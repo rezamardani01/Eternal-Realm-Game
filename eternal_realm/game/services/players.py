@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from ...context import AppContext
@@ -34,6 +35,8 @@ class DailyReward:
 class PlayerService:
     def __init__(self, ctx: AppContext) -> None:
         self.ctx = ctx
+        #: run inside the registration transaction (starter items and similar)
+        self.after_register: list[Callable[[Tx, Player], Awaitable[None]]] = []
 
     # --- registration -------------------------------------------------------------------------
     async def name_available(self, raw_name: str) -> str:
@@ -71,13 +74,11 @@ class PlayerService:
                 tx, player.id, gold=balance.start_gold, reason="start_gift", now=now,
                 ref=f"start:{player.id}",
             )
-            await self.on_registered(tx, player)
+            for hook in self.after_register:
+                await hook(tx, player)
             refreshed = await repo.get(tx, player.id)
             assert refreshed is not None
             return refreshed
-
-    async def on_registered(self, tx: Tx, player: Player) -> None:
-        """Hook for other services (starter items) - they extend this at wiring time."""
 
     # --- lookup -------------------------------------------------------------------------------
     def with_energy(self, player: Player) -> Player:

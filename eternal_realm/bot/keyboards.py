@@ -14,6 +14,8 @@ Rows = list[list[InlineKeyboardButton]]
 #: (page id, label) of the private main menu. Feature modules append their own entries.
 MENU_ENTRIES: list[tuple[str, str]] = [
     ("profile", "👤 شخصیت من"),
+    ("inventory", "🎒 کوله‌پشتی"),
+    ("equipment", "🧰 تجهیزات"),
     ("help", "❓ راهنما"),
 ]
 

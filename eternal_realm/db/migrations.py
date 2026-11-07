@@ -65,6 +65,33 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_group_members_rank ON group_members (chat_id, points DESC);
     """,
+    # 3: inventory (stackable items), gear (individual pieces) and activity cooldowns
+    """
+    CREATE TABLE inventory (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        item_id   TEXT    NOT NULL,
+        qty       INTEGER NOT NULL CHECK (qty >= 0),
+        PRIMARY KEY (player_id, item_id)
+    );
+
+    CREATE TABLE gear (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id  INTEGER NOT NULL REFERENCES players (id),
+        item_id    TEXT    NOT NULL,
+        upgrade    INTEGER NOT NULL DEFAULT 0 CHECK (upgrade >= 0),
+        slot       TEXT,
+        created_at INTEGER NOT NULL
+    );
+    CREATE INDEX idx_gear_player ON gear (player_id);
+    CREATE UNIQUE INDEX idx_gear_equipped ON gear (player_id, slot) WHERE slot IS NOT NULL;
+
+    CREATE TABLE cooldowns (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        key       TEXT    NOT NULL,
+        until     INTEGER NOT NULL,
+        PRIMARY KEY (player_id, key)
+    );
+    """,
 ]
 
 

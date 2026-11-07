@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..game.data.classes import CLASSES, CharacterClass
+from ..game.data.items import SLOT_LABELS
 from ..game.data.races import RACES, Race
 from ..game.data.stats import Stats
 from ..game.models import Player
@@ -94,3 +95,33 @@ def help_text() -> str:
         "• راهنما: فهرست کامل دستورها\n\n"
         "این منو برای مدیریت شخصیت، تجهیزات و فروشگاه است."
     )
+
+
+def inventory(owner: str, view) -> str:  # noqa: ANN001 - InventoryView
+    lines = [f"🎒 کوله‌پشتی {owner}", LINE]
+    if view.stacks:
+        lines.append("📦 آیتم‌ها")
+        lines += [f"• {item.label} ×{fa(qty)}" for item, qty in view.stacks]
+    else:
+        lines.append("📦 آیتمی نداری.")
+    lines.append(LINE)
+    if view.gear:
+        lines.append("⚔️ تجهیزات (پوشیدن: «تجهیز شماره»)")
+        for piece in view.gear:
+            mark = " ✅" if piece.slot else ""
+            lines.append(
+                f"#{fa(piece.id)} {piece.label} {piece.item.rarity_label}{mark}\n    {piece.stats.short()}"
+            )
+    else:
+        lines.append("⚔️ تجهیزاتی نداری.")
+    return "\n".join(lines)
+
+
+def equipment(owner: str, view, stats: Stats) -> str:  # noqa: ANN001
+    worn = {p.slot: p for p in view.gear if p.slot}
+    lines = [f"🧰 تجهیزات {owner}", LINE]
+    for slot, label in SLOT_LABELS.items():
+        piece = worn.get(slot)
+        lines.append(f"{label}: {piece.label + ' ' + piece.stats.short() if piece else '—'}")
+    lines += [LINE, f"قدرت کل: {stats.short()}"]
+    return "\n".join(lines)

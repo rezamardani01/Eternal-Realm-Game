@@ -38,6 +38,19 @@ async def help_page(services: Services, player: Player) -> Page:
     return views.help_text(), keyboards.back_to_menu()
 
 
+@page("inventory")
+async def inventory_page(services: Services, player: Player) -> Page:
+    view = await services.inventory.view(player.id)
+    return views.inventory(player.name, view), keyboards.back_to_menu()
+
+
+@page("equipment")
+async def equipment_page(services: Services, player: Player) -> Page:
+    view = await services.inventory.view(player.id)
+    stats = await services.characters.stats(player)
+    return views.equipment(player.name, view, stats), keyboards.back_to_menu()
+
+
 async def profile_text(services: Services, player: Player) -> str:
     stats = await services.characters.stats(player)
     return views.profile(
