@@ -14,10 +14,13 @@ class GearRow:
     item_id: str
     upgrade: int
     slot: str | None
+    listed: bool = False
 
     @classmethod
     def from_row(cls, row: Row) -> GearRow:
-        return cls(row["id"], row["player_id"], row["item_id"], row["upgrade"], row["slot"])
+        return cls(
+            row["id"], row["player_id"], row["item_id"], row["upgrade"], row["slot"], bool(row["listed"])
+        )
 
 
 # --- stacks -----------------------------------------------------------------------------------
@@ -70,7 +73,9 @@ async def get_gear(tx: Tx, gear_id: int) -> GearRow | None:
 
 
 async def list_gear(tx: Tx, player_id: int) -> list[GearRow]:
-    rows = await tx.fetchall("SELECT * FROM gear WHERE player_id = ? ORDER BY id", (player_id,))
+    rows = await tx.fetchall(
+        "SELECT * FROM gear WHERE player_id = ? AND listed = 0 ORDER BY id", (player_id,)
+    )
     return [GearRow.from_row(r) for r in rows]
 
 
@@ -92,7 +97,13 @@ async def delete_gear(tx: Tx, gear_id: int) -> None:
 
 
 async def transfer_gear(tx: Tx, gear_id: int, new_owner: int) -> None:
-    await tx.execute("UPDATE gear SET player_id = ?, slot = NULL WHERE id = ?", (new_owner, gear_id))
+    await tx.execute(
+        "UPDATE gear SET player_id = ?, slot = NULL, listed = 0 WHERE id = ?", (new_owner, gear_id)
+    )
+
+
+async def set_listed(tx: Tx, gear_id: int, listed: bool) -> None:
+    await tx.execute("UPDATE gear SET listed = ? WHERE id = ?", (int(listed), gear_id))
 
 
 # --- cooldowns --------------------------------------------------------------------------------

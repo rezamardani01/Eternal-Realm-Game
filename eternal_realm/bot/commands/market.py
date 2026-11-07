@@ -1,0 +1,80 @@
+"""Player market commands: browse, list, buy and cancel."""
+
+from __future__ import annotations
+
+from ...game.data.items import find_item
+from ...shared.errors import GameError
+from ...shared.text import fa, to_int
+from .. import views
+from .context import CommandContext
+from .registry import command
+
+
+@command(
+    "market", ["بازار", "market"], "آگهی‌های بازار (می‌توانی نام آیتم را هم بنویسی: بازار شمشیر آهنی)",
+    category="🏪 بازار", takes_args=True, points=0,
+)
+async def market(ctx: CommandContext) -> None:
+    item = None
+    if ctx.raw_args:
+        item = find_item(ctx.raw_args)
+        if item is None:
+            raise GameError("چنین آیتمی پیدا نشد.")
+    listings = await ctx.services.market.browse(item)
+    await ctx.reply(views.market_listings(listings, item))
+
+
+@command(
+    "my_listings", ["آگهی‌های من", "آگهی من"], "آگهی‌های فعال خودت", category="🏪 بازار", points=0,
+)
+async def my_listings(ctx: CommandContext) -> None:
+    listings = await ctx.services.market.mine(ctx.me)
+    await ctx.reply(views.market_listings(listings, None, title="🏷️ آگهی‌های من"))
+
+
+@command(
+    "list_item", ["عرضه", "بفروش", "list"],
+    "آگهی فروش: عرضه #شماره‌تجهیزات قیمت  یا  عرضه <نام> <تعداد> <قیمت‌کل>",
+    category="🏪 بازار", takes_args=True,
+)
+async def list_item(ctx: CommandContext) -> None:
+    args = ctx.args
+    usage = "مثال: «عرضه #12 5000» یا «عرضه سنگ آهن 10 900»"
+    if len(args) < 2 or (price := to_int(args[-1])) is None:
+        raise GameError(usage)
+    service = ctx.services.market
+    if args[0].startswith("#"):
+        gear_id = to_int(args[0].lstrip("#"))
+        if gear_id is None:
+            raise GameError(usage)
+        listing = await service.list_gear(ctx.me, gear_id, price)
+    else:
+        if len(args) < 3 or (qty := to_int(args[-2])) is None:
+            raise GameError(usage)
+        item = find_item(" ".join(args[:-2]))
+        if item is None:
+            raise GameError("چنین آیتمی پیدا نشد.")
+        listing = await service.list_stack(ctx.me, item, qty, price)
+    fee = service.fee_for(price)
+    await ctx.reply(
+        f"🏷️ آگهی 🔖{fa(listing.id)} ثبت شد: {listing.label} به قیمت {fa(price)} 🪙\n"
+        f"کارمزد فروش: {fa(fee)} سکه (هنگام فروش کسر می‌شود)."
+    )
+
+
+@command("buy_listing", ["بخر", "خرید آگهی"], "خرید از بازار: بخر <شماره آگهی>", category="🏪 بازار", takes_args=True)
+async def buy_listing(ctx: CommandContext) -> None:
+    listing_id = to_int(ctx.args[0].lstrip("🔖#")) if ctx.args else None
+    if listing_id is None:
+        raise GameError("شماره آگهی را بنویس. مثال: بخر 12")
+    listing = await ctx.services.market.buy(ctx.me, listing_id)
+    await ctx.reply(f"✅ {listing.label} را خریدی؛ {fa(listing.price)} 🪙 پرداخت شد.")
+
+
+@command("cancel_listing", ["لغو", "لغو آگهی"], "لغو آگهی خودت: لغو <شماره آگهی>", category="🏪 بازار", takes_args=True)
+async def cancel_listing(ctx: CommandContext) -> None:
+    listing_id = to_int(ctx.args[0].lstrip("🔖#")) if ctx.args else None
+    if listing_id is None:
+        raise GameError("شماره آگهی را بنویس. مثال: لغو 12")
+    listing = await ctx.services.market.cancel(ctx.me, listing_id)
+    await ctx.reply(f"↩️ آگهی 🔖{fa(listing.id)} لغو شد و {listing.label} به کوله‌پشتی‌ات برگشت.")

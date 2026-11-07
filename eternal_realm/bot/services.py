@@ -12,6 +12,7 @@ from ..game.services.economy import EconomyService
 from ..game.services.groups import GroupService
 from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
+from ..game.services.market import MarketService
 from ..game.services.players import PlayerService
 from ..game.services.shop import ShopService
 from .throttle import Throttle
@@ -27,6 +28,7 @@ class Services:
     duels: DuelService
     shop: ShopService
     economy: EconomyService
+    market: MarketService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -48,6 +50,7 @@ class Services:
             duels=DuelService(ctx, players, characters),
             shop=ShopService(ctx, inventory),
             economy=EconomyService(ctx),
+            market=MarketService(ctx, inventory),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(

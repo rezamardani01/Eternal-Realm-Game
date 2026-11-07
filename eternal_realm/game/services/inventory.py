@@ -64,6 +64,8 @@ class InventoryService:
         row = await repo.get_gear(tx, gear_id)
         if row is None or row.player_id != player_id:
             raise GameError("چنین تجهیزاتی در کوله‌پشتی تو نیست.")
+        if row.listed:
+            raise GameError("این تجهیزات برای فروش در بازار گذاشته شده؛ اول آگهی را لغو کن.")
         return Piece(row.id, get_item(row.item_id), row.upgrade, row.slot)
 
     async def on_registered(self, tx: Tx, player: Player) -> None:

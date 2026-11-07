@@ -150,6 +150,18 @@ def upgrade_result(result) -> str:  # noqa: ANN001 - UpgradeResult
     return f"💥 ارتقا شکست خورد؛ مواد از بین رفت ولی {result.piece.label} سالم ماند."
 
 
+def market_listings(listings, item, title: str | None = None) -> str:  # noqa: ANN001
+    head = title or ("🏪 بازار" + (f" · {item.label}" if item else ""))
+    if not listings:
+        return f"{head}\n{LINE}\nآگهی فعالی نیست."
+    lines = [head, LINE]
+    for lst in listings:
+        seller = f" — {lst.seller_name}" if lst.seller_name else ""
+        lines.append(f"🔖{fa(lst.id)}  {lst.label}  {fa(lst.price)} 🪙{seller}")
+    lines += [LINE, "خرید: «بخر <شماره>»   عرضه: «عرضه ...»   لغو: «لغو <شماره>»"]
+    return "\n".join(lines)
+
+
 def duel_invite(challenger, target, seconds: int) -> str:  # noqa: ANN001 - Player
     return (
         "⚔️ درخواست مبارزه!\n\n"

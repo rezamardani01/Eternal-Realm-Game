@@ -112,6 +112,25 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_duels_target ON duels (target_id, status);
     CREATE INDEX idx_duels_expiry ON duels (status, expires_at);
     """,
+    # 5: player market. Listed gear stays in `gear` but is flagged and hidden from its owner.
+    """
+    ALTER TABLE gear ADD COLUMN listed INTEGER NOT NULL DEFAULT 0;
+
+    CREATE TABLE market_listings (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        seller_id  INTEGER NOT NULL REFERENCES players (id),
+        item_id    TEXT    NOT NULL,
+        qty        INTEGER NOT NULL CHECK (qty > 0),
+        gear_id    INTEGER REFERENCES gear (id),
+        price      INTEGER NOT NULL CHECK (price > 0),
+        status     TEXT    NOT NULL CHECK (status IN ('active', 'sold', 'cancelled')),
+        buyer_id   INTEGER REFERENCES players (id),
+        created_at INTEGER NOT NULL,
+        closed_at  INTEGER
+    );
+    CREATE INDEX idx_market_active ON market_listings (status, item_id, price);
+    CREATE INDEX idx_market_seller ON market_listings (seller_id, status);
+    """,
 ]
 
 
