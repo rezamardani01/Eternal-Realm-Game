@@ -8,7 +8,7 @@ from ...context import AppContext
 from ...db.repos import inventory as inv_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
-from ..data.items import MAX_UPGRADE, Item, Kind, get_item
+from ..data.items import MAX_UPGRADE, Item, Kind
 from ..models import Player
 from .inventory import InventoryService, Piece
 
@@ -106,10 +106,7 @@ class ShopService:
             quote = upgrade_quote(piece.item, piece.upgrade)
             await wallet.apply(tx, player.id, gold=-quote.gold, reason="upgrade", now=now)
             for item_id, qty in quote.materials.items():
-                try:
-                    await self.inventory.take(tx, player.id, item_id, qty)
-                except GameError as err:
-                    raise GameError(f"مواد کافی ندارید: {get_item(item_id).label} ×{qty}. با «معدن» و «شکار» می‌توانید پیدایش کنید.") from err
+                await self.inventory.take(tx, player.id, item_id, qty)
             success = self.ctx.rng.random() < quote.chance
             if success:
                 await inv_repo.set_upgrade(tx, piece.id, quote.next_level)

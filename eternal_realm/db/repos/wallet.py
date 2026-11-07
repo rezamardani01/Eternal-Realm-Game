@@ -8,10 +8,26 @@ from ...shared.errors import GameError
 from ..database import Tx
 
 
+_FA = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+
+
+def _num(value: int) -> str:
+    return f"{value:,}".replace(",", "٬").translate(_FA)
+
+
 class InsufficientFunds(GameError):
-    def __init__(self, gold: bool = False, crystal: bool = False) -> None:
-        what = "سکه" if gold and not crystal else "کریستال" if crystal and not gold else "موجودی"
-        super().__init__(f"{what} کافی در کیسه‌ی شما نیست! با ماهیگیری، معدن و شکار می‌توانید بیشتر به دست آورید.")
+    """Not enough gold/crystal. The message states what the player has and what is needed."""
+
+    def __init__(self, shortages: list[tuple[str, str, int, int]]) -> None:
+        # each shortage: (icon, name, have, need)
+        lines = ["💸 کیسه‌ی شما برای این کار کافی نیست."]
+        for icon, name, have, need in shortages:
+            lines.append(f"{icon} {name}: دارید {_num(have)} · نیاز دارید {_num(need)} · کمبود {_num(need - have)}")
+        if any(name == "کریستال" for _, name, _, _ in shortages):
+            lines.append("💡 کریستال از «خزانه‌ی ویژه» یا گنج‌های کمیاب ماجراجویی به دست می‌آید.")
+        else:
+            lines.append("💡 با ماهیگیری، معدن، شکار و جایزه‌ی روزانه سکه جمع کنید.")
+        super().__init__("\n".join(lines))
 
 
 class DuplicateOperation(GameError):
@@ -42,7 +58,14 @@ async def apply(
         (gold, crystal, player_id, gold, crystal),
     )
     if tx.rowcount == 0:
-        raise InsufficientFunds(gold=gold < 0, crystal=crystal < 0)
+        row = await tx.fetchone("SELECT gold, crystal FROM players WHERE id = ?", (player_id,))
+        have_gold, have_crystal = (row["gold"], row["crystal"]) if row else (0, 0)
+        shortages = []
+        if gold < 0 and have_gold + gold < 0:
+            shortages.append(("🪙", "سکه", have_gold, -gold))
+        if crystal < 0 and have_crystal + crystal < 0:
+            shortages.append(("💎", "کریستال", have_crystal, -crystal))
+        raise InsufficientFunds(shortages)
     try:
         await tx.execute(
             "INSERT INTO transactions (player_id, gold_delta, crystal_delta, reason, ref, created_at)"

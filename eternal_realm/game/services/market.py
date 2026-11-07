@@ -10,7 +10,7 @@ from ...db.repos import market as repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
 from ...shared.text import fa
-from ..data.items import Item, get_item
+from ..data.items import ITEMS, Item, Kind, get_item
 from ..models import Player
 from .inventory import InventoryService
 
@@ -84,9 +84,12 @@ class MarketService:
             listing_id = await repo.create(tx, seller.id, item.id, qty, None, price, self.ctx.now())
             return Listing(listing_id, seller.id, seller.name, item, qty, price, None, 0)
 
-    async def browse(self, item: Item | None = None, limit: int = 15, offset: int = 0) -> list[Listing]:
+    async def browse(
+        self, item: Item | None = None, limit: int = 15, offset: int = 0, kinds: set[Kind] | None = None
+    ) -> list[Listing]:
+        ids = [i.id for i in ITEMS.values() if i.kind in kinds] if kinds is not None else None
         async with self.ctx.db.read() as tx:
-            rows = await repo.browse(tx, item.id if item else None, limit, offset)
+            rows = await repo.browse(tx, item.id if item else None, limit, offset, ids)
         return [_listing(r) for r in rows]
 
     async def get(self, listing_id: int) -> Listing | None:

@@ -287,3 +287,60 @@ async def test_rankings_tabs(h, services):
     assert any("این گروه" in t for t in h.labels())
     await h.tap(10, "ثروت", group=True)
     assert "🥇" in h.session.last_text()
+
+
+# --- help, shortages, market tabs ---------------------------------------------------------------
+def test_help_is_airy_and_every_word_in_it_is_a_real_command():
+    from eternal_realm.bot.commands import REGISTRY
+
+    text = views.command_help(REGISTRY, True)
+    assert "\n\n" in text and len(text) < 4000
+    assert text.count("\n\n") > 20  # a blank line between entries
+    words = [name.split(" ", 1)[1].split(" 500")[0] for _, rows in views.HELP_SECTIONS for name, _ in rows]
+    for word in words:
+        assert REGISTRY.resolve(word) is not None, word
+    for word in ("غیرفعال ماهیگیری", "فعال ماهیگیری", "تنظیمات گروه"):
+        assert REGISTRY.resolve(word) is not None, word
+
+
+async def test_shortage_messages_state_the_numbers(h, services, db):
+    p = await reg(services)
+    await h.panel(10, "shopitem", "iron_sword", "gear")
+    await h.tap(10, "خرید")
+    alert = next(a["text"] for a in h.session.callback_answers() if "کافی نیست" in a.get("text", ""))
+    assert "۵۰۰" in alert and "۹۰۰" in alert and "۴۰۰" in alert  # have, need, missing
+    await give(services, db, p.id, None, crystal=0)
+    await h.panel(10, "cbuy", "magic_chest")
+    assert any("کریستال" in a.get("text", "") and "۳۰" in a.get("text", "") for a in h.session.callback_answers())
+
+
+async def test_market_has_category_buttons_with_listings_below(h, services, db):
+    seller = await reg(services)
+    await reg(services, 11, "سارا", "fairy", "mage")
+    cap = (await give(services, db, seller.id, "leather_cap"))[0]
+    await give(services, db, seller.id, "iron_ore", 3)
+    await services.market.list_gear(await services.players.require(10), cap, 700)
+    await services.market.list_stack(await services.players.require(10), __import__("eternal_realm.game.data.items", fromlist=["x"]).get_item("iron_ore"), 3, 90)
+
+    await h.panel(11, "market")
+    labels = h.labels()
+    assert any("سلاح و زره" in t for t in labels) and any("مواد" in t for t in labels)
+    assert any("کلاه چرمی" in t for t in labels) and any("سنگ آهن" in t for t in labels)
+    await h.tap(11, "مواد")
+    labels = h.labels()
+    assert any("سنگ آهن" in t for t in labels) and not any("کلاه چرمی" in t for t in labels)
+    await h.tap(11, "صندوقچه")
+    assert "فروشنده باشید" in h.session.last_text()
+
+
+async def test_market_panel_opened_in_a_group_belongs_to_its_opener(h, services):
+    await reg(services)
+    await reg(services, 11, "سارا", "fairy", "mage")
+    await h.say(10, "بازار", group=True)
+    tab = h.button_data("مواد")
+    h.session.reset()
+    await h.click(11, tab, group=True)
+    assert not h.session.sent("editMessageText")
+    assert any("مال شما نیست" in a.get("text", "") for a in h.session.callback_answers())
+    await h.click(10, tab, group=True)
+    assert h.session.sent("editMessageText")

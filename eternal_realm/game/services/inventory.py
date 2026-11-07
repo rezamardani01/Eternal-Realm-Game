@@ -8,6 +8,7 @@ from ...context import AppContext
 from ...db.database import Tx
 from ...db.repos import inventory as repo
 from ...shared.errors import GameError
+from ...shared.text import fa
 from ..data.items import ITEMS, SLOT_LABELS, STARTER_WEAPON, Item, Kind, get_item, upgraded_stats
 from ..data.stats import Stats
 from ..models import Player
@@ -58,7 +59,11 @@ class InventoryService:
 
     async def take(self, tx: Tx, player_id: int, item_id: str, qty: int = 1) -> None:
         if not await repo.remove_stack(tx, player_id, item_id, qty):
-            raise GameError(f"{get_item(item_id).label} به اندازه‌ی کافی در کوله‌پشتی شما نیست.")
+            have = await repo.stack_qty(tx, player_id, item_id)
+            raise GameError(
+                f"📦 {get_item(item_id).label} کافی نیست.\n"
+                f"دارید {fa(have)} · نیاز دارید {fa(qty)} · کمبود {fa(qty - have)}"
+            )
 
     async def piece(self, tx: Tx, player_id: int, gear_id: int) -> Piece:
         row = await repo.get_gear(tx, gear_id)

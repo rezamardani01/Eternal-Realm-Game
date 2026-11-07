@@ -37,7 +37,9 @@ async def count_active(tx: Tx, seller_id: int) -> int:
     )
 
 
-async def browse(tx: Tx, item_id: str | None, limit: int, offset: int = 0) -> list[Row]:
+async def browse(
+    tx: Tx, item_id: str | None, limit: int, offset: int = 0, item_ids: list[str] | None = None
+) -> list[Row]:
     sql = (
         "SELECT m.*, p.display_name AS seller_name, g.upgrade AS upgrade FROM market_listings m"
         " JOIN players p ON p.id = m.seller_id LEFT JOIN gear g ON g.id = m.gear_id"
@@ -47,6 +49,11 @@ async def browse(tx: Tx, item_id: str | None, limit: int, offset: int = 0) -> li
     if item_id:
         sql += " AND m.item_id = ?"
         params.append(item_id)
+    if item_ids is not None:
+        if not item_ids:
+            return []
+        sql += " AND m.item_id IN (" + ",".join("?" * len(item_ids)) + ")"
+        params += item_ids
     sql += " ORDER BY m.created_at DESC, m.id DESC LIMIT ? OFFSET ?"
     params += [limit, offset]
     return await tx.fetchall(sql, params)

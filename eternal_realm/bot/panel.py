@@ -19,7 +19,7 @@ from baleropy.fsm import FSMContext, State, StatesGroup
 from baleropy.types import CallbackQuery, InlineKeyboardButton, Message
 
 from ..game.data.chests import CHESTS
-from ..game.data.items import Item, Kind, get_item
+from ..game.data.items import GEAR_KINDS, Item, Kind, get_item
 from ..game.data.stats import STAT_HELP, STAT_LABELS
 from ..game.models import Player
 from ..game.services.inventory import InventoryView, Piece
@@ -532,19 +532,32 @@ async def buy(c: Ctx) -> Screen:
 
 
 # --- market -----------------------------------------------------------------------------------
+MARKET_TABS = {
+    "all": ("🧺 همه", None),
+    "gear": ("⚔️ سلاح و زره", GEAR_KINDS),
+    "pot": ("🧪 معجون", {Kind.CONSUMABLE}),
+    "mat": ("📦 مواد", {Kind.MATERIAL}),
+    "chest": ("🎁 صندوقچه", {Kind.CHEST}),
+}
+
+
 @screen("market")
 async def market(c: Ctx) -> Screen:
     page = _int(c.a or "0", "صفحه")
-    found = await c.services.market.browse(None, PER_PAGE + 1, page * PER_PAGE)
+    tab = c.b if c.b in MARKET_TABS else "all"
+    found = await c.services.market.browse(None, PER_PAGE + 1, page * PER_PAGE, MARKET_TABS[tab][1])
     chunk, nxt = found[:PER_PAGE], len(found) > PER_PAGE
-    if not chunk:
-        text = f"🏪 {bold('بازار')}\n\nآگهی فعالی نیست. شما می‌توانید اولین فروشنده باشید!"
+    head = f"🏪 {bold('بازار')} · {MARKET_TABS[tab][0]}"
+    if chunk:
+        text = f"{head}\n\nآگهی‌های فروش را ببینید و یکی را انتخاب کنید 👇"
     else:
-        text = f"🏪 {bold('بازار')}\nیک آگهی را انتخاب کنید 👇"
-    rows = [[c.btn(f"{lst.label} — {fa(lst.price)}🪙", "listing", lst.id)] for lst in chunk]
-    if nav := _nav(c, "market", page, page > 0, nxt):
+        text = f"{head}\n\nدر این دسته آگهی فعالی نیست. شما می‌توانید اولین فروشنده باشید!"
+    tabs = [c.btn(("• " if key == tab else "") + label, "market", 0, key) for key, (label, _) in MARKET_TABS.items()]
+    rows = keyboards.grid(tabs, 3)
+    rows += [[c.btn(f"{lst.label} — {fa(lst.price)}🪙", "listing", lst.id)] for lst in chunk]
+    if nav := _nav(c, "market", page, page > 0, nxt, tab):
         rows.append(nav)
-    rows.append([c.btn("📋 آگهی‌های من", "mine")])
+    rows.append([c.btn("📋 آگهی‌های من", "mine"), c.btn("🏷️ فروش کالای من", "inv")])
     rows.append(c.back("home", "🔙 منو"))
     return Screen(text, rows)
 

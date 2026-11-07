@@ -76,27 +76,66 @@ def profile_lines(player: Player, stats: Stats, xp_needed: int, max_energy: int)
     )
 
 
-def command_help(registry, in_group: bool) -> str:  # noqa: ANN001
-    """Help generated from the registry, so it always matches the real commands."""
-    categories: dict[str, list[str]] = {}
-    for cmd in registry.all():
-        if cmd.name == "start" or cmd.category.startswith("🛠️") or (in_group and not cmd.group) or (
-            not in_group and not cmd.private
-        ):
-            continue
-        persian = [a for a in cmd.aliases if not a.isascii()]
-        label = persian[0] if persian else "/" + cmd.aliases[0]
-        categories.setdefault(cmd.category, []).append(f"• {label}: {cmd.description}")
-    blocks = [f"{bold(title)}\n" + "\n".join(lines) for title, lines in categories.items()]
-    return f"📖 {bold('راهنمای دستورها')}\n\n" + "\n\n".join(blocks)
+HELP_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
+    ("🌍 ماجراجویی (انرژی می‌خواهد)", [
+        ("🎣 ماهیگیری", "ماهی، گنج و گاهی کریستال از دریاچه"),
+        ("⛏️ معدن", "سنگ، آهن، طلا و پاره‌کریستال"),
+        ("🌿 گیاه", "گیاه‌های شفابخش و کمیاب"),
+        ("🔍 جستجو", "سکه، معجون و صندوقچه‌های پنهان"),
+        ("🐺 شکار", "جنگ با هیولا برای تجربه و غنیمت"),
+        ("😴 استراحت", "انرژی برمی‌گردد (هر ۳۰ دقیقه)"),
+        ("🗺️ ماجراجویی", "همه‌ی فعالیت‌ها با دکمه"),
+    ]),
+    ("⚔️ مبارزه", [
+        ("⚔️ مبارزه", "روی پیام یک نفر ریپلای کنید و بنویسید «مبارزه»؛ نبرد نوبتی با دکمه است"),
+    ]),
+    ("🎒 کوله‌پشتی و بازار", [
+        ("🎒 کوله‌پشتی", "آیتم‌ها و تجهیزاتتان؛ پوشیدن و ارتقا با دکمه"),
+        ("🎁 صندوقچه", "خرید، باز کردن و دیدن شانس‌ها"),
+        ("🛒 فروشگاه", "خرید سلاح، زره و معجون"),
+        ("🏪 بازار", "خرید و فروش با دیگر بازیکنان"),
+        ("💎 فروشگاه ویژه", "بسته‌های سکه و کریستال (در پیوی)"),
+    ]),
+    ("👤 قهرمان", [
+        ("👤 پروفایل", "قهرمان شما؛ با ریپلای، قهرمان دیگران"),
+        ("🎁 جایزه", "گنجینه‌ی روزانه"),
+        ("💸 انتقال 500", "روی پیام دوستتان ریپلای کنید تا سکه ببخشید"),
+        ("📲 کیف من", "دکمه‌ی ورود به پنل شخصی در پیوی"),
+        ("🏆 رتبه", "برترین‌های همین گروه و کل قلمرو"),
+    ]),
+]
+
+ADMIN_HELP = (
+    "🛠️ مدیران گروه",
+    [
+        ("⛔ غیرفعال ماهیگیری", "بستن یک فعالیت در همین گروه"),
+        ("✅ فعال ماهیگیری", "باز کردن دوباره‌اش"),
+        ("⚙️ تنظیمات گروه", "دیدن وضعیت بازی در گروه"),
+    ],
+)
+
+
+def _help_block(title: str, rows: list[tuple[str, str]]) -> str:
+    entries = "\n\n".join(f"{name}\n{desc}" for name, desc in rows)
+    return f"{bold(title)}\n\n{entries}"
+
+
+def command_help(registry, in_group: bool) -> str:  # noqa: ANN001 - kept for API compatibility
+    """Complete help with a blank line between entries (a test keeps it in sync with the commands)."""
+    sections = list(HELP_SECTIONS)
+    if in_group:
+        sections.append(ADMIN_HELP)
+    tail = "💡 همه‌ی کارهای دیگر، مثل پوشیدن، خرید و فروش، فقط با دکمه‌های شیشه‌ای انجام می‌شود."
+    return f"📖 {bold('راهنمای قلمرو جاودان')}\n\n" + "\n\n".join(_help_block(t, r) for t, r in sections) + "\n\n" + tail
 
 
 def help_text() -> str:
     return (
         f"❓ {bold('راهنمای ماجراجو')}\n\n"
-        "🏠 این‌جا (پیام خصوصی): قهرمان، کوله‌پشتی، فروشگاه و بازار شما.\n"
-        "🏰 گروه‌ها: ماجراجویی، شکار، دوئل و بازار.\n\n"
-        "ربات را به گروه اضافه کنید و بنویسید «راهنما» تا دستورها را ببینید."
+        "🏠 این‌جا (پیام خصوصی) پنل شخصی شماست: قهرمان، کوله‌پشتی، فروشگاه، بازار و ماجراجویی؛ "
+        "همه با دکمه.\n\n"
+        "🏰 در گروه‌ها می‌توانید با دوستانتان ماجراجویی کنید، دوئل بدهید و معامله کنید.\n\n"
+        "📖 فهرست کامل دستورهای گروه را با نوشتن «راهنما» در گروه ببینید."
     )
 
 

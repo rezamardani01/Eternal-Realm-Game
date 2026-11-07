@@ -97,7 +97,7 @@ async def test_upgrade_rejects_stale_level_missing_materials_and_other_owner(ser
     p, q = await reg(services), await reg(services, 11, "سارا")
     gid = (await services.inventory.view(p.id)).gear[0].id
     await fund(services, db, p.id, 5_000)
-    with pytest.raises(GameError, match="مواد"):
+    with pytest.raises(GameError, match="کافی نیست"):
         await services.shop.upgrade(p, gid, 1)
     assert (await services.players.require(10)).gold == p.gold + 5_000  # nothing was charged
     with pytest.raises(GameError):
