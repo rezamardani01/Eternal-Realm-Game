@@ -92,6 +92,26 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (player_id, key)
     );
     """,
+    # 4: duels between players
+    """
+    CREATE TABLE duels (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id       INTEGER NOT NULL,
+        message_id    INTEGER,
+        challenger_id INTEGER NOT NULL REFERENCES players (id),
+        target_id     INTEGER NOT NULL REFERENCES players (id),
+        status        TEXT    NOT NULL
+                      CHECK (status IN ('pending', 'active', 'finished', 'declined', 'expired')),
+        state         TEXT,
+        winner_id     INTEGER REFERENCES players (id),
+        created_at    INTEGER NOT NULL,
+        updated_at    INTEGER NOT NULL,
+        expires_at    INTEGER NOT NULL
+    );
+    CREATE INDEX idx_duels_challenger ON duels (challenger_id, status);
+    CREATE INDEX idx_duels_target ON duels (target_id, status);
+    CREATE INDEX idx_duels_expiry ON duels (status, expires_at);
+    """,
 ]
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 
 from baleropy import Bot, Dispatcher, Router
@@ -9,7 +11,7 @@ from baleropy import Bot, Dispatcher, Router
 from ..config import Settings
 from ..context import AppContext
 from ..db.database import Database
-from . import menu, onboarding
+from . import duels, menu, onboarding
 from .commands import REGISTRY
 from .commands import router as commands_router
 from .middlewares import ErrorMiddleware
@@ -31,7 +33,8 @@ def build_dispatcher(services: Services) -> Dispatcher:
     dp.message.middleware(errors)
     dp.callback_query.middleware(errors)
     REGISTRY.configure(services.ctx.settings.command_overrides)
-    _attach(dp, onboarding.router, menu.router, commands_router)
+    # order matters: FSM-bound onboarding first, free-text commands last
+    _attach(dp, onboarding.router, menu.router, duels.router, commands_router)
     return dp
 
 
@@ -45,6 +48,12 @@ async def run(settings: Settings) -> None:
         services.bot_username = me.username or ""
         log.info("Eternal Realm is up as @%s", services.bot_username)
         dp = build_dispatcher(services)
-        await dp.start_polling(bot, skip_updates=True)
+        cleaner = asyncio.create_task(duels.janitor(bot, services), name="duel-janitor")
+        try:
+            await dp.start_polling(bot, skip_updates=True)
+        finally:
+            cleaner.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await cleaner
     finally:
         await db.close()

@@ -15,3 +15,8 @@ class ClassCb(CallbackData, prefix="cls"):
 
 class MenuCb(CallbackData, prefix="m"):
     page: str
+
+
+class DuelCb(CallbackData, prefix="d"):
+    action: str
+    id: int

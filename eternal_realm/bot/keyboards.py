@@ -7,7 +7,8 @@ from baleropy.types import InlineKeyboardButton
 
 from ..game.data.classes import CLASSES
 from ..game.data.races import RACES
-from .callbacks import ClassCb, MenuCb, RaceCb
+from ..game.engine.combat import Fighter
+from .callbacks import ClassCb, DuelCb, MenuCb, RaceCb
 
 Rows = list[list[InlineKeyboardButton]]
 
@@ -42,3 +43,27 @@ def main_menu() -> Rows:
 
 def back_to_menu() -> Rows:
     return [[Button.inline("🔙 منوی اصلی", MenuCb(page="home"))]]
+
+
+def duel_invite(duel_id: int) -> Rows:
+    return [
+        [
+            Button.inline("⚔️ قبول مبارزه", DuelCb(action="accept", id=duel_id), style="success"),
+            Button.inline("❌ رد کردن", DuelCb(action="decline", id=duel_id), style="danger"),
+        ]
+    ]
+
+
+def duel_actions(duel_id: int, fighter: Fighter) -> Rows:
+    wait = fighter.skill_ready_in - 1
+    skill = f"{fighter.skill_emoji} {fighter.skill_name}" + (f" ({wait})" if wait > 0 else "")
+    return [
+        [
+            Button.inline("⚔️ حمله", DuelCb(action="attack", id=duel_id), style="primary"),
+            Button.inline(skill, DuelCb(action="skill", id=duel_id), style="success" if wait <= 0 else None),
+        ],
+        [
+            Button.inline("🛡️ دفاع", DuelCb(action="defend", id=duel_id)),
+            Button.inline("🏳️ تسلیم", DuelCb(action="surrender", id=duel_id), style="danger"),
+        ],
+    ]

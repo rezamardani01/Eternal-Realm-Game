@@ -7,7 +7,7 @@ from ..game.data.items import SLOT_LABELS
 from ..game.data.races import RACES, Race
 from ..game.data.stats import Stats
 from ..game.models import Player
-from ..shared.text import bar, fa
+from ..shared.text import bar, duration, fa
 
 LINE = "━━━━━━━━━━━━━━"
 
@@ -115,6 +115,53 @@ def activity_result(name: str, result) -> str:  # noqa: ANN001 - ActivityResult
         lines.append(f"🎉 سطحت بالا رفت! حالا سطح {fa(result.level_up.new_level)} هستی.")
     lines.append(f"⚡ انرژی: {fa(player.energy)}")
     return "\n".join(lines)
+
+
+def duel_invite(challenger, target, seconds: int) -> str:  # noqa: ANN001 - Player
+    return (
+        "⚔️ درخواست مبارزه!\n\n"
+        f"{challenger.title} شما را به دوئل دعوت کرده است.\n"
+        f"{challenger.race.emoji} {challenger.race.name} · سطح {fa(challenger.level)}\n"
+        f"🏆 پیروزی: {fa(challenger.wins)} · 💀 شکست: {fa(challenger.losses)}\n\n"
+        f"{target.title}، قبول می‌کنی؟ (تا {duration(seconds)} فرصت داری)"
+    )
+
+
+def _hp_line(f) -> str:  # noqa: ANN001 - Fighter
+    return f"{f.emoji} {f.name}  ❤️ {fa(max(f.hp, 0))}/{fa(f.max_hp)}  {bar(f.hp, f.max_hp, 8)}"
+
+
+def duel_status(battle, lines: list[str], turn_seconds: int) -> str:  # noqa: ANN001 - Battle
+    a, b = battle.fighters
+    parts = ["⚔️ دوئل", LINE, _hp_line(a), _hp_line(b), LINE]
+    parts += lines
+    if not battle.finished:
+        parts += [LINE, f"🎯 نوبت {battle.current.name} | دور {fa(battle.round)} از {fa(battle.max_rounds)}",
+                  f"⏳ {duration(turn_seconds)} فرصت برای انتخاب"]
+    return "\n".join(parts)
+
+
+def duel_result(update) -> str:  # noqa: ANN001 - DuelUpdate
+    battle = update.battle
+    a, b = battle.fighters
+    parts = ["⚔️ پایان دوئل", LINE, _hp_line(a), _hp_line(b), LINE, *update.lines, LINE]
+    if battle.winner is None:
+        parts.append("🤝 مساوی شد!")
+    else:
+        parts.append(f"🏆 برنده: {battle.fighters[battle.winner].name}")
+    for fighter in battle.fighters:
+        payout = update.payouts.get(fighter.player_id)
+        if payout is None:
+            continue
+        gains = []
+        if payout.gold:
+            gains.append(f"🪙 +{fa(payout.gold)}")
+        if payout.xp:
+            gains.append(f"⭐ +{fa(payout.xp)}")
+        if payout.level_up:
+            gains.append(f"🎉 سطح {fa(payout.level_up.new_level)}")
+        parts.append(f"{fighter.name}: " + (" · ".join(gains) if gains else "بدون پاداش (سقف روزانه)"))
+    return "\n".join(parts)
 
 
 def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
