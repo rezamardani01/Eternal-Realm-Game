@@ -92,6 +92,24 @@ class MarketService:
             rows = await repo.browse(tx, item.id if item else None, limit, offset, ids)
         return [_listing(r) for r in rows]
 
+    async def page(
+        self, kinds: set[Kind] | None, sort: str, page: int, per: int
+    ) -> tuple[list[Listing], bool]:
+        """One page of active listings. ``sort``: new | cheap | expensive | rare."""
+        ids = [i.id for i in ITEMS.values() if i.kind in kinds] if kinds is not None else None
+        async with self.ctx.db.read() as tx:
+            rows = await repo.browse(tx, None, 500, 0, ids)
+        found = [_listing(r) for r in rows]
+        keys = {
+            "new": lambda x: -x.id,
+            "cheap": lambda x: (x.price, -x.id),
+            "expensive": lambda x: (-x.price, -x.id),
+            "rare": lambda x: (-x.item.rarity, x.price, -x.id),
+        }
+        found.sort(key=keys.get(sort, keys["new"]))
+        start = max(0, page) * per
+        return found[start : start + per], len(found) > start + per
+
     async def get(self, listing_id: int) -> Listing | None:
         """One active listing, with the seller's name (``None`` once it is sold or cancelled)."""
         async with self.ctx.db.read() as tx:

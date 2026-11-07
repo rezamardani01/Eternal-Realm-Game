@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from baleropy.dispatcher import BaseMiddleware
-from baleropy.exceptions import BaleAPIError
+from baleropy.exceptions import BaleAPIError, CancelHandler, SkipHandler
 from baleropy.types import CallbackQuery, Message
 
 from ..shared.errors import GameError
@@ -23,6 +23,8 @@ class ErrorMiddleware(BaseMiddleware):
     async def __call__(self, handler: Any, event: Any, data: dict[str, Any]) -> Any:
         try:
             return await handler(event, data)
+        except (SkipHandler, CancelHandler):
+            raise  # flow control of the framework, not an error
         except GameError as error:
             await self._tell(event, error.message)
         except BaleAPIError:

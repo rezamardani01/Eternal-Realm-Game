@@ -242,7 +242,7 @@ async def test_listing_and_buying_through_the_panel(h, services, db):
 
     await h.panel(10, "piece", str(spare))
     await h.tap(10, "عرضه در بازار")
-    assert "بهای فروش" in h.session.last_text()
+    assert "قیمت فروش" in h.session.last_text()
     await h.say(10, "1200")  # the answer to the price prompt
     assert "آگهی شما نصب شد" in h.session.last_text()
 

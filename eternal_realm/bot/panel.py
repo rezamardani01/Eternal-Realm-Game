@@ -13,8 +13,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from baleropy import Button, F, Router
-from baleropy.exceptions import BaleAPIError
-from baleropy.filters import ChatTypeFilter
+from baleropy.exceptions import BaleAPIError, SkipHandler
 from baleropy.fsm import FSMContext, State, StatesGroup
 from baleropy.types import CallbackQuery, InlineKeyboardButton, Message
 
@@ -361,7 +360,7 @@ async def _piece_screen(c: Ctx, gear_id: int, toast: str | None = None) -> Scree
     if not p.slot and (price := _sell_price(p)):
         second.append(c.btn(f"💰 فروش {fa(price)}🪙", "sellq", p.id))
     rows.append(second)
-    if not p.slot and not c.is_group:
+    if not p.slot and p.item.tradable:
         rows.append([c.btn("🏷️ عرضه در بازار", "listask", "g", p.id)])
     rows.append(c.back("gear", "🔙 بازگشت"))
     return Screen("\n".join(lines), rows, toast=toast)
@@ -469,8 +468,8 @@ async def _item_screen(c: Ctx, item_id: str, toast: str | None = None) -> Screen
         if qty > 1:
             sell_row.append(c.btn(f"💰 فروش همه ({fa(qty)})", "isell", item.id, "all"))
         rows.append(sell_row)
-    if not c.is_group and item.tradable:
-        rows.append([c.btn("🏷️ عرضه در بازار", "listask", "s", item.id)])
+    if item.tradable:
+        rows.append([c.btn("🏷️ عرضه در بازار", "lqty", item.id)])
     rows.append(c.back("chests" if item.kind is Kind.CHEST else "items", "🔙 بازگشت"))
     return Screen("\n".join(lines), rows, toast=toast)
 
@@ -671,26 +670,73 @@ MARKET_TABS = {
     "mat": ("📦 مواد", {Kind.MATERIAL}),
     "chest": ("🎁 صندوقچه", {Kind.CHEST}),
 }
+MARKET_SORTS = {
+    "new": "🆕 جدیدترین",
+    "cheap": "💰 ارزان‌ترین",
+    "expensive": "💎 گران‌ترین",
+    "rare": "🌟 کمیاب‌ترین",
+}
+
+
+def _tab_sort(c: Ctx) -> tuple[str, str]:
+    """The market keeps «category.sort» in the second argument, e.g. ``gear.cheap``."""
+    tab, _, sort = (c.b or "").partition(".")
+    return (tab if tab in MARKET_TABS else "all"), (sort if sort in MARKET_SORTS else "new")
 
 
 @screen("market")
 async def market(c: Ctx) -> Screen:
     page = _int(c.a or "0", "صفحه")
-    tab = c.b if c.b in MARKET_TABS else "all"
-    found = await c.services.market.browse(None, PER_PAGE + 1, page * PER_PAGE, MARKET_TABS[tab][1])
-    chunk, nxt = found[:PER_PAGE], len(found) > PER_PAGE
-    head = f"🏪 {bold('بازار')} · {MARKET_TABS[tab][0]}"
-    if chunk:
-        text = f"{head}\n\nآگهی‌های فروش را ببینید و یکی را انتخاب کنید 👇"
+    tab, sort = _tab_sort(c)
+    found, nxt = await c.services.market.page(MARKET_TABS[tab][1], sort, page, PER_PAGE)
+    head = f"🏪 {bold('بازار')}\nدسته: {MARKET_TABS[tab][0]} · مرتب‌سازی: {MARKET_SORTS[sort]}"
+    if found:
+        text = f"{head}\n\nآگهی بازیکنان از همه‌ی گروه‌ها؛ یکی را انتخاب کنید 👇"
     else:
         text = f"{head}\n\nدر این دسته آگهی فعالی نیست. شما می‌توانید اولین فروشنده باشید!"
-    tabs = [c.btn(("• " if key == tab else "") + label, "market", 0, key) for key, (label, _) in MARKET_TABS.items()]
-    rows = keyboards.grid(tabs, 3)
-    rows += [[c.btn(f"{lst.label} — {fa(lst.price)}🪙", "listing", lst.id)] for lst in chunk]
-    if nav := _nav(c, "market", page, page > 0, nxt, tab):
+    tabs = [c.btn(("• " if k == tab else "") + label, "market", 0, f"{k}.{sort}") for k, (label, _) in MARKET_TABS.items()]
+    sorts = [c.btn(("• " if k == sort else "") + label, "market", 0, f"{tab}.{k}") for k, label in MARKET_SORTS.items()]
+    rows = keyboards.grid(tabs, 3) + keyboards.grid(sorts, 2)
+    rows += [
+        [c.btn(f"{lst.label} {lst.item.rarity_label.split(' ')[0]} — {fa(lst.price)}🪙", "listing", lst.id)]
+        for lst in found
+    ]
+    if nav := _nav(c, "market", page, page > 0, nxt, f"{tab}.{sort}"):
         rows.append(nav)
-    rows.append([c.btn("📋 آگهی‌های من", "mine"), c.btn("🏷️ فروش کالای من", "inv")])
-    rows.append(c.back("home", "🔙 بازگشت"))
+    rows.append([c.btn("🏷️ فروش کالای من", "msell", style="success"), c.btn("📋 آگهی‌های من", "mine")])
+    rows.append(c.back("home"))
+    return Screen(text, rows)
+
+
+@screen("msell")
+async def market_sell(c: Ctx) -> Screen:
+    """Pick what to sell: every tradable piece and stack you own, one button each."""
+    view = await c.services.inventory.view(c.player.id)
+    entries = [(p.label, "listask", "g", str(p.id)) for p in view.gear if p.slot is None and p.item.tradable]
+    entries += [(f"{i.label} ×{fa(q)}", "lqty", i.id, "") for i, q in view.stacks if i.tradable]
+    if not entries:
+        text = f"🏷️ {bold('فروش کالای من')}\n\nچیزی برای فروش ندارید. تجهیزات پوشیده را اول درآورید."
+        return Screen(text, [c.back("market")])
+    page = _int(c.a or "0", "صفحه")
+    chunk, prev, nxt = _page(entries, page)
+    rows = [[c.btn(label, screen_, a, b)] for label, screen_, a, b in chunk]
+    if nav := _nav(c, "msell", page, prev, nxt):
+        rows.append(nav)
+    rows.append(c.back("market"))
+    text = f"🏷️ {bold('فروش کالای من')}\n\nکالایی را که می‌خواهید بفروشید انتخاب کنید؛ قیمت را خودتان تعیین می‌کنید 👇"
+    return Screen(text, rows)
+
+
+@screen("lqty")
+async def market_quantity(c: Ctx) -> Screen:
+    item = get_item(c.a)
+    have = await _stack_qty(c, item.id)
+    if have <= 0:
+        raise GameError("این آیتم دیگر در کوله‌پشتی شما نیست.")
+    options = sorted({n for n in (1, 5, 10, 50, have) if n <= have})
+    buttons = [c.btn("همه (" + fa(n) + ")" if n == have and n > 1 else f"×{fa(n)}", "listask", "s", f"{item.id}.{n}") for n in options]
+    rows = keyboards.grid(buttons, 3) + [c.back("msell")]
+    text = f"🏷️ {bold('چند عدد؟')}\n\n{item.label}\nدر کوله‌پشتی شما: {fa(have)} عدد\n\nتعداد فروش را انتخاب کنید 👇"
     return Screen(text, rows)
 
 
@@ -747,21 +793,24 @@ async def market_cancel(c: Ctx) -> Screen:
 
 @screen("listask")
 async def listing_ask(c: Ctx) -> Screen:
-    if c.is_group or c.state is None:
-        raise GameError("برای عرضه در بازار وارد پیام خصوصی ربات شوید.")
+    if c.state is None:
+        raise GameError("برای عرضه در بازار از «فروش کالای من» در بازار شروع کنید.")
     kind, ref = c.a, c.b
+    if kind == "g":
+        piece_ = await _piece(c, _int(ref))
+        what, back = piece_.label, c.btn("❌ انصراف", "piece", piece_.id)
+    else:
+        item_id, _, qty = ref.partition(".")
+        item = get_item(item_id)
+        what, back = f"{item.label} ×{fa(_int(qty))}", c.btn("❌ انصراف", "lqty", item.id)
     await c.state.set_state(ListingFlow.waiting)
     await c.state.update_data(kind=kind, ref=ref)
-    if kind == "g":
-        text = f"🏷️ {bold('عرضه در بازار')}\n\nبهای فروش را به سکه بنویسید.\nمثال: 5000"
-        cancel = c.btn("❌ انصراف", "piece", ref)
-    else:
-        text = (
-            f"🏷️ {bold('عرضه در بازار')}\n\nتعداد و بهای کل را بنویسید.\n"
-            "مثال: «10 900» یعنی ۱۰ عدد روی هم ۹۰۰ سکه"
-        )
-        cancel = c.btn("❌ انصراف", "item", ref)
-    return Screen(text, [[cancel]])
+    text = (
+        f"🏷️ {bold('قیمت فروش')}\n\n{what}\n\n"
+        "قیمت کل را به سکه بنویسید و بفرستید.\nمثال: 5000\n\n"
+        "پس از ثبت، آگهی شما برای همه‌ی بازیکنان در هر گروهی دیده می‌شود."
+    )
+    return Screen(text, [[back]])
 
 
 # --- rankings and premium ---------------------------------------------------------------------
@@ -954,27 +1003,26 @@ async def on_panel(
 listing_router = Router(name="listing-flow")
 
 
-@listing_router.message(ListingFlow.waiting, F.text, ChatTypeFilter("private"))
-async def got_listing_numbers(message: Message, state: FSMContext, services: Services) -> None:
+@listing_router.message(ListingFlow.waiting, F.text)
+async def got_listing_price(message: Message, state: FSMContext, services: Services) -> None:
+    price = to_int((message.text or "").strip())
+    if price is None:
+        if _is_group(message):
+            raise SkipHandler  # ordinary chat or a game word: let the command router see it
+        raise GameError("فقط یک عدد بنویسید؛ مثلاً: 5000")
     player = await services.players.require(message.from_user.id)  # type: ignore[union-attr]
     data = await state.get_data()
-    numbers = [to_int(word) for word in (message.text or "").split()]
-    if not numbers or None in numbers:
-        raise GameError("فقط عدد بنویسید؛ مثلاً: 5000")
     if data.get("kind") == "g":
-        if len(numbers) != 1:
-            raise GameError("فقط بهای فروش را بنویسید؛ مثلاً: 5000")
-        made = await services.market.list_gear(player, int(data["ref"]), numbers[0])
+        made = await services.market.list_gear(player, int(data["ref"]), price)
     else:
-        if len(numbers) != 2:
-            raise GameError("تعداد و بها را بنویسید؛ مثلاً: 10 900")
-        made = await services.market.list_stack(player, get_item(data["ref"]), numbers[0], numbers[1])
+        item_id, _, qty = str(data["ref"]).partition(".")
+        made = await services.market.list_stack(player, get_item(item_id), int(qty), price)
     await state.clear()
     fee = services.market.fee_for(made.price)
     owner = player.platform_user_id
-    await message.answer(
-        f"🏷️ {bold('آگهی شما نصب شد')}\n{made.label} به بهای {fa(made.price)} سکه.\n"
-        f"کارمزد بازار ({fa(fee)} سکه) هنگام فروش کسر می‌شود.",
+    await message.reply(
+        f"🏷️ {bold('آگهی شما نصب شد')}\n\n{made.label}\nبها: {fa(made.price)} سکه\n\n"
+        f"💡 همه‌ی بازیکنان در هر گروهی آن را در بازار می‌بینند.\nکارمزد بازار ({fa(fee)} سکه) هنگام فروش کسر می‌شود.",
         buttons=[
             [keyboards.panel_button("🏪 بازار", "market", owner), keyboards.panel_button("📋 آگهی‌های من", "mine", owner)],
             [keyboards.panel_button("🔙 بازگشت", "home", owner)],

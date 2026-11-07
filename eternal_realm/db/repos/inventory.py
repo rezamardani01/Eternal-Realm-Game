@@ -93,6 +93,8 @@ async def set_upgrade(tx: Tx, gear_id: int, upgrade: int) -> None:
 
 
 async def delete_gear(tx: Tx, gear_id: int) -> None:
+    # finished market listings still point at the piece; keep that history (item id stays) but unlink it
+    await tx.execute("UPDATE market_listings SET gear_id = NULL WHERE gear_id = ?", (gear_id,))
     await tx.execute("DELETE FROM gear WHERE id = ?", (gear_id,))
 
 
