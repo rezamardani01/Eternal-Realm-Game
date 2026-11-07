@@ -43,6 +43,7 @@ class Fighter:
     skill_ready_in: int = 0
     shield: bool = False
     player_id: int | None = None
+    mention: str = ""
 
     @property
     def hp_ratio(self) -> float:
@@ -53,14 +54,16 @@ class Fighter:
         return self.skill_ready_in <= 0
 
     @classmethod
-    def for_player(cls, player_id: int, name: str, char_class: CharacterClass, stats: Stats) -> Fighter:
+    def for_player(
+        cls, player_id: int, name: str, char_class: CharacterClass, stats: Stats, mention: str = ""
+    ) -> Fighter:
         skill = char_class.skill
         return cls(
             name=name, emoji=char_class.emoji, max_hp=stats.hp, hp=stats.hp, atk=stats.atk,
             defense=stats.defense, magic=stats.magic, speed=stats.speed, luck=stats.luck,
             skill_name=skill.name, skill_emoji=skill.emoji, skill_kind=skill.kind,
             skill_power=skill.power, skill_cooldown=skill.cooldown, skill_effect=skill.effect,
-            crit_bonus=char_class.crit_bonus, player_id=player_id,
+            crit_bonus=char_class.crit_bonus, player_id=player_id, mention=mention,
         )
 
 

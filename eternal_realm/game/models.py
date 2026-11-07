@@ -62,5 +62,10 @@ class Player:
         return CLASSES[self.class_id]
 
     @property
+    def mention(self) -> str:
+        """Bale mention of this player; used in group messages so the person gets pinged."""
+        return f"[{self.name}](uid:{self.platform_user_id})"
+
+    @property
     def title(self) -> str:
         return f"{self.char_class.emoji} {self.name}"

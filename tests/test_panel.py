@@ -423,3 +423,40 @@ async def test_help_panel_has_a_page_for_every_topic(h, services):
     await h.say(10, "راهنما", group=True)
     await h.tap(10, "باس گروهی", group=True)
     assert "باس" in h.session.last_text() and "احضار" in h.session.last_text()
+
+
+# --- mentions, other players' profiles, airier texts ---------------------------------------------
+async def test_names_are_mentions_in_groups_but_plain_in_private(h, services):
+    await reg(services)
+    await h.say(10, "ماهیگیری", group=True)
+    assert "[آرش](uid:10)" in h.session.sent("sendMessage")[0]["text"]
+    await h.say(10, "جایزه", group=True)
+    assert "[آرش](uid:10)" in h.session.last_text()
+    h.session.reset()
+    await h.panel(10, "act", "fishing")
+    assert "(uid:" not in " ".join(h.session.texts())
+
+
+async def test_profile_of_another_player_is_a_glass_panel_with_their_numbers(h, services):
+    await reg(services)
+    other = await reg(services, 11, "سارا", "fairy", "mage")
+    stats = await services.characters.stats(other)
+    await h.say(10, "پروفایل", group=True, reply_to=h.message_of(11))
+    labels = h.labels()
+    assert any("حمله" in t and str(stats.atk).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")) in t for t in labels)
+    assert "سارا" in h.session.last_text()
+    assert not any("کوله‌پشتی" in t for t in labels)  # it is their profile, not your backpack
+    await h.say(10, "پروفایل", group=True)
+    assert any("کوله‌پشتی" in t for t in h.labels())
+
+
+async def test_transfer_text_is_split_into_calm_blocks(h, services, db):
+    from eternal_realm.db.repos import wallet
+
+    a = await reg(services)
+    await reg(services, 11, "سارا", "fairy", "mage")
+    async with db.transaction() as tx:
+        await wallet.apply(tx, a.id, gold=2_000, reason="t", now=services.ctx.now())
+    await h.say(10, "انتقال 500", group=True, reply_to=h.message_of(11))
+    text = h.session.last_text()
+    assert text.count("\n\n") >= 2 and "[سارا](uid:11)" in text

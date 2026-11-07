@@ -126,7 +126,7 @@ class DuelService:
             fighters = []
             for p in (challenger, target):
                 stats = await self.characters.stats_in(tx, p)
-                fighters.append(Fighter.for_player(p.id, p.name, p.char_class, stats))
+                fighters.append(Fighter.for_player(p.id, p.name, p.char_class, stats, p.mention))
             battle = Battle.start(fighters[0], fighters[1], b.duel_max_rounds, self.ctx.rng)
             if not await repo.start(tx, duel_id, json.dumps(battle.to_dict()), now, now + b.duel_turn_seconds):
                 raise GameError("این دعوت‌نامه دیگر معتبر نیست؛ پذیرفته، رد یا منقضی شده است.")

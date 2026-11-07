@@ -17,9 +17,7 @@ async def profile(ctx: CommandContext) -> None:
     if target is None or target.id == ctx.me.id:
         await panel.send(ctx.message, ctx.services, ctx.me, "profile", reply=True)
         return
-    stats = await ctx.services.characters.stats(target)
-    chars = ctx.services.characters
-    await ctx.reply(views.profile_lines(target, stats, chars.xp_needed(target), chars.max_energy(target)))
+    await panel.send(ctx.message, ctx.services, ctx.me, "profile", str(target.id), reply=True)
 
 
 @command(
@@ -61,7 +59,8 @@ async def start_in_group(ctx: CommandContext) -> None:
 @command("daily", ["جایزه", "روزانه", "جایزه روزانه", "daily"], "گنجینه‌ی روزانه", category="👤 شخصیت")
 async def daily(ctx: CommandContext) -> None:
     reward = await ctx.services.players.claim_daily(ctx.me.id)
-    streak = f"\n🔥 {fa(reward.streak)} روز پشت‌سرهم!" if reward.streak > 1 else ""
+    streak = f"\n\n🔥 {fa(reward.streak)} روز پشت‌سرهم!" if reward.streak > 1 else ""
     await ctx.reply(
-        f"🎁 {bold('گنجینه‌ی روزانه')}\nفرمانده {ctx.me.name} ، {bold(fa(reward.gold))} سکه گرفتید.{streak}"
+        f"🎁 {bold('گنجینه‌ی روزانه')}\n\n"
+        f"فرمانده {ctx.who(ctx.me)} ، {bold(fa(reward.gold))} سکه به گنجینه‌تان آمد.{streak}"
     )

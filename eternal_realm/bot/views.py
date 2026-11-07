@@ -502,9 +502,9 @@ def boss_final(v) -> str:  # noqa: ANN001 - BossView
 def duel_invite(challenger, target, seconds: int) -> str:  # noqa: ANN001 - Player
     return (
         f"⚔️ {bold('فراخوان دوئل')}\n\n"
-        f"{challenger.char_class.emoji} {bold(challenger.name)} · سطح {fa(challenger.level)}\n"
+        f"{challenger.char_class.emoji} {challenger.mention} · سطح {fa(challenger.level)}\n"
         f"🏆 {fa(challenger.wins)} پیروزی · 💀 {fa(challenger.losses)} شکست\n\n"
-        f"فرمانده {bold(target.name)} ، دعوت را می‌پذیرید؟\n"
+        f"فرمانده {target.mention} ، دعوت را می‌پذیرید؟\n"
         f"⏳ {duration(seconds)} فرصت دارید."
     )
 
@@ -533,7 +533,8 @@ def duel_result(update) -> str:  # noqa: ANN001 - DuelUpdate
     if battle.winner is None:
         parts.append("🤝 مساوی شد؛ هر دو دلاور بودند!")
     else:
-        parts.append(f"🏆 برنده: {bold(battle.fighters[battle.winner].name)}")
+        winner = battle.fighters[battle.winner]
+        parts.append(f"🏆 برنده: {winner.mention or bold(winner.name)}")
     for fighter in battle.fighters:
         payout = update.payouts.get(fighter.player_id)
         if payout is None:

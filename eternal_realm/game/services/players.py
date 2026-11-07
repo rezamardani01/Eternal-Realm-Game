@@ -129,7 +129,7 @@ class PlayerService:
         if energy < cost:
             wait = progression.seconds_to_next_energy(at, now, self.ctx.balance)
             raise GameError(
-                f"⚡ انرژی شما کافی نیست ({fa(energy)} از {fa(cost)}).\n"
+                f"⚡ انرژی شما کافی نیست ({fa(energy)} از {fa(cost)}).\n\n"
                 f"یک انرژی تازه تا {duration(wait)} دیگر می‌رسد. می‌توانید «استراحت» کنید "
                 "یا معجون انرژی بنوشید و دوباره به میدان بیایید!"
             )

@@ -20,9 +20,10 @@ class InsufficientFunds(GameError):
 
     def __init__(self, shortages: list[tuple[str, str, int, int]]) -> None:
         # each shortage: (icon, name, have, need)
-        lines = ["💸 کیسه‌ی شما برای این کار کافی نیست."]
+        lines = ["💸 کیسه‌ی شما برای این کار کافی نیست.", ""]
         for icon, name, have, need in shortages:
             lines.append(f"{icon} {name}: دارید {_num(have)} · نیاز دارید {_num(need)} · کمبود {_num(need - have)}")
+        lines.append("")
         if any(name == "کریستال" for _, name, _, _ in shortages):
             lines.append("💡 کریستال از «خزانه‌ی ویژه» یا گنج‌های کمیاب ماجراجویی به دست می‌آید.")
         else:

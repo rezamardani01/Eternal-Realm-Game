@@ -46,6 +46,10 @@ class CommandContext:
         assert self.player is not None
         return self.player
 
+    def who(self, player: Player) -> str:
+        """How to write a player's name: a real mention in groups, the plain name in private."""
+        return player.mention if self.is_group else player.name
+
     async def reply(self, text: str, buttons: Rows | None = None) -> Message:
         text = headline(text)
         if buttons:

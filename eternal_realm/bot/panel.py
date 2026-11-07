@@ -67,6 +67,9 @@ class Ctx:
     def back(self, screen: str, label: str = "🔙 بازگشت", a: object = "", b: object = "") -> list:
         return [self.btn(label, screen, a, b)]
 
+    def who(self, player: Player) -> str:
+        return player.mention if self.is_group else player.name
+
     async def show(self, text: str) -> None:
         """A progress frame: replaces the panel text and removes the buttons (no double taps)."""
         if self.message is not None:
@@ -119,7 +122,7 @@ async def home(c: Ctx) -> Screen:
     p = c.player
     top = c.services.characters.max_energy(p)
     text = (
-        f"🏰 فرمانده {bold(p.name)} ، به قلمرو خوش آمدید!\n"
+        f"🏰 فرمانده {c.who(p) if c.is_group else bold(p.name)} ، به قلمرو خوش آمدید!\n"
         f"سطح {fa(p.level)} · {p.race.name} · {p.char_class.name}\n\n"
         f"⚡ انرژی {fa(p.energy)} / {fa(top)}\n🪙 {fa(p.gold)} سکه · 💎 {fa(p.crystal)} کریستال\n\n"
         "امروز به کجا حمله می‌کنید؟"
@@ -206,23 +209,34 @@ async def rest(c: Ctx) -> Screen:
 # --- profile ----------------------------------------------------------------------------------
 @screen("profile")
 async def profile(c: Ctx) -> Screen:
-    p = c.player
-    stats = await c.services.characters.stats(p)
-    top = c.services.characters.max_energy(p)
+    """Your own character, or (with ``a`` = a player id) somebody else's, always with glass buttons."""
+    me = c.player
+    target = me
+    if c.a and _int(c.a) != me.id:
+        other = await c.services.players.get(_int(c.a))
+        if other is None:
+            raise GameError("این قهرمان پیدا نشد.")
+        target = other
+    stats = await c.services.characters.stats(target)
+    top = c.services.characters.max_energy(target)
 
     def stat(key: str, value: str):
         label = "⚡ انرژی" if key == "energy" else STAT_LABELS[key]
-        return c.btn(f"{label} {value}", "stat", key, style=None)
+        return c.btn(f"{label} {value}", "stat", key)
 
     rows = [
-        [stat("hp", fa(stats.hp)), stat("energy", f"{fa(p.energy)}/{fa(top)}")],
+        [stat("hp", fa(stats.hp)), stat("energy", f"{fa(target.energy)}/{fa(top)}")],
         [stat("atk", fa(stats.atk)), stat("defense", fa(stats.defense))],
         [stat("magic", fa(stats.magic)), stat("speed", fa(stats.speed))],
         [stat("luck", fa(stats.luck))],
-        [c.btn("🧰 تجهیزات", "gear"), c.btn("🎒 کوله‌پشتی", "inv")],
-        c.back("home", "🔙 بازگشت"),
     ]
-    text = views.profile_header(p, c.services.characters.xp_needed(p)) + "\n\nروی هر ویژگی بزنید تا بدانید چه می‌کند 👇"
+    if target is me:
+        rows.append([c.btn("🧰 تجهیزات", "gear"), c.btn("🎒 کوله‌پشتی", "inv")])
+        rows.append(c.back("home"))
+    else:
+        rows.append([c.btn("🏰 قلمرو من", "home")])
+    hint = "روی هر ویژگی بزنید تا بدانید چه می‌کند 👇"
+    text = views.profile_header(target, c.services.characters.xp_needed(target)) + f"\n\n{hint}"
     return Screen(text, rows)
 
 
@@ -269,9 +283,9 @@ async def act(c: Ctx) -> Screen:
     services, p = c.services, c.player
     if c.a == "hunt":
         hunted = await services.hunting.hunt(p.id)
-        for frame in views.hunt_frames(p.name, hunted):
+        for frame in views.hunt_frames(c.who(p), hunted):
             await c.show(frame)
-        text = views.hunt_result(p.name, hunted)
+        text = views.hunt_result(c.who(p), hunted)
         rows = keyboards.result_rows(
             c.owner, gold=hunted.gold, xp=hunted.xp, items=hunted.items, energy=hunted.player.energy,
             again="hunt", hp=(hunted.hero_hp, hunted.hero_max_hp),
@@ -279,9 +293,9 @@ async def act(c: Ctx) -> Screen:
         return Screen(text, rows)
     else:
         done = await services.activities.perform(p.id, c.a)
-        for frame in views.activity_frames(p.name, done.activity):
+        for frame in views.activity_frames(c.who(p), done.activity):
             await c.show(frame)
-        text = views.activity_result(p.name, done)
+        text = views.activity_result(c.who(p), done)
         rows = keyboards.result_rows(
             c.owner, gold=done.rolled.gold, xp=done.rolled.xp, crystal=done.rolled.crystal, items=done.items,
             energy=done.player.energy, again=c.a,

@@ -36,8 +36,8 @@ _LEAD = re.compile(rf"^((?:{EMOJI})+)\s+(.+)$", re.S)
 
 def emphasize(line: str) -> str:
     """Bold a line, keeping a leading emoji outside the markers. Lines already bold stay as they are."""
-    if "**" in line or not line.strip():
-        return line
+    if "**" in line or "](uid:" in line or not line.strip():
+        return line  # already styled, or it holds a mention (bold around a link is unreliable)
     match = _LEAD.match(line.strip())
     if match:
         return f"{match.group(1)} **{match.group(2).strip()}**"
