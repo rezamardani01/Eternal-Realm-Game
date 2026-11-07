@@ -9,7 +9,7 @@ from ..game.data.classes import CLASSES
 from ..game.data.races import RACES
 from ..game.engine.combat import Fighter
 from ..shared.text import fa
-from .callbacks import ClassCb, DuelCb, PanelCb, RaceCb
+from .callbacks import BossCb, ClassCb, DuelCb, PanelCb, RaceCb
 
 Rows = list[list[InlineKeyboardButton]]
 
@@ -59,6 +59,15 @@ def result_rows(
     rows.append(status)
     rows.append([panel_button("🔁 دوباره", "act", owner, again), panel_button("🗺️ ماجراجویی", "adv", owner)])
     return rows
+
+
+def boss_buttons(boss_id: int, hit_energy: int, heavy_energy: int) -> Rows:
+    return [
+        [
+            Button.inline(f"⚔️ حمله · {fa(hit_energy)}⚡", BossCb(action="hit", id=boss_id), style="primary"),
+            Button.inline(f"💥 حمله سنگین · {fa(heavy_energy)}⚡", BossCb(action="heavy", id=boss_id), style="danger"),
+        ]
+    ]
 
 
 def duel_invite(duel_id: int) -> Rows:

@@ -450,6 +450,54 @@ def sale_report(order, player, user, charge_id, when: int, totals, granted: str 
     )
 
 
+# --- group boss --------------------------------------------------------------------------------
+MEDALS = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
+
+
+def boss_status(v, last: str | None = None) -> str:  # noqa: ANN001 - BossView
+    percent = round(100 * v.hp / v.max_hp) if v.max_hp else 0
+    lines = [
+        f"{v.type.emoji} {bold(v.type.name)} · سطح {fa(v.level)}",
+        f"❤️ جان: {fa(v.hp)} / {fa(v.max_hp)}",
+        f"{bar(v.hp, v.max_hp, 10)}  {fa(percent)}٪",
+        f"⏳ زمان باقی‌مانده: {duration(v.seconds_left)}",
+        f"👥 {fa(v.participants)} نفر در نبرد",
+    ]
+    if v.top:
+        lines += ["", f"🏅 {bold('برترین ضربه‌ها')}"]
+        lines += [f"{MEDALS[i]} {name} — {fa(dmg)}" for i, (name, dmg, _) in enumerate(v.top)]
+    if last:
+        lines += ["", DIV, last]
+    lines += ["", "همه با هم ضربه بزنید تا باس بیفتد 👇"]
+    return "\n".join(lines)
+
+
+def boss_summoned(v, name: str) -> str:  # noqa: ANN001
+    return (
+        f"{v.type.emoji} {bold(v.type.name + ' ظاهر شد!')}\n"
+        f"فرمانده {name} باس را احضار کرد. همه به میدان بیایند!\n\n" + boss_status(v)
+    )
+
+
+def boss_final(v) -> str:  # noqa: ANN001 - BossView
+    defeated = v.status == "defeated"
+    head = (
+        f"🏆 {bold(v.type.name + ' شکست خورد!')}\nهمه با هم پیروز شدید."
+        if defeated
+        else f"⌛ {bold(v.type.name + ' گریخت')}\nزمان تمام شد؛ ولی تلاشتان بی‌پاداش نماند."
+    )
+    lines = [head, "", DIV]
+    for i, p in enumerate(v.payouts):
+        medal = MEDALS[i] if i < len(MEDALS) else "🔹"
+        extra = {"magic_chest": " · 🎁 صندوقچه جادویی", "wooden_chest": " · 📦 صندوقچه چوبی"}.get(p.chest or "", "")
+        up = f" · 🎉 سطح {fa(p.level_up)}" if p.level_up else ""
+        lines.append(f"{medal} {p.name} — {fa(p.damage)} ({fa(round(p.share * 100))}٪)")
+        lines.append(f"   🪙 {fa(p.gold)} · ⭐ {fa(p.xp)}{extra}{up}")
+    if not v.payouts:
+        lines.append("هیچ‌کس ضربه‌ای نزد.")
+    return "\n".join(lines)
+
+
 # --- duels -------------------------------------------------------------------------------------
 def duel_invite(challenger, target, seconds: int) -> str:  # noqa: ANN001 - Player
     return (

@@ -25,7 +25,7 @@ from ..game.models import Player
 from ..game.services.inventory import InventoryView, Piece
 from ..game.services.shop import shop_items
 from ..shared.errors import GameError
-from ..shared.text import bold, fa, headline, to_int
+from ..shared.text import bold, duration, fa, headline, to_int
 from . import keyboards, views
 from ..game.data.packs import PACKS
 from .callbacks import BuyCb, PanelCb
@@ -132,7 +132,36 @@ async def home(c: Ctx) -> Screen:
         [c.btn("💎 خزانه‌ی ویژه", "premium"), c.btn("🎁 جایزه روزانه", "daily")],
         [c.btn("😴 استراحت", "rest"), c.btn("❓ راهنما", "help")],
     ]
+    if c.is_group:
+        rows.insert(-1, [c.btn("🐉 باس گروه", "boss")])
     return Screen(text, rows)
+
+
+@screen("boss")
+async def boss_panel(c: Ctx) -> Screen:
+    b = c.services.ctx.balance
+    if not c.is_group:
+        return Screen(f"🐉 {bold('باس گروهی')}\n\nباس را در یک گروه احضار کنید و با دوستانتان بزنیدش!", [c.back("home")])
+    if await c.services.bosses.active(c.chat_id) is not None:
+        return Screen(None, toast="🐉 یک باس زنده است! پیامش را بالاتر ببینید یا «باس» را بنویسید.", alert=True)
+    text = (
+        f"🐉 {bold('احضار باس')}\n\n"
+        f"هزینه: {bold(fa(b.boss_summon_gold))} سکه\n"
+        f"از سطح {fa(b.boss_min_level)} · هر گروه هر {duration(b.boss_cooldown_seconds)} یک باس\n\n"
+        "همه‌ی اعضا می‌توانند به باس ضربه بزنند و پاداش را به نسبت ضربه‌هایشان می‌برند.\n\n"
+        "احضار کنیم؟"
+    )
+    return Screen(text, [[c.btn("🐉 احضار", "bsummon", style="danger"), c.btn("↩️ نه", "home")]])
+
+
+@screen("bsummon")
+async def boss_summon(c: Ctx) -> Screen:
+    from . import boss as boss_ui
+
+    view = await c.services.bosses.summon(c.player, c.chat_id)
+    if c.message is not None:
+        await boss_ui.post(c.message, c.services, view, views.boss_summoned(view, c.player.name))
+    return Screen(f"🐉 {bold('باس احضار شد')}\n\nپیامش را در پایین ببینید 👇", [c.back("home")])
 
 
 @screen("help")

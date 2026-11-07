@@ -22,6 +22,11 @@ class PanelCb(CallbackData, prefix="p"):
     o: int
 
 
+class BossCb(CallbackData, prefix="b"):
+    action: str
+    id: int
+
+
 class DuelCb(CallbackData, prefix="d"):
     action: str
     id: int

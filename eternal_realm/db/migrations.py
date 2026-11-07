@@ -159,6 +159,32 @@ MIGRATIONS: list[str] = [
         created_at INTEGER NOT NULL
     );
     """,
+    # 8: group bosses and every player's share of the damage
+    """
+    CREATE TABLE bosses (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id     INTEGER NOT NULL,
+        message_id  INTEGER,
+        boss_type   TEXT    NOT NULL,
+        level       INTEGER NOT NULL,
+        max_hp      INTEGER NOT NULL,
+        hp          INTEGER NOT NULL CHECK (hp >= 0),
+        status      TEXT    NOT NULL CHECK (status IN ('active', 'defeated', 'expired')),
+        summoner_id INTEGER NOT NULL REFERENCES players (id),
+        created_at  INTEGER NOT NULL,
+        expires_at  INTEGER NOT NULL,
+        ended_at    INTEGER
+    );
+    CREATE INDEX idx_bosses_chat ON bosses (chat_id, status, created_at);
+
+    CREATE TABLE boss_hits (
+        boss_id   INTEGER NOT NULL REFERENCES bosses (id),
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        damage    INTEGER NOT NULL DEFAULT 0,
+        hits      INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (boss_id, player_id)
+    );
+    """,
 ]
 
 

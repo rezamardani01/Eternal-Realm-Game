@@ -36,6 +36,7 @@ async def test_no_line_or_button_starts_with_two_emojis(services, db):
     other = await services.players.register(11, "u11", "سارا", "fairy", "mage")
     async with db.transaction() as tx:
         await wallet.apply(tx, me.id, gold=50_000, crystal=500, reason="t", now=services.ctx.now())
+        await tx.execute("UPDATE players SET level = 6 WHERE id = ?", (me.id,))
         await services.inventory.grant(tx, me.id, "wooden_chest", 2)
         await services.inventory.grant(tx, me.id, "iron_ore", 20)
         await services.inventory.grant(tx, me.id, "leather_cap", 1)
@@ -48,10 +49,10 @@ async def test_no_line_or_button_starts_with_two_emojis(services, db):
     steps = [("say", "/start"), ("say", "قلمرو"), ("say", "راهنما"), ("say", "پروفایل"), ("say", "جایزه"),
              ("say", "ماهیگیری"), ("say", "معدن"), ("say", "گیاه"), ("say", "جستجو"), ("say", "شکار"),
              ("say", "استراحت"), ("say", "رتبه"), ("say", "ثروتمندان"), ("say", "تنظیمات گروه"),
-             ("say", "کیف من"), ("say", "فروشگاه ویژه")]
+             ("say", "کیف من"), ("say", "فروشگاه ویژه"), ("say", "باس")]
     screens = ["home", "profile", "inv", "gear", "items", "chests", "chestshop", "shop", "shopcat:gear",
                "shopcat:pot", "market", "mine", "top:level", "premium", "prem:coins", "prem:crystals",
-               "prem:bundles", "prem:chests", "adv", "help", "daily", "rest", "open:wooden_chest", "odds:magic_chest"]
+               "prem:bundles", "prem:chests", "prem:materials", "luckyodds", "helpsec:boss", "helpsec:all", "boss", "adv", "help", "daily", "rest", "open:wooden_chest", "odds:magic_chest"]
     problems: list[tuple[str, str]] = []
 
     def scan(label: str) -> None:

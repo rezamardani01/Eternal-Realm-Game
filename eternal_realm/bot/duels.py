@@ -13,7 +13,7 @@ from baleropy.types import CallbackQuery
 from ..game.engine.combat import Action
 from ..game.services.duels import Duel, DuelUpdate
 from ..shared.errors import GameError
-from . import keyboards, views
+from . import boss, keyboards, views
 from .callbacks import DuelCb
 from .services import Services
 
@@ -81,6 +81,7 @@ async def janitor(bot: Bot, services: Services, interval: float = 20.0) -> None:
             for item in await services.duels.expire_stale():
                 await _announce(bot, services, item)
             await services.payments.expire_stale()
+            await boss.announce_expired(bot, services)
         except asyncio.CancelledError:
             raise
         except Exception:

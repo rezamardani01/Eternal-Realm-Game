@@ -52,11 +52,10 @@ class CommandContext:
             return await self.message.reply(text, buttons=buttons)
         return await self.message.reply(text)
 
-    async def play(self, frames: list[str], final: str, buttons: Rows | None = None) -> None:
+    async def play(self, frames: list[str], final: str, buttons: Rows | None = None) -> Message:
         """Send the first frame, edit the same message through the rest, finish with ``final``."""
         if not frames:
-            await self.reply(final, buttons)
-            return
+            return await self.reply(final, buttons)
         sent = await self.reply(frames[0])
         pause = self.services.ctx.pause
         for frame in frames[1:]:
@@ -64,6 +63,7 @@ class CommandContext:
             await _edit(sent, frame)
         await pause()
         await _edit(sent, final, buttons)
+        return sent
 
     async def say(self, text: str, buttons: Rows | None = None) -> Message:
         text = headline(text)
