@@ -97,6 +97,26 @@ def help_text() -> str:
     )
 
 
+def activity_result(name: str, result) -> str:  # noqa: ANN001 - ActivityResult
+    rolled, player = result.rolled, result.player
+    gains = []
+    if rolled.gold:
+        gains.append(f"🪙 +{fa(rolled.gold)} سکه")
+    if rolled.crystal:
+        gains.append(f"💎 +{fa(rolled.crystal)} کریستال")
+    if rolled.xp:
+        gains.append(f"⭐ +{fa(rolled.xp)} تجربه")
+    lines = [result.activity.intro.format(name=name), rolled.outcome.text.format(name=name)]
+    if gains:
+        lines.append(" · ".join(gains))
+    if result.items:
+        lines.append("📦 " + "، ".join(f"{label} ×{fa(qty)}" for label, qty in result.items))
+    if result.level_up:
+        lines.append(f"🎉 سطحت بالا رفت! حالا سطح {fa(result.level_up.new_level)} هستی.")
+    lines.append(f"⚡ انرژی: {fa(player.energy)}")
+    return "\n".join(lines)
+
+
 def inventory(owner: str, view) -> str:  # noqa: ANN001 - InventoryView
     lines = [f"🎒 کوله‌پشتی {owner}", LINE]
     if view.stacks:

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from ..context import AppContext
 from ..game.services.characters import CharacterService
+from ..game.services.activities import ActivityService
 from ..game.services.groups import GroupService
 from ..game.services.inventory import InventoryService
 from ..game.services.players import PlayerService
@@ -17,6 +18,7 @@ class Services:
     ctx: AppContext
     players: PlayerService
     inventory: InventoryService
+    activities: ActivityService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -32,6 +34,7 @@ class Services:
             ctx=ctx,
             players=players,
             inventory=inventory,
+            activities=ActivityService(ctx, players, inventory),
             characters=CharacterService(ctx, inventory),
             groups=GroupService(ctx),
             throttle=Throttle(

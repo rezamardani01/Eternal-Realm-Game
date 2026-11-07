@@ -21,7 +21,7 @@ class Balance:
     energy_per_level: int = 2
     energy_regen_seconds: int = 90
     xp_base: int = 100
-    xp_exponent: float = 1.6
+    xp_exponent: float = 1.4
     start_gold: int = 500
     start_energy_potions: int = 2
     daily_gold: int = 300
