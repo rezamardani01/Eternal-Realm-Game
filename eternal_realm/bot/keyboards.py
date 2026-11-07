@@ -30,6 +30,10 @@ def class_buttons() -> Rows:
     return _grid([Button.inline(f"{c.emoji} {c.name}", ClassCb(id=c.id)) for c in CLASSES.values()])
 
 
+def start_button(bot_username: str) -> list[InlineKeyboardButton]:
+    return [Button.url("🎮 شروع بازی", f"https://ble.ir/{bot_username}?start=1")]
+
+
 def main_menu() -> Rows:
     return _grid([Button.inline(label, MenuCb(page=page)) for page, label in MENU_ENTRIES])
 

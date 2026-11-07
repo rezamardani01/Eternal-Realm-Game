@@ -45,6 +45,26 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_transactions_player ON transactions (player_id, created_at);
     CREATE INDEX idx_transactions_reason ON transactions (reason, player_id, created_at);
     """,
+    # 2: Bale groups the bot plays in, and per-group activity of each player
+    """
+    CREATE TABLE groups (
+        chat_id      INTEGER PRIMARY KEY,
+        title        TEXT    NOT NULL DEFAULT '',
+        enabled      INTEGER NOT NULL DEFAULT 1,
+        disabled_cmds TEXT   NOT NULL DEFAULT '',
+        created_at   INTEGER NOT NULL,
+        last_seen    INTEGER NOT NULL
+    );
+
+    CREATE TABLE group_members (
+        chat_id     INTEGER NOT NULL REFERENCES groups (chat_id),
+        player_id   INTEGER NOT NULL REFERENCES players (id),
+        points      INTEGER NOT NULL DEFAULT 0,
+        last_active INTEGER NOT NULL,
+        PRIMARY KEY (chat_id, player_id)
+    );
+    CREATE INDEX idx_group_members_rank ON group_members (chat_id, points DESC);
+    """,
 ]
 
 

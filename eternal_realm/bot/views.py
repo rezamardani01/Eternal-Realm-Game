@@ -73,6 +73,19 @@ def pick_summary(race: Race, cls: CharacterClass) -> str:
     return f"{race.emoji} {race.name} · {cls.emoji} {cls.name}"
 
 
+def command_help(registry, in_group: bool) -> str:  # noqa: ANN001
+    """Help generated from the registry, so it always matches the real commands."""
+    categories: dict[str, list[str]] = {}
+    for cmd in registry.all():
+        if cmd.name == "start" or (in_group and not cmd.group) or (not in_group and not cmd.private):
+            continue
+        persian = [a for a in cmd.aliases if not a.isascii()]
+        label = persian[0] if persian else "/" + cmd.aliases[0]
+        categories.setdefault(cmd.category, []).append(f"• {label}: {cmd.description}")
+    blocks = [f"{title}\n" + "\n".join(lines) for title, lines in categories.items()]
+    return "📖 دستورهای قلمرو جاودان\n\n" + "\n\n".join(blocks)
+
+
 def help_text() -> str:
     return (
         "❓ راهنمای قلمرو جاودان\n\n"

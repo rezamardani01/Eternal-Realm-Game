@@ -69,6 +69,9 @@ class FakeSession(BaseSession):
 class Harness:
     def __init__(self, services: Services) -> None:
         self.services = services
+        services.bot_username = "er_bot"
+        services.throttle.user_gap = 0
+        services.throttle.group_max = 10_000
         self.session = FakeSession()
         self.bot = Bot("123456:TESTTOKEN", session=self.session)
         self.dp = build_dispatcher(services)

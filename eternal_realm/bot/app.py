@@ -10,6 +10,8 @@ from ..config import Settings
 from ..context import AppContext
 from ..db.database import Database
 from . import menu, onboarding
+from .commands import REGISTRY
+from .commands import router as commands_router
 from .middlewares import ErrorMiddleware
 from .services import Services
 
@@ -28,7 +30,8 @@ def build_dispatcher(services: Services) -> Dispatcher:
     errors = ErrorMiddleware()
     dp.message.middleware(errors)
     dp.callback_query.middleware(errors)
-    _attach(dp, onboarding.router, menu.router)
+    REGISTRY.configure(services.ctx.settings.command_overrides)
+    _attach(dp, onboarding.router, menu.router, commands_router)
     return dp
 
 
