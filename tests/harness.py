@@ -17,6 +17,7 @@ class FakeSession(BaseSession):
     def __init__(self) -> None:
         super().__init__()
         self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.chat_admins: set[int] = set()
         self._next_id = 1000
 
     async def _send(self, bot: Any, method: Any) -> tuple[int, bytes]:
@@ -25,6 +26,12 @@ class FakeSession(BaseSession):
         self.calls.append((name, payload))
         if name == "getMe":
             result: Any = {"id": 1, "is_bot": True, "first_name": "bot", "username": "er_bot"}
+        elif name == "getChatMember":
+            uid = int(payload["user_id"])
+            result = {
+                "status": "administrator" if uid in self.chat_admins else "member",
+                "user": {"id": uid, "is_bot": False, "first_name": f"user{uid}"},
+            }
         elif name.startswith(("send", "edit", "forward")) and name != "sendChatAction":
             self._next_id += 1
             result = {
