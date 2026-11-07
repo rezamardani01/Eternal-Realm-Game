@@ -1,0 +1,46 @@
+"""Small text helpers: Persian digits, normalisation and progress bars."""
+
+from __future__ import annotations
+
+import re
+
+_TO_FA = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+_FROM_FA = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+_CHAR_FIX = str.maketrans({"ي": "ی", "ك": "ک", "ۀ": "ه", "ة": "ه", "‌": " ", "‏": "", "‎": ""})
+_SPACES = re.compile(r"\s+")
+
+
+def fa(value: int | float | str) -> str:
+    """``12500`` -> ``۱۲٬۵۰۰``."""
+    if isinstance(value, float):
+        value = round(value)
+    text = f"{value:,}" if isinstance(value, int) else str(value)
+    return text.replace(",", "٬").translate(_TO_FA)
+
+
+def normalize(text: str) -> str:
+    """Canonical form used for matching commands and names: Persian letters and ASCII digits."""
+    return _SPACES.sub(" ", text.translate(_CHAR_FIX).translate(_FROM_FA)).strip()
+
+
+def to_int(text: str) -> int | None:
+    """Parse ``'۱٬۲۰۰'`` / ``'1,200'`` / ``'1200'`` into an int (``None`` if it is not a number)."""
+    cleaned = normalize(text).replace(",", "").replace("٬", "").replace("،", "")
+    return int(cleaned) if cleaned.isdigit() else None
+
+
+def bar(current: int, maximum: int, width: int = 10) -> str:
+    maximum = max(maximum, 1)
+    filled = max(0, min(width, round(width * current / maximum)))
+    return "▰" * filled + "▱" * (width - filled)
+
+
+def duration(seconds: int) -> str:
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return f"{fa(seconds)} ثانیه"
+    minutes, sec = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{fa(minutes)} دقیقه" + (f" و {fa(sec)} ثانیه" if sec and minutes < 5 else "")
+    hours, minutes = divmod(minutes, 60)
+    return f"{fa(hours)} ساعت" + (f" و {fa(minutes)} دقیقه" if minutes else "")
