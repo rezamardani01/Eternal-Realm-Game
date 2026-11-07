@@ -8,6 +8,7 @@ from ..context import AppContext
 from ..game.services.activities import ActivityService
 from ..game.services.characters import CharacterService
 from ..game.services.duels import DuelService
+from ..game.services.economy import EconomyService
 from ..game.services.groups import GroupService
 from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
@@ -25,6 +26,7 @@ class Services:
     hunting: HuntService
     duels: DuelService
     shop: ShopService
+    economy: EconomyService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -45,6 +47,7 @@ class Services:
             hunting=HuntService(ctx, players, inventory, characters),
             duels=DuelService(ctx, players, characters),
             shop=ShopService(ctx, inventory),
+            economy=EconomyService(ctx),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(
