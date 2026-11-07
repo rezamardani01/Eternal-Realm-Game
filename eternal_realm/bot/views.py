@@ -218,6 +218,56 @@ def chest_opened(name: str, opened) -> str:  # noqa: ANN001 - Opened
     return f"🎁 {name} {opened.chest.label} را باز کرد...\n✨ " + " + ".join(got)
 
 
+def pack_description(pack) -> str:  # noqa: ANN001 - Pack
+    from ..game.data.items import get_item
+
+    parts = []
+    if pack.gold:
+        parts.append(f"{fa(pack.gold)} سکه")
+    if pack.crystal:
+        parts.append(f"{fa(pack.crystal)} کریستال")
+    parts += [f"{get_item(i).name} ×{fa(q)}" for i, q in pack.items.items()]
+    return "شامل: " + " + ".join(parts)
+
+
+def premium_shop(payments_enabled: bool) -> str:
+    from ..game.data.chests import CHESTS
+    from ..game.data.items import get_item
+    from ..game.data.packs import PACKS, SECTIONS
+
+    lines = ["💎 فروشگاه ویژه", LINE]
+    if payments_enabled:
+        for section, title in SECTIONS.items():
+            lines.append(title)
+            for pack in (p for p in PACKS.values() if p.section == section):
+                lines.append(f"• {pack.label} — {fa(pack.price_toman)} تومان")
+                if section == "bundles":
+                    lines.append(f"   {pack_description(pack)}")
+            lines.append("")
+    else:
+        lines += ["خرید با پول واقعی فعلاً غیرفعال است.", ""]
+    lines.append("🎁 صندوقچه‌ها (با کریستال)")
+    for chest in CHESTS.values():
+        if chest.price and chest.price[0] == "crystal":
+            lines.append(f"• {get_item(chest.item_id).label} — {fa(chest.price[1])} 💎")
+    lines += [
+        "شانس دقیق محتویات هر صندوقچه: «شانس صندوقچه جادویی»",
+        LINE,
+        "💳 پرداخت با کیف پول بله انجام می‌شود و اطلاعات کارت شما ذخیره نمی‌شود.",
+        "⚠️ کاربران زیر ۱۸ سال فقط با اطلاع و اجازه والدین خرید کنند.",
+        "همه‌چیز را می‌شود بدون پرداخت هم با بازی به‌دست آورد.",
+    ]
+    return "\n".join(lines)
+
+
+def delivery(order) -> str:  # noqa: ANN001 - Order
+    return (
+        f"✅ پرداخت موفق بود! سفارش {fa(order.id)}\n"
+        f"{order.pack.label} به حسابت اضافه شد.\n{pack_description(order.pack)}\n"
+        "ممنون که از بازی حمایت می‌کنی 💛"
+    )
+
+
 def duel_invite(challenger, target, seconds: int) -> str:  # noqa: ANN001 - Player
     return (
         "⚔️ درخواست مبارزه!\n\n"

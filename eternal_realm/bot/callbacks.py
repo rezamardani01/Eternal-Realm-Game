@@ -22,6 +22,11 @@ class DuelCb(CallbackData, prefix="d"):
     id: int
 
 
+class BuyCb(CallbackData, prefix="buy"):
+    kind: str
+    id: str
+
+
 class UpgradeCb(CallbackData, prefix="up"):
     id: int
     level: int

@@ -8,7 +8,11 @@ from baleropy.types import InlineKeyboardButton
 from ..game.data.classes import CLASSES
 from ..game.data.races import RACES
 from ..game.engine.combat import Fighter
-from .callbacks import ClassCb, DuelCb, MenuCb, RaceCb, UpgradeCb
+from ..game.data.chests import CHESTS
+from ..game.data.items import get_item
+from ..game.data.packs import PACKS
+from ..shared.text import fa
+from .callbacks import BuyCb, ClassCb, DuelCb, MenuCb, RaceCb, UpgradeCb
 
 Rows = list[list[InlineKeyboardButton]]
 
@@ -18,6 +22,7 @@ MENU_ENTRIES: list[tuple[str, str]] = [
     ("inventory", "🎒 کوله‌پشتی"),
     ("equipment", "🧰 تجهیزات"),
     ("shop", "🛒 فروشگاه"),
+    ("premium", "💎 فروشگاه ویژه"),
     ("help", "❓ راهنما"),
 ]
 
@@ -44,6 +49,20 @@ def main_menu() -> Rows:
 
 def back_to_menu() -> Rows:
     return [[Button.inline("🔙 منوی اصلی", MenuCb(page="home"))]]
+
+
+def premium_buttons(payments_enabled: bool) -> Rows:
+    rows: Rows = []
+    if payments_enabled:
+        for pack in PACKS.values():
+            label = f"{pack.label} — {fa(pack.price_toman)} تومان"
+            rows.append([Button.inline(label, BuyCb(kind="cash", id=pack.id), style="success")])
+    for chest in CHESTS.values():
+        if chest.price and chest.price[0] == "crystal":
+            item = get_item(chest.item_id)
+            rows.append([Button.inline(f"{item.label} — {fa(chest.price[1])} 💎", BuyCb(kind="crystal", id=item.id))])
+    rows += back_to_menu()
+    return rows
 
 
 def upgrade_confirm(gear_id: int, level: int) -> Rows:

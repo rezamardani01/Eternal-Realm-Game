@@ -131,6 +131,24 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_market_active ON market_listings (status, item_id, price);
     CREATE INDEX idx_market_seller ON market_listings (seller_id, status);
     """,
+    # 6: real-money orders paid through the Bale wallet. No card data is ever stored.
+    """
+    CREATE TABLE orders (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id    INTEGER NOT NULL REFERENCES players (id),
+        pack_id      TEXT    NOT NULL,
+        amount       INTEGER NOT NULL CHECK (amount > 0),
+        status       TEXT    NOT NULL
+                     CHECK (status IN ('pending', 'paid', 'delivered', 'failed', 'refunded')),
+        payload      TEXT    NOT NULL UNIQUE,
+        charge_id    TEXT UNIQUE,
+        created_at   INTEGER NOT NULL,
+        paid_at      INTEGER,
+        delivered_at INTEGER
+    );
+    CREATE INDEX idx_orders_player ON orders (player_id, status);
+    CREATE INDEX idx_orders_pending ON orders (status, created_at);
+    """,
 ]
 
 

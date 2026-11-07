@@ -113,6 +113,44 @@ class Harness:
             self.bot, {"update_id": self._update_id, "message": message}
         )
 
+    async def precheckout(self, uid: int, payload: str, amount: int) -> None:
+        self._update_id += 1
+        await self.dp.feed_raw_update(
+            self.bot,
+            {
+                "update_id": self._update_id,
+                "pre_checkout_query": {
+                    "id": f"pc{self._update_id}",
+                    "from": self._user(uid),
+                    "currency": "IRR",
+                    "total_amount": amount,
+                    "invoice_payload": payload,
+                },
+            },
+        )
+
+    async def paid(self, uid: int, payload: str, amount: int, charge: str = "charge-1") -> None:
+        self._update_id += 1
+        self._message_id += 1
+        await self.dp.feed_raw_update(
+            self.bot,
+            {
+                "update_id": self._update_id,
+                "message": {
+                    "message_id": self._message_id,
+                    "from": self._user(uid),
+                    "chat": {"id": uid, "type": "private"},
+                    "date": 0,
+                    "successful_payment": {
+                        "currency": "IRR",
+                        "total_amount": amount,
+                        "invoice_payload": payload,
+                        "provider_payment_charge_id": charge,
+                    },
+                },
+            },
+        )
+
     def message_of(self, uid: int, *, group: bool = True, message_id: int = 7) -> dict[str, Any]:
         """A message authored by ``uid``, to be used as the target of a reply."""
         return {

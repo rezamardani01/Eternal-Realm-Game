@@ -80,6 +80,7 @@ async def janitor(bot: Bot, services: Services, interval: float = 20.0) -> None:
         try:
             for item in await services.duels.expire_stale():
                 await _announce(bot, services, item)
+            await services.payments.expire_stale()
         except asyncio.CancelledError:
             raise
         except Exception:

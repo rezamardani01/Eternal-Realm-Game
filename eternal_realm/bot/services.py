@@ -14,6 +14,7 @@ from ..game.services.groups import GroupService
 from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
 from ..game.services.market import MarketService
+from ..game.services.payments import PaymentService
 from ..game.services.players import PlayerService
 from ..game.services.rankings import RankingService
 from ..game.services.shop import ShopService
@@ -33,6 +34,7 @@ class Services:
     market: MarketService
     rankings: RankingService
     chests: ChestService
+    payments: PaymentService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -57,6 +59,7 @@ class Services:
             market=MarketService(ctx, inventory),
             rankings=RankingService(ctx),
             chests=ChestService(ctx, inventory),
+            payments=PaymentService(ctx, inventory),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(

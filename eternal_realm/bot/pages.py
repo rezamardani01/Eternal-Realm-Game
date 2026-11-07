@@ -51,6 +51,12 @@ async def equipment_page(services: Services, player: Player) -> Page:
     return views.equipment(player.name, view, stats), keyboards.back_to_menu()
 
 
+@page("premium")
+async def premium_page(services: Services, player: Player) -> Page:
+    enabled = services.ctx.settings.payments_enabled
+    return views.premium_shop(enabled), keyboards.premium_buttons(enabled)
+
+
 @page("shop")
 async def shop_page(services: Services, player: Player) -> Page:
     return views.shop_listing(), keyboards.back_to_menu()

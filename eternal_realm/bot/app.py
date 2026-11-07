@@ -11,7 +11,7 @@ from baleropy import Bot, Dispatcher, Router
 from ..config import Settings
 from ..context import AppContext
 from ..db.database import Database
-from . import duels, menu, onboarding
+from . import duels, menu, onboarding, payments
 from . import shop as shop_buttons
 from .commands import REGISTRY
 from .commands import router as commands_router
@@ -35,7 +35,10 @@ def build_dispatcher(services: Services) -> Dispatcher:
     dp.callback_query.middleware(errors)
     REGISTRY.configure(services.ctx.settings.command_overrides)
     # order matters: FSM-bound onboarding first, free-text commands last
-    _attach(dp, onboarding.router, menu.router, duels.router, shop_buttons.router, commands_router)
+    _attach(
+        dp, onboarding.router, menu.router, payments.router, duels.router, shop_buttons.router,
+        commands_router,
+    )
     return dp
 
 
