@@ -11,7 +11,7 @@ from baleropy import Bot, Dispatcher, Router
 from ..config import Settings
 from ..context import AppContext
 from ..db.database import Database
-from . import duels, menu, onboarding, payments
+from . import duels, maintenance, menu, onboarding, payments
 from . import shop as shop_buttons
 from .commands import REGISTRY
 from .commands import router as commands_router
@@ -52,12 +52,17 @@ async def run(settings: Settings) -> None:
         services.bot_username = me.username or ""
         log.info("Eternal Realm is up as @%s", services.bot_username)
         dp = build_dispatcher(services)
-        cleaner = asyncio.create_task(duels.janitor(bot, services), name="duel-janitor")
+        background = [
+            asyncio.create_task(duels.janitor(bot, services), name="janitor"),
+            asyncio.create_task(maintenance.backup_loop(db), name="backup"),
+        ]
         try:
             await dp.start_polling(bot, skip_updates=True)
         finally:
-            cleaner.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await cleaner
+            for task in background:
+                task.cancel()
+            for task in background:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
     finally:
         await db.close()
