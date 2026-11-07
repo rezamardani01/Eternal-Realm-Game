@@ -149,6 +149,16 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_orders_player ON orders (player_id, status);
     CREATE INDEX idx_orders_pending ON orders (status, created_at);
     """,
+    # 7: audit trail of everything administrators do
+    """
+    CREATE TABLE admin_log (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        admin_id   INTEGER NOT NULL,
+        action     TEXT    NOT NULL,
+        detail     TEXT    NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL
+    );
+    """,
 ]
 
 

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from ..context import AppContext
 from ..game.services.activities import ActivityService
+from ..game.services.admin import AdminService
 from ..game.services.characters import CharacterService
 from ..game.services.chests import ChestService
 from ..game.services.duels import DuelService
@@ -35,6 +36,7 @@ class Services:
     rankings: RankingService
     chests: ChestService
     payments: PaymentService
+    admin: AdminService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -60,6 +62,7 @@ class Services:
             rankings=RankingService(ctx),
             chests=ChestService(ctx, inventory),
             payments=PaymentService(ctx, inventory),
+            admin=AdminService(ctx, inventory),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(
