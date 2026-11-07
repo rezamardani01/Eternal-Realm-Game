@@ -12,6 +12,7 @@ from ..game.services.groups import GroupService
 from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
 from ..game.services.players import PlayerService
+from ..game.services.shop import ShopService
 from .throttle import Throttle
 
 
@@ -23,6 +24,7 @@ class Services:
     activities: ActivityService
     hunting: HuntService
     duels: DuelService
+    shop: ShopService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -42,6 +44,7 @@ class Services:
             activities=ActivityService(ctx, players, inventory),
             hunting=HuntService(ctx, players, inventory, characters),
             duels=DuelService(ctx, players, characters),
+            shop=ShopService(ctx, inventory),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(

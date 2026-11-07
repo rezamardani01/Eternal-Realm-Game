@@ -51,6 +51,11 @@ async def equipment_page(services: Services, player: Player) -> Page:
     return views.equipment(player.name, view, stats), keyboards.back_to_menu()
 
 
+@page("shop")
+async def shop_page(services: Services, player: Player) -> Page:
+    return views.shop_listing(), keyboards.back_to_menu()
+
+
 async def profile_text(services: Services, player: Player) -> str:
     stats = await services.characters.stats(player)
     return views.profile(

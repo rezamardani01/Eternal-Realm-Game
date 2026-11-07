@@ -8,7 +8,7 @@ from baleropy.types import InlineKeyboardButton
 from ..game.data.classes import CLASSES
 from ..game.data.races import RACES
 from ..game.engine.combat import Fighter
-from .callbacks import ClassCb, DuelCb, MenuCb, RaceCb
+from .callbacks import ClassCb, DuelCb, MenuCb, RaceCb, UpgradeCb
 
 Rows = list[list[InlineKeyboardButton]]
 
@@ -17,6 +17,7 @@ MENU_ENTRIES: list[tuple[str, str]] = [
     ("profile", "👤 شخصیت من"),
     ("inventory", "🎒 کوله‌پشتی"),
     ("equipment", "🧰 تجهیزات"),
+    ("shop", "🛒 فروشگاه"),
     ("help", "❓ راهنما"),
 ]
 
@@ -43,6 +44,10 @@ def main_menu() -> Rows:
 
 def back_to_menu() -> Rows:
     return [[Button.inline("🔙 منوی اصلی", MenuCb(page="home"))]]
+
+
+def upgrade_confirm(gear_id: int, level: int) -> Rows:
+    return [[Button.inline(f"🔨 ارتقا به +{level}", UpgradeCb(id=gear_id, level=level), style="success")]]
 
 
 def duel_invite(duel_id: int) -> Rows:

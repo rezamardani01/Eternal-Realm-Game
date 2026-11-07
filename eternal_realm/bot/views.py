@@ -117,6 +117,39 @@ def activity_result(name: str, result) -> str:  # noqa: ANN001 - ActivityResult
     return "\n".join(lines)
 
 
+def shop_listing() -> str:
+    from ..game.services.shop import shop_items
+
+    groups: dict[str, list[str]] = {}
+    for item in shop_items():
+        title = "🧪 مصرفی‌ها" if item.kind.value == "consumable" else "⚔️ تجهیزات"
+        bonus = f" {item.stats.short()}" if item.is_gear else ""
+        level = f" (سطح {fa(item.level_req)})" if item.level_req > 1 else ""
+        groups.setdefault(title, []).append(f"• {item.label}{bonus}{level} — {fa(item.buy)} 🪙")
+    blocks = [f"{title}\n" + "\n".join(lines) for title, lines in groups.items()]
+    footer = "خرید: «خرید <نام> [تعداد]»\nفروش: «فروش <نام> [تعداد]» یا «فروش #شماره»"
+    return "🛒 فروشگاه\n" + LINE + "\n" + "\n\n".join(blocks) + "\n" + LINE + "\n" + footer
+
+
+def upgrade_quote(piece, quote) -> str:  # noqa: ANN001
+    from ..game.data.items import get_item
+
+    mats = "، ".join(f"{get_item(i).label} ×{fa(q)}" for i, q in quote.materials.items())
+    return (
+        f"🔨 ارتقای {piece.label} به +{fa(quote.next_level)}\n"
+        f"💰 هزینه: {fa(quote.gold)} 🪙\n"
+        f"📦 مواد: {mats}\n"
+        f"🎯 شانس موفقیت: {fa(round(quote.chance * 100))}٪\n"
+        "اگر ارتقا شکست بخورد مواد از بین می‌رود، اما تجهیزاتت سالم می‌ماند."
+    )
+
+
+def upgrade_result(result) -> str:  # noqa: ANN001 - UpgradeResult
+    if result.success:
+        return f"✅ ارتقا موفق بود! {result.piece.label}\n{result.piece.stats.short()}"
+    return f"💥 ارتقا شکست خورد؛ مواد از بین رفت ولی {result.piece.label} سالم ماند."
+
+
 def duel_invite(challenger, target, seconds: int) -> str:  # noqa: ANN001 - Player
     return (
         "⚔️ درخواست مبارزه!\n\n"

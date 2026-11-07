@@ -42,7 +42,6 @@ class Balance:
     market_fee_percent: int = 5
     market_max_listings: int = 10
     market_max_price: int = 10_000_000
-    npc_sell_percent: int = 40
     command_gap_seconds: float = 1.0
     group_flood_window: int = 10
     group_flood_max: int = 25

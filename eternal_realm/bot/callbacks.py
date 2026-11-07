@@ -20,3 +20,8 @@ class MenuCb(CallbackData, prefix="m"):
 class DuelCb(CallbackData, prefix="d"):
     action: str
     id: int
+
+
+class UpgradeCb(CallbackData, prefix="up"):
+    id: int
+    level: int
