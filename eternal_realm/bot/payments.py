@@ -34,7 +34,7 @@ async def on_buy(query: CallbackQuery, callback_data: BuyCb, services: Services,
     await bot.send_invoice(
         chat_id=query.from_user.id,
         title=pack.title[:32],
-        description=views.pack_description(pack)[:255],
+        description=views.pack_description(pack, services.ctx.now())[:255],
         payload=order.payload,
         provider_token=services.ctx.settings.provider_token,
         prices=[LabeledPrice(label=pack.title[:32], amount=order.amount)],
@@ -67,9 +67,9 @@ async def on_successful_payment(message: Message, services: Services, bot: Bot) 
     if delivery.duplicate:
         await message.answer("ℹ️ این پرداخت پیش‌تر ثبت شده و کالایتان را گرفته‌اید؛ نگران نباشید، پولی دوباره کم نشد.")
         return
-    await message.answer(views.delivery(delivery.order))
+    await message.answer(views.delivery(delivery.order, delivery.granted))
     with contextlib.suppress(BaleAPIError):
         buyer = await services.players.get(delivery.player_id)
         totals = await services.admin.stats()
-        report = views.sale_report(delivery.order, buyer, user, charge, services.ctx.now(), totals)
+        report = views.sale_report(delivery.order, buyer, user, charge, services.ctx.now(), totals, delivery.granted)
         await bot.send_message(services.ctx.settings.owner_id, report)

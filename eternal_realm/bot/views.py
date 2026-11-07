@@ -343,6 +343,26 @@ def chest_opening(item) -> str:  # noqa: ANN001
     return f"🗝️ {bold('در حال باز کردن ' + item.name)}\n\nقفل می‌شکند... لطفاً صبر کنید ✨"
 
 
+def lucky_odds(theme) -> str:  # noqa: ANN001 - Theme
+    from ..game.data import lucky
+    from ..game.data.items import get_item
+
+    lines = [f"🎲 {bold('شانس‌های بسته‌ی شانسی امروز')}", f"تم امروز: {theme.emoji} {theme.name}", LINE]
+    for prize, share in sorted(lucky.odds(theme), key=lambda x: -x[1]):
+        parts = []
+        if prize.gold[1]:
+            parts.append(f"{fa(prize.gold[0])} تا {fa(prize.gold[1])} سکه")
+        if prize.crystal[1]:
+            parts.append(f"{fa(prize.crystal[0])} تا {fa(prize.crystal[1])} کریستال")
+        if prize.item_id:
+            qty = f" ×{fa(prize.qty[0])}" + (f" تا {fa(prize.qty[1])}" if prize.qty[1] > prize.qty[0] else "")
+            parts.append(get_item(prize.item_id).name + qty)
+        pct = f"{share * 100:.1f}".translate(str.maketrans("0123456789.", "۰۱۲۳۴۵۶۷۸۹٫"))
+        lines.append(f"{pct}٪  " + " + ".join(parts))
+    lines += [LINE, "هر بسته سکه‌ی تضمینی دارد و جایزه‌ها از همین فهرست انتخاب می‌شوند. فردا تم عوض می‌شود."]
+    return "\n".join(lines)
+
+
 def upgrade_working() -> str:
     return f"🔨 {bold('آهنگر در کار است')}\n\nچکش بالا می‌رود... لطفاً صبر کنید ✨"
 
@@ -359,9 +379,19 @@ def chest_opened(name: str, opened) -> str:  # noqa: ANN001 - Opened
 
 
 # --- premium shop and payments -----------------------------------------------------------------
-def pack_description(pack) -> str:  # noqa: ANN001 - Pack
+def pack_description(pack, now: int | None = None) -> str:  # noqa: ANN001 - Pack
+    from ..game.data import lucky
     from ..game.data.items import get_item
 
+    if pack.lucky:
+        import time
+
+        theme = lucky.theme_of_day(now if now is not None else int(time.time()))
+        tier = lucky.TIERS[pack.id]
+        return (
+            f"شامل: {fa(tier.guaranteed_gold)} سکه‌ی تضمینی + {fa(tier.rolls)} جایزه‌ی تصادفی "
+            f"از تم «{theme.name}»"
+        )
     parts = []
     if pack.gold:
         parts.append(f"{fa(pack.gold)} سکه")
@@ -371,18 +401,22 @@ def pack_description(pack) -> str:  # noqa: ANN001 - Pack
     return "شامل: " + " + ".join(parts)
 
 
-def delivery(order) -> str:  # noqa: ANN001 - Order
+def delivery(order, granted: str = "") -> str:  # noqa: ANN001 - Order
+    body = f"🎲 این‌ها از بسته درآمد:\n{granted}" if granted else pack_description(order.pack)
     return (
         f"✅ {bold('پرداخت موفق بود')}\n"
-        f"{order.pack.label} به گنجینه‌ی شما رسید.\n{pack_description(order.pack)}\n\n"
+        f"{order.pack.label} به گنجینه‌ی شما رسید.\n\n{body}\n\n"
         "سپاس از حمایت شما 💛"
     )
 
 
-SECTION_NAMES = {"coins": "بسته‌ی سکه", "crystals": "بسته‌ی کریستال", "bundles": "بسته‌ی ویژه"}
+SECTION_NAMES = {
+    "coins": "بسته‌ی سکه", "crystals": "بسته‌ی کریستال", "bundles": "بسته‌ی ویژه",
+    "materials": "مواد", "lucky": "بسته‌ی شانسی روزانه",
+}
 
 
-def sale_report(order, player, user, charge_id, when: int, totals) -> str:  # noqa: ANN001
+def sale_report(order, player, user, charge_id, when: int, totals, granted: str = "") -> str:  # noqa: ANN001
     """The message the bot owner receives after every successful sale."""
     from ..shared.jalali import describe
 
@@ -399,7 +433,8 @@ def sale_report(order, player, user, charge_id, when: int, totals) -> str:  # no
             "",
             f"📦 محصول: {pack.label}",
             f"🏷️ نوع: {SECTION_NAMES.get(pack.section, pack.section)}",
-            f"🎁 {pack_description(pack)}",
+            f"🎁 {pack_description(pack, when)}",
+            *(["🎲 محتوای تصادفی:", granted] if granted else []),
             f"💵 مبلغ: {bold(fa(order.amount // 10))} تومان ({fa(order.amount)} ریال)",
             "",
             f"👤 خریدار: {bold(player.name)}",

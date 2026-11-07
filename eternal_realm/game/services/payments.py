@@ -16,11 +16,26 @@ from ...db.repos import orders as repo
 from ...db.repos import players as player_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
+from ..data import lucky
+from ..data.items import get_item
 from ..data.packs import ORDER_TTL_SECONDS, PACKS, Pack
 from ..models import Player
 from .inventory import InventoryService
 
 log = logging.getLogger("eternal_realm.payments")
+
+
+def describe_haul(gold: int, crystal: int, items: dict[str, int]) -> str:
+    """One line per kind of reward, e.g. for the buyer's receipt."""
+    from ...shared.text import fa
+
+    lines = []
+    if gold:
+        lines.append(f"🪙 {fa(gold)} سکه")
+    if crystal:
+        lines.append(f"💎 {fa(crystal)} کریستال")
+    lines += [f"{get_item(i).label} ×{fa(q)}" for i, q in items.items()]
+    return "\n".join(lines)
 
 
 @dataclass
@@ -39,6 +54,8 @@ class Delivery:
     player_id: int
     #: this confirmation was a repeat of one already delivered
     duplicate: bool = False
+    #: what a lucky bundle turned out to contain (empty for fixed packs)
+    granted: str = ""
 
 
 class PaymentService:
@@ -90,20 +107,27 @@ class PaymentService:
                 raise GameError("اطلاعات پرداخت با سفارش نمی‌خواند. نگران نباشید، با پشتیبانی تماس بگیرید تا بررسی کنیم.")
             if not await repo.mark_paid(tx, order.id, charge_id or f"none:{payload}", now):
                 return Delivery(order, row["player_id"], duplicate=True)
-            await self._deliver(tx, order, pack, now)
+            granted = await self._deliver(tx, order, pack, now)
             await repo.mark_delivered(tx, order.id, now)
             order.status = "delivered"
-            return Delivery(order, row["player_id"])
+            return Delivery(order, row["player_id"], granted=granted)
 
-    async def _deliver(self, tx, order: Order, pack: Pack, now: int) -> None:  # noqa: ANN001
+    async def _deliver(self, tx, order: Order, pack: Pack, now: int) -> str:  # noqa: ANN001
+        """Grant the goods; returns a description of what a lucky bundle contained."""
         if await player_repo.get(tx, order.player_id) is None:
             raise GameError("بازیکن پیدا نشد.")
+        gold, crystal, items, granted = pack.gold, pack.crystal, dict(pack.items), ""
+        if pack.lucky:
+            haul = lucky.roll(pack.id, lucky.theme_of_day(now), self.ctx.rng)
+            gold, crystal, items = haul.gold, haul.crystal, haul.items
+            granted = describe_haul(gold, crystal, items)
         await wallet.apply(
-            tx, order.player_id, gold=pack.gold, crystal=pack.crystal, reason=f"order:{pack.id}",
+            tx, order.player_id, gold=gold, crystal=crystal, reason=f"order:{pack.id}",
             now=now, ref=f"order:{order.id}",
         )
-        for item_id, qty in pack.items.items():
+        for item_id, qty in items.items():
             await self.inventory.grant(tx, order.player_id, item_id, qty)
+        return granted
 
     async def expire_stale(self) -> int:
         async with self.ctx.db.transaction() as tx:

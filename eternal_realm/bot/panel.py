@@ -762,6 +762,7 @@ PREMIUM_SECTIONS = {
     "coins": ("🪙", "خرید سکه", "با سکه سلاح، زره و معجون می‌خرید و تجهیزاتتان را ارتقا می‌دهید."),
     "crystals": ("💎", "خرید کریستال", "کریستال ارز کمیاب قلمرو است؛ با آن صندوقچه‌های جادویی و سلطنتی می‌خرید."),
     "bundles": ("🎁", "خرید بسته", "بسته‌های ویژه چند چیز را با هم و به‌صرفه‌تر می‌دهند."),
+    "materials": ("⛓️", "خرید مواد", "سنگ آهن برای ارتقای تجهیزات؛ هر مرتبه‌ی آهنگری به آن نیاز دارد."),
 }
 
 
@@ -795,9 +796,38 @@ async def premium(c: Ctx) -> Screen:
     rows = [
         [c.btn("🪙 خرید سکه", "prem", "coins"), c.btn("💎 خرید کریستال", "prem", "crystals")],
         [c.btn("🎁 خرید بسته", "prem", "bundles"), c.btn("📦 خرید صندوق", "prem", "chests")],
+        [c.btn("⛓️ خرید مواد", "prem", "materials")],
         c.back("home"),
     ]
     return Screen(text, rows)
+
+
+def _lucky_block(c: Ctx, lines: list[str]) -> list:
+    from ..game.data import lucky
+
+    theme = lucky.theme_of_day(c.services.ctx.now())
+    lines += [
+        "",
+        f"🎲 {bold('بسته‌های شانسی امروز')}",
+        f"تم امروز: {theme.emoji} {theme.name} (فردا تم عوض می‌شود)",
+        "هر بسته سکه‌ی تضمینی دارد و چند جایزه‌ی تصادفی از همین تم.",
+        "",
+    ]
+    rows = []
+    for pack in (x for x in PACKS.values() if x.lucky):
+        tier = lucky.TIERS[pack.id]
+        lines.append(f"• {pack.label} — {fa(pack.price_toman)} تومان")
+        lines.append(f"   {fa(tier.guaranteed_gold)} سکه‌ی تضمینی + {fa(tier.rolls)} جایزه")
+        rows.append([Button.inline(f"{pack.label} — {fa(pack.price_toman)} تومان", BuyCb(kind="cash", id=pack.id), style="success")])
+    rows.append([c.btn("🎲 شانس‌های امروز", "luckyodds")])
+    return rows
+
+
+@screen("luckyodds")
+async def lucky_odds(c: Ctx) -> Screen:
+    from ..game.data import lucky
+
+    return Screen(views.lucky_odds(lucky.theme_of_day(c.services.ctx.now())), [c.back("prem", "🔙 بازگشت", "bundles")])
 
 
 @screen("prem")
@@ -830,11 +860,13 @@ async def premium_section(c: Ctx) -> Screen:
     if not enabled:
         lines.append("🔒 خرید با پول واقعی فعلاً بسته است. با بازی کردن هم می‌توانید به این‌ها برسید!")
     else:
-        for pack in (x for x in PACKS.values() if x.section == c.a):
+        for pack in (x for x in PACKS.values() if x.section == c.a and not x.lucky):
             lines.append(f"• {pack.label} — {fa(pack.price_toman)} تومان")
             if c.a == "bundles":
                 lines.append(f"   {views.pack_description(pack)}")
             rows.append([Button.inline(f"{pack.label} — {fa(pack.price_toman)} تومان", BuyCb(kind="cash", id=pack.id), style="success")])
+        if c.a == "bundles":
+            rows += _lucky_block(c, lines)
         lines += ["", "پس از زدن، فاکتور پرداخت بله برایتان می‌آید."]
     rows.append(c.back("premium"))
     return Screen("\n".join(lines), rows)

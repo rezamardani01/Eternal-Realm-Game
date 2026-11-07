@@ -28,7 +28,7 @@ def test_pack_catalogue_is_valid():
 
     for pack in PACKS.values():
         assert len(pack.title) <= 32 and pack.price_rial > 0 and pack.price_rial % 10 == 0
-        assert pack.gold or pack.crystal or pack.items
+        assert pack.gold or pack.crystal or pack.items or pack.lucky
         assert all(item in ITEMS for item in pack.items)
 
 
@@ -104,7 +104,7 @@ async def test_invoice_flow_through_the_bot(h, services):
     await h.say(10, "/start")
     await h.panel(10, "premium")
     assert "خزانه‌ی ویژه" in h.session.last_text()
-    assert len(h.labels()) == 5  # four sections and a back button
+    assert len(h.labels()) == 6  # five sections and a back button
     await h.tap(10, "خرید کریستال")
     assert "تومان" in h.session.last_text()
     await h.click(10, h.button_data("۲۰ کریستال"))
@@ -155,7 +155,7 @@ async def test_premium_hub_has_four_sections_each_with_its_own_text(h, services)
     await reg(services)
     await h.panel(10, "premium")
     labels = h.labels()
-    for word in ("خرید سکه", "خرید کریستال", "خرید بسته", "خرید صندوق"):
+    for word in ("خرید سکه", "خرید کریستال", "خرید بسته", "خرید صندوق", "خرید مواد"):
         assert any(word in t for t in labels), word
     assert all("منو" not in t for t in labels)
 
@@ -187,3 +187,59 @@ async def test_owner_gets_a_complete_sale_report(h, services):
 
     await h.paid(10, order.payload, order.amount, "TRACK-77")  # a repeated update sends no second report
     assert len([m for m in h.session.sent("sendMessage") if m["chat_id"] == 1]) == 1
+
+
+# --- iron ore and the daily lucky bundles ------------------------------------------------------
+async def test_iron_ore_packs_deliver_ore(services):
+    p = await reg(services)
+    order = await services.payments.create_order(p, "ore_m")
+    await services.payments.complete(10, order.payload, order.amount, "ore-1")
+    stacks = {i.id: q for i, q in (await services.inventory.view(p.id)).stacks}
+    assert stacks["iron_ore"] == 100
+
+
+async def test_lucky_bundle_gives_guaranteed_gold_and_prizes_from_todays_theme(services, clock):
+    from eternal_realm.game.data import lucky
+
+    p = await reg(services)
+    before = (await services.players.require(10)).gold
+    order = await services.payments.create_order(p, "lucky_m")
+    result = await services.payments.complete(10, order.payload, order.amount, "lucky-1")
+    assert result.granted and "سکه" in result.granted
+    gained = (await services.players.require(10)).gold - before
+    assert gained >= lucky.TIERS["lucky_m"].guaranteed_gold
+    theme = lucky.theme_of_day(services.ctx.now())
+    allowed = {pr.item_id for pr in theme.prizes if pr.item_id}
+    got = {i.id for i, _ in (await services.inventory.view(p.id)).stacks} | {
+        g.item.id for g in (await services.inventory.view(p.id)).gear
+    }
+    assert (got - {"energy_potion", "short_bow"}) <= allowed | {"big_energy_potion"} | allowed
+
+
+def test_theme_changes_every_day_and_odds_sum_to_one():
+    from eternal_realm.game.data import lucky
+    from eternal_realm.game.data.items import ITEMS
+
+    days = {lucky.theme_of_day(d * 86400).id for d in range(3)}
+    assert len(days) == 3
+    for theme in lucky.THEMES:
+        assert abs(sum(share for _, share in lucky.odds(theme)) - 1) < 1e-9
+        assert all(pr.item_id is None or pr.item_id in ITEMS for pr in theme.prizes)
+
+
+async def test_bundles_screen_shows_lucky_packs_and_their_odds(h, services):
+    await reg(services)
+    await h.panel(10, "prem", "bundles")
+    assert "بسته‌های شانسی امروز" in h.session.last_text()
+    assert sum("شانسی" in t for t in h.labels()) >= 3
+    await h.tap(10, "شانس‌های امروز")
+    assert "٪" in h.session.last_text() and "تضمینی" in h.session.last_text()
+
+
+async def test_lucky_purchase_through_the_bot_shows_what_was_inside(h, services):
+    p = await reg(services)
+    order = await services.payments.create_order(p, "lucky_s")
+    await h.paid(10, order.payload, order.amount, "LK-1")
+    assert any("این‌ها از بسته درآمد" in t for t in h.session.texts())
+    owner_report = [m["text"] for m in h.session.sent("sendMessage") if m["chat_id"] == 1][0]
+    assert "محتوای تصادفی" in owner_report
