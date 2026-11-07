@@ -8,6 +8,7 @@ from ..context import AppContext
 from ..game.services.characters import CharacterService
 from ..game.services.activities import ActivityService
 from ..game.services.groups import GroupService
+from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
 from ..game.services.players import PlayerService
 from .throttle import Throttle
@@ -19,6 +20,7 @@ class Services:
     players: PlayerService
     inventory: InventoryService
     activities: ActivityService
+    hunting: HuntService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -30,12 +32,14 @@ class Services:
         players = PlayerService(ctx)
         inventory = InventoryService(ctx, players)
         players.after_register.append(inventory.on_registered)
+        characters = CharacterService(ctx, inventory)
         return cls(
             ctx=ctx,
             players=players,
             inventory=inventory,
             activities=ActivityService(ctx, players, inventory),
-            characters=CharacterService(ctx, inventory),
+            characters=characters,
+            hunting=HuntService(ctx, players, inventory, characters),
             groups=GroupService(ctx),
             throttle=Throttle(
                 balance.command_gap_seconds, balance.group_flood_window, balance.group_flood_max

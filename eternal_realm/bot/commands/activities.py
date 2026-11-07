@@ -31,3 +31,11 @@ for _activity in ACTIVITIES.values():
 async def rest(ctx: CommandContext) -> None:
     restored = await ctx.services.activities.rest(ctx.me.id)
     await ctx.reply(f"😴 {ctx.me.name} کمی استراحت کرد و {fa(restored)} انرژی گرفت ⚡")
+
+
+@command(
+    "hunt", ["شکار", "برو شکار", "hunt"], "شکار هیولا (۱۰ انرژی)", category="🌍 فعالیت‌ها", toggleable=True,
+)
+async def hunt(ctx: CommandContext) -> None:
+    result = await ctx.services.hunting.hunt(ctx.me.id)
+    await ctx.reply(views.hunt_result(ctx.me.name, result))

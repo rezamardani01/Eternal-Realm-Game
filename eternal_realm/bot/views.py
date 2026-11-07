@@ -117,6 +117,31 @@ def activity_result(name: str, result) -> str:  # noqa: ANN001 - ActivityResult
     return "\n".join(lines)
 
 
+def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
+    lines = [
+        f"{r.monster.emoji} {name} در حین شکار با «{r.monster.name}» روبه‌رو شد!",
+        f"⚔️ نبرد {fa(r.rounds)} دور طول کشید.",
+    ]
+    if r.won:
+        lines.append("🏆 پیروز شدی!")
+    else:
+        lines.append("💀 شکست خوردی و با زخم‌هایت فرار کردی (چیزی از دست ندادی).")
+    lines.append(f"❤️ جان باقی‌مانده: {fa(r.hero_hp)} / {fa(r.hero_max_hp)}")
+    gains = []
+    if r.gold:
+        gains.append(f"🪙 +{fa(r.gold)} سکه")
+    if r.xp:
+        gains.append(f"⭐ +{fa(r.xp)} تجربه")
+    if gains:
+        lines.append(" · ".join(gains))
+    if r.items:
+        lines.append("📦 " + "، ".join(f"{label} ×{fa(q)}" for label, q in r.items))
+    if r.level_up:
+        lines.append(f"🎉 سطحت بالا رفت! حالا سطح {fa(r.level_up.new_level)} هستی.")
+    lines.append(f"⚡ انرژی: {fa(r.player.energy)}")
+    return "\n".join(lines)
+
+
 def inventory(owner: str, view) -> str:  # noqa: ANN001 - InventoryView
     lines = [f"🎒 کوله‌پشتی {owner}", LINE]
     if view.stacks:
