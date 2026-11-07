@@ -23,6 +23,9 @@ def main() -> int:
         asyncio.run(run(settings))
     except KeyboardInterrupt:
         logging.getLogger("eternal_realm").info("stopped")
+    except ConfigError as error:
+        print(f"خطای تنظیمات: {error}", file=sys.stderr)
+        return 1
     return 0
 
 

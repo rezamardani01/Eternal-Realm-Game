@@ -7,8 +7,9 @@ import contextlib
 import logging
 
 from baleropy import Bot, Dispatcher, Router
+from baleropy.exceptions import BaleUnauthorized
 
-from ..config import Settings
+from ..config import ConfigError, Settings
 from ..context import AppContext
 from ..db.database import Database
 from . import duels, maintenance, menu, onboarding, payments
@@ -48,7 +49,10 @@ async def run(settings: Settings) -> None:
     services = Services.build(AppContext(db, settings))
     bot = Bot(settings.token)
     try:
-        me = await bot.me()
+        try:
+            me = await bot.me()
+        except BaleUnauthorized as error:
+            raise ConfigError("توکن ربات نامعتبر است؛ توکن را در config.toml بررسی کنید.") from error
         services.bot_username = me.username or ""
         log.info("Eternal Realm is up as @%s", services.bot_username)
         dp = build_dispatcher(services)
@@ -65,4 +69,6 @@ async def run(settings: Settings) -> None:
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
     finally:
+        with contextlib.suppress(Exception):
+            await bot.close()
         await db.close()
