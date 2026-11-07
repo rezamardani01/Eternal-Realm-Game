@@ -1,4 +1,4 @@
-"""Telegram-style groups the bot plays in: registration, per-group switches and activity points."""
+"""Bale groups the bot plays in: registration, per-group switches and activity points."""
 
 from __future__ import annotations
 
