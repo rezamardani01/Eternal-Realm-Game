@@ -29,7 +29,7 @@ async def help_(ctx: CommandContext) -> None:
 async def start_in_group(ctx: CommandContext) -> None:
     username = ctx.services.bot_username
     await ctx.reply(
-        "🎮 برای ساخت شخصیت، ربات را در پیام خصوصی استارت کن.",
+        "🎮 برای ساختن قهرمان، ربات را در پیام خصوصی استارت کنید. دکمه‌ی زیر راه را نشانتان می‌دهد!",
         buttons=[keyboards.start_button(username)] if username else None,
     )
 
@@ -37,5 +37,5 @@ async def start_in_group(ctx: CommandContext) -> None:
 @command("daily", ["جایزه", "روزانه", "جایزه روزانه", "daily"], "دریافت جایزه روزانه", category="شخصیت")
 async def daily(ctx: CommandContext) -> None:
     reward = await ctx.services.players.claim_daily(ctx.me.id)
-    streak = f"\n🔥 پشت‌سرهم: {fa(reward.streak)} روز" if reward.streak > 1 else ""
-    await ctx.reply(f"🎁 {ctx.me.name} جایزه روزانه‌ات را گرفتی: {fa(reward.gold)} سکه{streak}")
+    streak = f"\n🔥 {fa(reward.streak)} روز پشت‌سرهم آمده‌اید؛ هر روز پاداشتان بزرگ‌تر می‌شود!" if reward.streak > 1 else ""
+    await ctx.reply(f"🎁 درود بر شما فرمانده {ctx.me.name}!\nپادشاه گنجینه‌ی امروز را فرستاد: {fa(reward.gold)} سکه{streak}\nامروز به کجا حمله می‌کنید؟")

@@ -51,14 +51,14 @@ async def on_duel_button(query: CallbackQuery, callback_data: DuelCb, services: 
         await message.edit_text(text, buttons=buttons)
     elif action == "decline":
         duel = await services.duels.decline(duel_id, player)
-        who = "رد شد" if player.id == duel.target_id else "لغو شد"
-        await message.edit_text(f"❌ درخواست مبارزه {who}.")
+        who = "را نپذیرفت" if player.id == duel.target_id else "را پس گرفت"
+        await message.edit_text(f"🏳️ فراخوان دوئل بی‌نتیجه ماند؛ فرمانده‌ی مقابل آن {who}. شاید در فرصتی دیگر!")
     elif action in ACTIONS:
         update = await services.duels.act(duel_id, player, ACTIONS[action])
         text, buttons = render(update, turn_seconds)
         await message.edit_text(text, buttons=buttons)
     else:
-        raise GameError("دکمه نامعتبر است.")
+        raise GameError("این دکمه از کار افتاده است؛ فرمان تازه‌ای بدهید.")
     await query.answer()
 
 
@@ -69,7 +69,7 @@ async def _announce(bot: Bot, services: Services, item: DuelUpdate | Duel) -> No
     if isinstance(item, DuelUpdate):
         text = views.duel_result(item)
     else:
-        text = "⌛ درخواست مبارزه بی‌پاسخ ماند و بسته شد."
+        text = "⌛ فراخوان دوئل بی‌پاسخ ماند و در باد گم شد. هر وقت خواستید دوباره دعوت کنید!"
     with contextlib.suppress(BaleAPIError):
         await bot.edit_message_text(duel.chat_id, duel.message_id, text)
 

@@ -49,7 +49,7 @@ async def got_name(message: Message, state: FSMContext, services: Services) -> N
 
 @router.message(Onboarding.name)
 async def name_needs_text(message: Message) -> None:
-    raise GameError("لطفاً نام شخصیتت را به‌صورت متن بفرست.")
+    raise GameError("نام قهرمان را باید با حرف بنویسید، فرمانده! یک نام برای خود بفرستید (۲ تا ۱۶ حرف).")
 
 
 @router.callback_query(Onboarding.race, RaceCb.filter())
@@ -59,7 +59,7 @@ async def got_race(
     race = RACES.get(callback_data.id)
     data = await state.get_data()
     if race is None or "name" not in data or query.message is None:
-        raise GameError("دوباره /start بزن.")
+        raise GameError("راه گم شد! دوباره /start را بزنید تا از اول، قهرمانتان را بسازیم.")
     await state.update_data(race=race.id)
     await state.set_state(Onboarding.char_class)
     await query.message.edit_text(
@@ -75,7 +75,7 @@ async def got_class(
     char_class = CLASSES.get(callback_data.id)
     data = await state.get_data()
     if char_class is None or "race" not in data or query.message is None:
-        raise GameError("دوباره /start بزن.")
+        raise GameError("راه گم شد! دوباره /start را بزنید تا از اول، قهرمانتان را بسازیم.")
     user = query.from_user
     player = await services.players.register(
         user.id, user.username, data["name"], data["race"], char_class.id
@@ -84,4 +84,4 @@ async def got_class(
     await query.message.edit_text(views.created(player, services.bot_username))
     text, buttons = await pages.PAGES["home"](services, player)
     await query.message.answer(text, buttons=buttons)
-    await query.answer("شخصیتت ساخته شد 🎉")
+    await query.answer("قهرمان شما به دنیا آمد 🎉")

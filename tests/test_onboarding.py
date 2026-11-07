@@ -30,7 +30,7 @@ async def test_full_onboarding_flow(h, services):
     player = await services.players.find(10)
     assert player is not None
     assert (player.name, player.race_id, player.class_id) == ("آرش", "elf", "archer")
-    assert any("شخصیت «آرش» ساخته شد" in t for t in h.session.texts())
+    assert any("درود بر فرمانده آرش" in t for t in h.session.texts())
 
 
 async def test_invalid_and_taken_names_keep_asking(h, services):
@@ -39,7 +39,7 @@ async def test_invalid_and_taken_names_keep_asking(h, services):
     await h.say(10, "a")
     assert "حرف" in h.session.last_text()
     await h.say(10, "سارا")
-    assert "قبلاً" in h.session.last_text()
+    assert "پیش‌تر" in h.session.last_text()
     await h.say(10, "رها")
     assert "نژاد" in h.session.last_text()
 
@@ -47,7 +47,7 @@ async def test_invalid_and_taken_names_keep_asking(h, services):
 async def test_start_for_existing_player_shows_profile(h, services):
     await services.players.register(10, "x", "آرش", "dwarf", "warrior")
     await h.say(10, "/start")
-    assert "آرش" in h.session.last_text() and "سلامتی" in h.session.last_text()
+    assert "آرش" in h.session.last_text() and "جان" in h.session.last_text()
     assert h.session.last_buttons()
 
 

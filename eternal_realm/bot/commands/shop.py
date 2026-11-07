@@ -20,7 +20,7 @@ def _split_qty(args: list[str]) -> tuple[str, int]:
 def _item(text: str):  # noqa: ANN202
     item = find_item(text)
     if item is None:
-        raise GameError("چنین آیتمی پیدا نشد. اسم دقیق آیتم را بنویس.")
+        raise GameError("چنین کالایی در قلمرو پیدا نشد. اسمش را دقیق‌تر بنویسید، یا «فروشگاه» را بزنید تا فهرست را ببینید.")
     return item
 
 
@@ -43,10 +43,10 @@ async def buy(ctx: CommandContext) -> None:
     if item.kind is Kind.CHEST:
         currency, total = await ctx.services.chests.buy(ctx.me, item.id, qty)
         icon = "🪙" if currency == "gold" else "💎"
-        await ctx.reply(f"✅ {item.label} ×{fa(qty)} خریدی؛ {fa(total)} {icon} پرداخت شد.\nبرای باز کردن: «باز کردن {item.name}»")
+        await ctx.reply(f"🛍️ انتخابی شایسته، فرمانده! {item.label} ×{fa(qty)} اکنون در اختیار شماست ({fa(total)} {icon} پرداخت شد).\n🗝️ برای گشودنش بنویسید: «باز کردن {item.name}»")
         return
     paid = await ctx.services.shop.buy(ctx.me, item, qty)
-    await ctx.reply(f"✅ {item.label} ×{fa(qty)} خریدی؛ {fa(paid)} 🪙 پرداخت شد.")
+    await ctx.reply(f"🛍️ به‌به! انتخابی شایسته، فرمانده. {item.label} ×{fa(qty)} اکنون در اختیار شماست ({fa(paid)} 🪙 پرداخت شد).\nباشد که در نبردهای آینده یار و یاورتان باشد.")
 
 
 @command(
@@ -55,15 +55,15 @@ async def buy(ctx: CommandContext) -> None:
 )
 async def sell(ctx: CommandContext) -> None:
     if not ctx.args:
-        raise GameError("چه چیزی را بفروشم؟ مثال: فروش ماهی کوچک 5  یا  فروش #12")
+        raise GameError("چه چیزی را بفروشید، فرمانده؟ مثال: «فروش ماهی کوچک 5» یا برای سلاح و زره «فروش #12».")
     if ctx.args[0].startswith("#") and (gear_id := _gear_ref(ctx.args[0])) is not None:
         piece, total = await ctx.services.shop.sell_gear(ctx.me, gear_id)
-        await ctx.reply(f"💰 {piece.label} را فروختی و {fa(total)} 🪙 گرفتی.")
+        await ctx.reply(f"💰 معامله انجام شد! {piece.label} را فروختید و {fa(total)} 🪙 به کیسه‌تان ریخت.")
         return
     name, qty = _split_qty(ctx.args)
     item = _item(name)
     total = await ctx.services.shop.sell_stack(ctx.me, item, qty)
-    await ctx.reply(f"💰 {item.label} ×{fa(qty)} را فروختی و {fa(total)} 🪙 گرفتی.")
+    await ctx.reply(f"💰 معامله انجام شد! {item.label} ×{fa(qty)} را فروختید و {fa(total)} 🪙 به کیسه‌تان ریخت.")
 
 
 @command(
@@ -73,7 +73,7 @@ async def sell(ctx: CommandContext) -> None:
 async def upgrade(ctx: CommandContext) -> None:
     gear_id = _gear_ref(ctx.args[0]) if ctx.args else None
     if gear_id is None:
-        raise GameError("شماره تجهیزات را بنویس. مثال: ارتقا 12")
+        raise GameError("آهنگر شماره‌ی تجهیزات را لازم دارد. مثال: «ارتقا 12» (شماره‌ها را در «کوله‌پشتی» ببینید).")
     piece, quote = await ctx.services.shop.quote(ctx.me, gear_id)
     await ctx.reply(
         views.upgrade_quote(piece, quote),

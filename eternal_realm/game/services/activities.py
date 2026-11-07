@@ -39,10 +39,10 @@ class ActivityService:
         async with self.ctx.db.transaction() as tx:
             until = await inv_repo.cooldown_until(tx, player_id, "rest")
             if until > now:
-                raise GameError(f"😴 تازه استراحت کرده‌ای؛ {duration(until - now)} دیگر دوباره می‌توانی.")
+                raise GameError(f"😴 همین تازگی کنار آتش نشسته‌اید. {duration(until - now)} دیگر دوباره می‌توانید استراحت کنید.")
             restored = await self.players.add_energy(tx, player_id, balance.rest_energy)
             if restored <= 0:
-                raise GameError("انرژی‌ات پر است، استراحت لازم نداری!")
+                raise GameError("شما سرشار از انرژی هستید، فرمانده! وقتی خسته شدید، کنار آتش استراحت کنید.")
             await inv_repo.set_cooldown(tx, player_id, "rest", now + balance.rest_cooldown_seconds)
         return restored
 
@@ -56,7 +56,7 @@ class ActivityService:
             key = f"act:{activity.id}"
             until = await inv_repo.cooldown_until(tx, player_id, key)
             if until > now:
-                raise GameError(f"⏳ هنوز خسته‌ای! {duration(until - now)} دیگر دوباره امتحان کن.")
+                raise GameError(f"⏳ دست‌هایتان هنوز خسته است، فرمانده! {duration(until - now)} دیگر دوباره امتحان کنید.")
             await self.players.spend_energy(tx, player_id, activity.energy)
 
             stats = progression.base_stats(player.race_id, player.class_id, player.level)

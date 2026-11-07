@@ -13,7 +13,7 @@ from ..shared.errors import GameError
 
 log = logging.getLogger("eternal_realm.bot")
 
-GENERIC_ERROR = "😵 مشکلی پیش آمد، چند لحظه دیگر دوباره امتحان کن."
+GENERIC_ERROR = "😵 اوه! طوفانی در قلمرو وزید و کار نیمه‌کاره ماند. نگران نباشید، چند لحظه دیگر دوباره امتحان کنید."
 
 
 class ErrorMiddleware(BaseMiddleware):
@@ -35,7 +35,12 @@ class ErrorMiddleware(BaseMiddleware):
     async def _tell(event: Any, text: str) -> None:
         try:
             if isinstance(event, CallbackQuery):
-                await event.answer(text[:190], show_alert=True)
+                if len(text) <= 190:
+                    await event.answer(text, show_alert=True)
+                else:
+                    await event.answer("⚠️ پیام را در گفتگو بخوانید 👇", show_alert=False)
+                    if event.message is not None:
+                        await event.message.answer(text)
             elif isinstance(event, Message):
                 await event.reply(text)
         except BaleAPIError:

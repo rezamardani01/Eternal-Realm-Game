@@ -12,9 +12,9 @@ from ..models import Player
 
 #: board id -> (title, SQL ordering, value column, value label)
 BOARDS: dict[str, tuple[str, str, str, str]] = {
-    "level": ("🏆 برترین سطح‌ها", "level DESC, xp DESC", "level", "سطح"),
-    "rich": ("💰 ثروتمندترین‌ها", "gold DESC, level DESC", "gold", "🪙"),
-    "wins": ("⚔️ قهرمانان دوئل", "wins DESC, level DESC", "wins", "پیروزی"),
+    "level": ("🏆 تالار بزرگان (بالاترین سطح)", "level DESC, xp DESC", "level", "سطح"),
+    "rich": ("💰 تالار ثروتمندان", "gold DESC, level DESC", "gold", "🪙"),
+    "wins": ("⚔️ تالار قهرمانان دوئل", "wins DESC, level DESC", "wins", "پیروزی"),
 }
 
 
@@ -65,7 +65,7 @@ class RankingService:
         entries = [
             Entry(r["display_name"], _badge(r["race"], r["class"]), r["points"], r["level"]) for r in rows
         ]
-        return Board("🏰 فعال‌ترین‌های این گروه", "امتیاز", entries)
+        return Board("🏰 دلاورترین‌های همین گروه", "امتیاز", entries)
 
 
 async def _top(ctx: AppContext, chat_id: int, limit: int):  # noqa: ANN202

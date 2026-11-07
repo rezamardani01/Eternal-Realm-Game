@@ -112,6 +112,6 @@ async def test_market_commands(h, services, db):
     await h.say(11, "بازار", group=True)
     assert "شمشیر آهنی" in h.session.last_text() and "سنگ آهن" in h.session.last_text()
     await h.say(11, "بخر 1", group=True)
-    assert "خریدی" in h.session.last_text()
+    assert "معامله مبارک" in h.session.last_text()
     await h.say(10, "لغو 2", group=True)
-    assert "لغو شد" in h.session.last_text()
+    assert "پس گرفتید" in h.session.last_text()

@@ -75,4 +75,4 @@ async def test_inventory_commands_in_group(h, services):
     await h.say(10, "تجهیزات", group=True)
     assert "سلاح" in h.session.last_text()
     await h.say(10, "مصرف معجون انرژی", group=True)
-    assert "انرژی‌ات پر است" in h.session.last_text()
+    assert "پر پر است" in h.session.last_text()

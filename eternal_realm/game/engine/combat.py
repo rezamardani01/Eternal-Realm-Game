@@ -132,7 +132,7 @@ def act(battle: Battle, action: Action, rng: random.Random) -> list[str]:
         me.skill_ready_in -= 1
 
     if action is Action.SURRENDER:
-        lines.append(f"🏳️ {me.name} تسلیم شد!")
+        lines.append(f"🏳️ فرمانده {me.name} پرچم سفید را بالا برد و تسلیم شد!")
         battle.finished, battle.surrendered = True, True
         battle.winner = 1 - battle.actor
         return lines
@@ -141,13 +141,13 @@ def act(battle: Battle, action: Action, rng: random.Random) -> list[str]:
         heal = max(1, me.max_hp // 20)
         me.hp = min(me.max_hp, me.hp + heal)
         me.shield = True
-        lines.append(f"🛡️ {me.name} سپر گرفت و {fa(heal)} جان بازیافت.")
+        lines.append(f"🛡️ {me.name} سپر خود را بالا برد و {fa(heal)} جان تازه گرفت.")
     else:
         use_skill = action is Action.SKILL
         if use_skill and not me.skill_ready:
             raise ValueError("skill is on cooldown")
         if rng.random() < _dodge_chance(me, foe):
-            lines.append(f"💨 {foe.name} از ضربه {me.name} جاخالی داد!")
+            lines.append(f"💨 {foe.name} چابک کنار پرید و از ضربه‌ی {me.name} جاخالی داد!")
             if use_skill:
                 me.skill_ready_in = me.skill_cooldown
         elif use_skill:
@@ -160,21 +160,21 @@ def act(battle: Battle, action: Action, rng: random.Random) -> list[str]:
                 me.shield = True
             me.skill_ready_in = me.skill_cooldown
             lines.append(
-                f"{me.skill_emoji} {me.name} «{me.skill_name}» زد! "
-                f"{'🎯 بحرانی! ' if crit else ''}💥 {fa(damage)} آسیب"
+                f"{me.skill_emoji} {me.name} «{me.skill_name}» را آزاد کرد! "
+                f"{'🎯 ضربه‌ی کاری! ' if crit else ''}💥 {fa(damage)} آسیب"
             )
         else:
             offense = max(me.atk, me.magic * 0.8)
             damage, crit = _strike(me, foe, offense, foe.defense * 0.5, rng)
             foe.hp = max(0, foe.hp - damage)
             lines.append(
-                f"⚔️ {me.name} به {foe.name} حمله کرد! {'🎯 بحرانی! ' if crit else ''}💥 {fa(damage)} آسیب"
+                f"⚔️ {me.name} شمشیر کشید و به {foe.name} حمله کرد! {'🎯 ضربه‌ی کاری! ' if crit else ''}💥 {fa(damage)} آسیب"
             )
 
     if foe.hp <= 0:
         battle.finished = True
         battle.winner = battle.actor
-        lines.append(f"🏆 {me.name} پیروز شد!")
+        lines.append(f"🏆 {foe.name} بر زمین افتاد و {me.name} پیروز شد!")
         return lines
 
     battle.actor = 1 - battle.actor
@@ -184,7 +184,7 @@ def act(battle: Battle, action: Action, rng: random.Random) -> list[str]:
             battle.finished = True
             a, b = battle.fighters
             battle.winner = None if a.hp_ratio == b.hp_ratio else (0 if a.hp_ratio > b.hp_ratio else 1)
-            lines.append("⏱️ زمان مبارزه تمام شد!")
+            lines.append("⏳ ریگ‌های ساعت ریختند و نبرد به پایان رسید!")
     return lines
 
 

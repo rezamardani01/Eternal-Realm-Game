@@ -68,7 +68,7 @@ class HuntService:
                 raise NotRegistered
             until = await inv_repo.cooldown_until(tx, player_id, "hunt")
             if until > now:
-                raise GameError(f"⏳ هنوز زخم‌هایت تازه است! {duration(until - now)} دیگر دوباره شکار کن.")
+                raise GameError(f"⏳ زخم‌هایتان هنوز تازه است، فرمانده! {duration(until - now)} دیگر دوباره به شکار بروید.")
             await self.players.spend_energy(tx, player_id, HUNT_ENERGY)
 
             stats = await self.characters.stats_in(tx, player)

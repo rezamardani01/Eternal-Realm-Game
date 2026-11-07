@@ -92,7 +92,7 @@ async def test_pair_daily_limit(services):
         await services.duels.accept(duel.id, b)
         who = await current_player(services, duel.id, a, b)
         await services.duels.act(duel.id, who, Action.SURRENDER)
-    with pytest.raises(GameError, match="بیش از حد"):
+    with pytest.raises(GameError, match="شمشیرها خسته"):
         await services.duels.challenge(-500, a, b)
 
 
@@ -128,7 +128,7 @@ async def test_daily_reward_cap(services):
 async def test_duel_via_chat_buttons(h, services):
     a, b = await two_players(services)
     await h.say(10, "مبارزه", group=True, reply_to=h.message_of(11))
-    assert "درخواست مبارزه" in h.session.last_text()
+    assert "طبل جنگ" in h.session.last_text()
     accept = h.button_data("قبول")
 
     await services.players.register(12, "c", "رها", "elf", "archer")
@@ -136,7 +136,7 @@ async def test_duel_via_chat_buttons(h, services):
     assert any("فقط کسی" in c.get("text", "") for c in h.session.callback_answers())
 
     await h.click(11, accept, group=True)
-    assert "دوئل" in h.session.last_text() and h.session.last_buttons()
+    assert "میدان نبرد" in h.session.last_text() and h.session.last_buttons()
 
     for _ in range(80):
         duel = await services.duels.get(1)
@@ -145,7 +145,7 @@ async def test_duel_via_chat_buttons(h, services):
         uid = 10 if duel.battle.current.player_id == a.id else 11
         await h.click(uid, h.button_data("حمله"), group=True)
     assert (await services.duels.get(1)).status == "finished"
-    assert "پایان دوئل" in h.session.last_text()
+    assert "پایان نبرد" in h.session.last_text()
 
 
 async def test_cannot_duel_without_reply_or_with_unregistered(h, services):
@@ -153,4 +153,4 @@ async def test_cannot_duel_without_reply_or_with_unregistered(h, services):
     await h.say(10, "مبارزه", group=True)
     assert "ریپلای" in h.session.last_text()
     await h.say(10, "مبارزه", group=True, reply_to=h.message_of(99))
-    assert "شخصیت نساخته" in h.session.last_text()
+    assert "قهرمانی نساخته" in h.session.last_text()

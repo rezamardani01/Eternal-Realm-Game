@@ -51,11 +51,11 @@ class MarketService:
 
     def _check_price(self, price: int) -> None:
         if not 1 <= price <= self.ctx.balance.market_max_price:
-            raise GameError(f"قیمت باید بین ۱ تا {fa(self.ctx.balance.market_max_price)} سکه باشد.")
+            raise GameError(f"بها را درست بنویسید: عددی بین ۱ تا {fa(self.ctx.balance.market_max_price)} سکه.")
 
     async def _check_slots(self, tx, seller: Player) -> None:  # noqa: ANN001
         if await repo.count_active(tx, seller.id) >= self.ctx.balance.market_max_listings:
-            raise GameError(f"حداکثر {self.ctx.balance.market_max_listings} آگهی فعال می‌توانی داشته باشی.")
+            raise GameError(f"روی تخته‌ی بازار حداکثر {self.ctx.balance.market_max_listings} آگهی فعال می‌توانید داشته باشید. یکی را لغو کنید یا صبر کنید تا فروخته شود.")
 
     async def list_gear(self, seller: Player, gear_id: int, price: int) -> Listing:
         self._check_price(price)
@@ -63,9 +63,9 @@ class MarketService:
             await self._check_slots(tx, seller)
             piece = await self.inventory.piece(tx, seller.id, gear_id)
             if piece.slot is not None:
-                raise GameError("اول این تجهیزات را دربیاور.")
+                raise GameError("اول این تجهیزات را از تن خود دربیاورید؛ با «درآوردن شماره».")
             if not piece.item.tradable:
-                raise GameError("این آیتم قابل معامله نیست.")
+                raise GameError("این آیتم ویژه است و نمی‌شود آن را به دیگران فروخت.")
             await inv_repo.set_listed(tx, piece.id, True)
             listing_id = await repo.create(tx, seller.id, piece.item.id, 1, piece.id, price, self.ctx.now())
             return Listing(listing_id, seller.id, seller.name, piece.item, 1, price, piece.id, piece.upgrade)
@@ -73,11 +73,11 @@ class MarketService:
     async def list_stack(self, seller: Player, item: Item, qty: int, price: int) -> Listing:
         self._check_price(price)
         if item.is_gear:
-            raise GameError("برای تجهیزات از شماره‌شان استفاده کن: عرضه #شماره قیمت")
+            raise GameError("برای سلاح و زره، شماره‌اش را بنویسید: عرضه #شماره قیمت")
         if not item.tradable:
-            raise GameError("این آیتم قابل معامله نیست.")
+            raise GameError("این آیتم ویژه است و نمی‌شود آن را به دیگران فروخت.")
         if not 1 <= qty <= 10_000:
-            raise GameError("تعداد نامعتبر است.")
+            raise GameError("تعداد را درست بنویسید؛ مثلاً: 5")
         async with self.ctx.db.transaction() as tx:
             await self._check_slots(tx, seller)
             await self.inventory.take(tx, seller.id, item.id, qty)
@@ -97,13 +97,13 @@ class MarketService:
         async with self.ctx.db.transaction() as tx:
             row = await repo.get(tx, listing_id)
             if row is None or row["status"] != "active":
-                raise GameError("این آگهی دیگر فعال نیست (فروخته یا لغو شده).")
+                raise GameError("این آگهی دیگر روی تخته نیست؛ یا فروخته شده یا برداشته شده. «بازار» را بنویسید تا آگهی‌های تازه را ببینید.")
             if row["seller_id"] == buyer.id:
-                raise GameError("این آگهی خودت است! برای برداشتنش «لغو <شماره>» بزن.")
+                raise GameError("این آگهی خود شماست، فرمانده! اگر پشیمان شدید «لغو شماره» را بنویسید.")
             price, fee = row["price"], self.fee_for(row["price"])
             # the status flip is the single gate: only one buyer can ever pass it
             if not await repo.close(tx, listing_id, "sold", buyer.id, now):
-                raise GameError("این آگهی همین الان فروخته شد.")
+                raise GameError("افسوس! یک نفر لحظه‌ای زودتر آن را خرید.")
             await wallet.apply(
                 tx, buyer.id, gold=-price, reason="market_buy", now=now, ref=f"market:{listing_id}:buy"
             )
@@ -125,9 +125,9 @@ class MarketService:
         async with self.ctx.db.transaction() as tx:
             row = await repo.get(tx, listing_id)
             if row is None or row["seller_id"] != seller.id:
-                raise GameError("چنین آگهی‌ای از تو پیدا نشد.")
+                raise GameError("چنین آگهی‌ای از شما پیدا نشد. «آگهی‌های من» را بنویسید تا شماره‌ها را ببینید.")
             if not await repo.close(tx, listing_id, "cancelled", None, now):
-                raise GameError("این آگهی دیگر فعال نیست.")
+                raise GameError("این آگهی دیگر روی تخته نیست.")
             if row["gear_id"] is not None:
                 await inv_repo.set_listed(tx, row["gear_id"], False)
             else:

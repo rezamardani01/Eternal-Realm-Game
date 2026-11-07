@@ -115,9 +115,9 @@ async def test_shop_commands_in_group(h, services, db):
     await h.say(10, "فروشگاه", group=True)
     assert "معجون انرژی" in h.session.last_text()
     await h.say(10, "خرید معجون انرژی 2", group=True)
-    assert "خریدی" in h.session.last_text()
+    assert "اکنون در اختیار" in h.session.last_text()
     await h.say(10, "فروش معجون انرژی 2", group=True)
-    assert "فروختی" in h.session.last_text()
+    assert "فروختید" in h.session.last_text()
     await h.say(10, "خرید چیزی که نیست", group=True)
     assert "پیدا نشد" in h.session.last_text()
 

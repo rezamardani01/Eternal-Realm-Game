@@ -30,7 +30,7 @@ for _activity in ACTIVITIES.values():
 @command("rest", ["استراحت", "بخواب", "rest"], "بازیابی انرژی (هر ۳۰ دقیقه)", category="🌍 فعالیت‌ها", points=0)
 async def rest(ctx: CommandContext) -> None:
     restored = await ctx.services.activities.rest(ctx.me.id)
-    await ctx.reply(f"😴 {ctx.me.name} کمی استراحت کرد و {fa(restored)} انرژی گرفت ⚡")
+    await ctx.reply(f"🔥 فرمانده {ctx.me.name} کنار آتش نشست، نان و آب خورد و {fa(restored)} انرژی تازه گرفت ⚡\nآماده‌اید که دوباره به میدان بروید؟")
 
 
 @command(

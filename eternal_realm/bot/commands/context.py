@@ -61,8 +61,8 @@ class CommandContext:
             return None
         target = target_msg.from_user
         if target.is_bot:
-            raise GameError("روی ربات‌ها نمی‌شود این کار را کرد.")
+            raise GameError("ربات‌ها اهل نبرد و معامله نیستند، فرمانده! روی پیام یک بازیکن واقعی ریپلای کنید.")
         found = await self.services.players.find(target.id, target.username)
         if found is None:
-            raise GameError(f"{target.full_name or 'این کاربر'} هنوز در بازی شخصیت نساخته است.")
+            raise GameError(f"{target.full_name or 'این کاربر'} هنوز قهرمانی نساخته و از قلمرو خبر ندارد! از او بخواهید ربات را استارت کند.")
         return found

@@ -82,7 +82,7 @@ async def test_fishing_command_in_group(h, services):
     await reg(services)
     await h.say(10, "ماهیگیری", group=True)
     text = h.session.last_text()
-    assert "قلابش" in text and "انرژی" in text
+    assert "قلاب" in text and "انرژی" in text
     await h.say(10, "ماهی", group=True)  # alias, but still on cooldown
     assert "خسته" in h.session.last_text()
 
@@ -92,7 +92,7 @@ async def test_group_can_disable_activity(h, services):
     await h.say(10, "راهنما", group=True)  # registers the group
     await services.groups.set_command(-500, "fishing", False)
     await h.say(10, "ماهیگیری", group=True)
-    assert "غیرفعال" in h.session.last_text()
+    assert "بسته" in h.session.last_text()
 
 
 @pytest.mark.parametrize("word", ["معدن", "گیاه", "جستجو"])
@@ -117,7 +117,7 @@ def test_race_perk_boosts_matching_activity():
 async def test_rest_restores_energy_once_per_cooldown(h, services, db, clock):
     p = await reg(services)
     await h.say(10, "استراحت", group=True)
-    assert "پر است" in h.session.last_text()
+    assert "سرشار از انرژی" in h.session.last_text()
     async with db.transaction() as tx:
         await services.players.spend_energy(tx, p.id, 60)
     await h.say(10, "استراحت", group=True)
@@ -126,4 +126,4 @@ async def test_rest_restores_energy_once_per_cooldown(h, services, db, clock):
     assert "دیگر" in h.session.last_text()
     clock.advance(1801)  # natural regeneration also tops the bar up, so only part of 25 fits
     await h.say(10, "استراحت", group=True)
-    assert "انرژی گرفت" in h.session.last_text()
+    assert "انرژی تازه" in h.session.last_text()

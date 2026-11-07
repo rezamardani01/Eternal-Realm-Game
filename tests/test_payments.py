@@ -103,7 +103,7 @@ async def test_invoice_flow_through_the_bot(h, services):
     p = await reg(services)
     await h.say(10, "/start")
     await h.click(10, "m:premium")
-    assert "فروشگاه ویژه" in h.session.last_text() and "تومان" in h.session.last_text()
+    assert "خزانه‌ی ویژه" in h.session.last_text() and "تومان" in h.session.last_text()
     await h.click(10, h.button_data("۱۰۰ کریستال") if False else "buy:cash:crystal_s")
     invoice = h.session.sent("sendInvoice")[-1]
     assert invoice["provider_token"].startswith("WALLET-")
@@ -115,7 +115,7 @@ async def test_invoice_flow_through_the_bot(h, services):
     assert answer["ok"] is True
 
     await h.paid(10, payload, 100_000, "wallet-abc")
-    assert "پرداخت موفق" in h.session.last_text() or any("پرداخت موفق" in t for t in h.session.texts())
+    assert "با موفقیت انجام شد" in h.session.last_text() or any("با موفقیت انجام شد" in t for t in h.session.texts())
     assert (await services.players.require(10)).crystal == 20
 
     await h.paid(10, payload, 100_000, "wallet-abc")  # Bale re-delivers the update

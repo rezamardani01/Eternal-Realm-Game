@@ -22,7 +22,7 @@ async def test_non_admin_cannot_change_settings(h, services):
     await h.say(10, "غیرفعال ماهیگیری", group=True)
     assert "مدیران" in h.session.last_text()
     await h.say(10, "ماهیگیری", group=True)
-    assert "قلابش" in h.session.last_text()
+    assert "قلاب" in h.session.last_text()
 
 
 async def test_admin_toggles_activity(h, services):
@@ -31,12 +31,12 @@ async def test_admin_toggles_activity(h, services):
     await h.say(99, "غیرفعال ماهیگیری", group=True)
     assert "غیرفعال شد" in h.session.last_text()
     await h.say(10, "ماهیگیری", group=True)
-    assert "غیرفعال شده" in h.session.last_text()
+    assert "بسته" in h.session.last_text()
     await h.say(99, "تنظیمات گروه", group=True)
     assert "ماهیگیری" in h.session.last_text()
     await h.say(99, "فعال ماهیگیری", group=True)
     await h.say(10, "ماهیگیری", group=True)
-    assert "قلابش" in h.session.last_text()
+    assert "قلاب" in h.session.last_text()
 
 
 async def test_admin_pauses_whole_game(h, services):
@@ -47,7 +47,7 @@ async def test_admin_pauses_whole_game(h, services):
     await h.say(10, "پروفایل", group=True)
     assert h.session.calls == []  # silent while paused
     await h.say(99, "فعال بازی", group=True)  # admin tools keep working
-    assert "فعال شد" in h.session.last_text()
+    assert "باز شد" in h.session.last_text()
     await h.say(10, "پروفایل", group=True)
     assert "آرش" in h.session.last_text()
 
@@ -55,7 +55,7 @@ async def test_admin_pauses_whole_game(h, services):
 async def test_unknown_or_fixed_commands_cannot_be_toggled(h):
     h.session.chat_admins.add(99)
     await h.say(99, "غیرفعال پروفایل", group=True)
-    assert "قابل تنظیم نیست" in h.session.last_text()
+    assert "نمی‌شود خاموش کرد" in h.session.last_text()
 
 
 async def test_bot_owner_is_always_allowed(h, services):

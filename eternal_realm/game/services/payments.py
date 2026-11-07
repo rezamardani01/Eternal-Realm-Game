@@ -48,10 +48,10 @@ class PaymentService:
 
     async def create_order(self, player: Player, pack_id: str) -> Order:
         if not self.ctx.settings.payments_enabled:
-            raise GameError("پرداخت فعلاً غیرفعال است.")
+            raise GameError("دروازه‌ی پرداخت فعلاً بسته است. کمی بعد دوباره سر بزنید.")
         pack = PACKS.get(pack_id)
         if pack is None:
-            raise GameError("این بسته وجود ندارد.")
+            raise GameError("چنین بسته‌ای در خزانه نیست.")
         async with self.ctx.db.transaction() as tx:
             payload = f"ER-{secrets.token_hex(8)}"
             order_id = await repo.create(tx, player.id, pack.id, pack.price_rial, payload, self.ctx.now())
@@ -62,15 +62,15 @@ class PaymentService:
         async with self.ctx.db.read() as tx:
             row = await repo.by_payload(tx, payload)
         if row is None:
-            return "این سفارش پیدا نشد."
+            return "این سفارش در دفتر خزانه پیدا نشد."
         if row["platform_user_id"] != platform_user_id:
-            return "این سفارش مال حساب دیگری است."
+            return "این سفارش برای قهرمان دیگری ثبت شده است."
         if row["status"] != "pending":
-            return "این سفارش دیگر معتبر نیست؛ دوباره از فروشگاه ویژه سفارش بده."
+            return "این سفارش دیگر معتبر نیست؛ از «فروشگاه ویژه» دوباره سفارش بدهید."
         if self.ctx.now() - row["created_at"] > ORDER_TTL_SECONDS:
-            return "مهلت پرداخت این سفارش تمام شده؛ دوباره سفارش بده."
+            return "مهلت پرداخت این سفارش تمام شده است؛ دوباره سفارش بدهید."
         if row["amount"] != amount or row["pack_id"] not in PACKS:
-            return "مبلغ سفارش با فروشگاه نمی‌خواند."
+            return "مبلغ پرداخت با قیمت بسته نمی‌خواند؛ از «فروشگاه ویژه» دوباره سفارش بدهید."
         return None
 
     async def complete(self, platform_user_id: int, payload: str, amount: int, charge_id: str | None) -> Delivery:
@@ -80,14 +80,14 @@ class PaymentService:
             row = await repo.by_payload(tx, payload)
             if row is None:
                 log.error("payment for an unknown order payload %r (user %s)", payload, platform_user_id)
-                raise GameError("پرداخت شما ثبت شد ولی سفارش پیدا نشد. با پشتیبانی تماس بگیرید.")
+                raise GameError("پرداخت شما رسید اما سفارش پیدا نشد. نگران نباشید، با پشتیبانی تماس بگیرید تا درستش کنیم.")
             pack = PACKS[row["pack_id"]]
             order = Order(row["id"], row["player_id"], pack, row["amount"], row["status"], payload)
             if row["status"] in ("delivered", "refunded"):
                 return Delivery(order, row["player_id"], duplicate=True)
             if row["platform_user_id"] != platform_user_id or row["amount"] != amount:
                 log.error("payment mismatch for order %s (user %s, amount %s)", row["id"], platform_user_id, amount)
-                raise GameError("اطلاعات پرداخت با سفارش نمی‌خواند. با پشتیبانی تماس بگیرید.")
+                raise GameError("اطلاعات پرداخت با سفارش نمی‌خواند. نگران نباشید، با پشتیبانی تماس بگیرید تا بررسی کنیم.")
             if not await repo.mark_paid(tx, order.id, charge_id or f"none:{payload}", now):
                 return Delivery(order, row["player_id"], duplicate=True)
             await self._deliver(tx, order, pack, now)

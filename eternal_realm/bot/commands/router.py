@@ -30,7 +30,7 @@ async def on_text(message: Message, bot: Bot, services: Services) -> None:
     private = _is_private(message)
 
     if private and not cmd.private:
-        raise GameError("این دستور فقط داخل گروه کار می‌کند.")
+        raise GameError("این فرمان مال میدان‌های گروهی است! ربات را به یک گروه ببرید و آنجا امتحانش کنید.")
     if not private and not cmd.group:
         return
     if not services.throttle.allow_user(user.id):
@@ -44,19 +44,19 @@ async def on_text(message: Message, bot: Bot, services: Services) -> None:
             if not group.enabled:
                 return
             if cmd.name in group.disabled_commands:
-                raise GameError("این فعالیت در این گروه غیرفعال شده است.")
+                raise GameError("فرمانده، مدیر این گروه این فعالیت را فعلاً بسته است. شاید بعداً دوباره باز شود!")
 
     player = None
     if cmd.needs_player:
         player = await services.players.find(user.id, user.username)
         if player is None:
             await message.reply(
-                "🎮 هنوز شخصیتی نساخته‌ای! اول ربات را استارت کن و شخصیتت را بساز.",
+                "🎮 ای ماجراجوی ناشناس! هنوز قهرمانی نساخته‌اید. به پیام خصوصی ربات بروید، شروع را بزنید و قهرمان خود را بسازید؛ بعد برگردید و ماجراجویی کنید!",
                 buttons=[keyboards.start_button(services.bot_username)] if services.bot_username else None,
             )
             return
         if player.banned:
-            raise GameError("⛔ حساب تو در بازی مسدود شده است.")
+            raise GameError("⛔ نگهبانان قلمرو درهای شهر را به روی شما بسته‌اند. اگر فکر می‌کنید اشتباهی شده، با مدیر ربات صحبت کنید.")
 
     ctx = CommandContext(message, bot, services, cmd, match.args, match.raw_args, player)
     await cmd.handler(ctx)

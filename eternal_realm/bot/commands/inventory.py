@@ -13,7 +13,7 @@ from .registry import command
 def _gear_id(ctx: CommandContext) -> int:
     number = to_int(ctx.args[0].lstrip("#")) if ctx.args else None
     if number is None:
-        raise GameError("شماره تجهیزات را بنویس. مثال: تجهیز 12")
+        raise GameError("شماره‌ی تجهیزات را بنویسید. مثال: «تجهیز 12» (شماره‌ها را در «کوله‌پشتی» ببینید).")
     return number
 
 
@@ -43,8 +43,8 @@ async def equipment(ctx: CommandContext) -> None:
 )
 async def equip(ctx: CommandContext) -> None:
     piece, replaced = await ctx.services.inventory.equip(ctx.me, _gear_id(ctx))
-    extra = f"\n↩️ {replaced.label} درآمد." if replaced else ""
-    await ctx.reply(f"✅ {piece.label} را پوشیدی. {piece.stats.short()}{extra}")
+    extra = f"\n↩️ {replaced.label} را کنار گذاشتید." if replaced else ""
+    await ctx.reply(f"🛡️ {piece.label} را بر تن کردید و آماده‌تر از همیشه‌اید! {piece.stats.short()}{extra}")
 
 
 @command(
@@ -53,7 +53,7 @@ async def equip(ctx: CommandContext) -> None:
 )
 async def unequip(ctx: CommandContext) -> None:
     piece = await ctx.services.inventory.unequip(ctx.me, _gear_id(ctx))
-    await ctx.reply(f"✅ {piece.label} را درآوردی.")
+    await ctx.reply(f"↩️ {piece.label} را از تن درآوردید و در کوله‌پشتی گذاشتید.")
 
 
 @command(
@@ -63,5 +63,5 @@ async def unequip(ctx: CommandContext) -> None:
 async def use(ctx: CommandContext) -> None:
     item = find_item(ctx.raw_args)
     if item is None:
-        raise GameError("چنین آیتمی پیدا نشد. مثال: مصرف معجون انرژی")
+        raise GameError("چنین معجونی پیدا نشد. اسمش را درست بنویسید؛ مثال: «مصرف معجون انرژی».")
     await ctx.reply(await ctx.services.inventory.use(ctx.me, item))

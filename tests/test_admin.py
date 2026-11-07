@@ -69,7 +69,7 @@ async def test_ban_blocks_and_unban_restores(h, services):
     await services.players.register(10, "a", "آرش", "elf", "archer")
     await h.say(OWNER, "/ban آرش")
     await h.say(10, "پروفایل", group=True)
-    assert "مسدود" in h.session.last_text()
+    assert "بسته‌اند" in h.session.last_text()
     await h.say(OWNER, "/unban آرش")
     await h.say(10, "پروفایل", group=True)
     assert "سطح" in h.session.last_text()

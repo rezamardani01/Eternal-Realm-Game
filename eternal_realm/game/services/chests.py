@@ -39,9 +39,9 @@ class ChestService:
         """Buy chests with gold or crystals. Returns ``(currency, total_price)``."""
         chest = CHESTS.get(chest_id)
         if chest is None or chest.price is None:
-            raise GameError("این صندوقچه برای فروش نیست.")
+            raise GameError("این صندوقچه فروشی نیست؛ فقط از ماجراجویی به دست می‌آید.")
         if not 1 <= qty <= 20:
-            raise GameError("تعداد باید بین ۱ تا ۲۰ باشد.")
+            raise GameError("هر بار فقط می‌توانید بین ۱ تا ۲۰ صندوقچه بخرید.")
         currency, unit = chest.price
         total = unit * qty
         async with self.ctx.db.transaction() as tx:
@@ -55,7 +55,7 @@ class ChestService:
     async def open(self, player: Player, item: Item) -> Opened:
         chest = CHESTS.get(item.id)
         if item.kind is not Kind.CHEST or chest is None:
-            raise GameError(f"{item.label} صندوقچه نیست.")
+            raise GameError(f"{item.label} صندوقچه نیست و قفلی ندارد که بشکنید!")
         prize = self.roll(chest)
         rng = self.ctx.rng
         gold = rng.randint(*prize.gold) if prize.gold[1] else 0

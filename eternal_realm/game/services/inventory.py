@@ -58,14 +58,14 @@ class InventoryService:
 
     async def take(self, tx: Tx, player_id: int, item_id: str, qty: int = 1) -> None:
         if not await repo.remove_stack(tx, player_id, item_id, qty):
-            raise GameError(f"{get_item(item_id).label} به اندازه کافی نداری.")
+            raise GameError(f"{get_item(item_id).label} به اندازه‌ی کافی در کوله‌پشتی شما نیست.")
 
     async def piece(self, tx: Tx, player_id: int, gear_id: int) -> Piece:
         row = await repo.get_gear(tx, gear_id)
         if row is None or row.player_id != player_id:
-            raise GameError("چنین تجهیزاتی در کوله‌پشتی تو نیست.")
+            raise GameError("چنین تجهیزاتی در کوله‌پشتی شما پیدا نشد. «کوله‌پشتی» را بنویسید تا شماره‌ی درست را ببینید.")
         if row.listed:
-            raise GameError("این تجهیزات برای فروش در بازار گذاشته شده؛ اول آگهی را لغو کن.")
+            raise GameError("این تجهیزات روی تخته‌ی بازار برای فروش گذاشته شده است. اگر پشیمان شدید، اول آگهی را «لغو» کنید.")
         return Piece(row.id, get_item(row.item_id), row.upgrade, row.slot)
 
     async def on_registered(self, tx: Tx, player: Player) -> None:
@@ -96,9 +96,9 @@ class InventoryService:
         async with self.ctx.db.transaction() as tx:
             piece = await self.piece(tx, player.id, gear_id)
             if piece.slot is not None:
-                raise GameError("این تجهیزات همین الان پوشیده شده است.")
+                raise GameError("این تجهیزات هم‌اکنون بر تن شماست!")
             if player.level < piece.item.level_req:
-                raise GameError(f"برای پوشیدن {piece.item.name} باید حداقل سطح {piece.item.level_req} باشی.")
+                raise GameError(f"{piece.item.name} هنوز برای شما سنگین است! برای پوشیدنش باید دست‌کم به سطح {piece.item.level_req} برسید.")
             slot = piece.item.slot
             assert slot is not None
             old_row = await repo.equipped_in_slot(tx, player.id, slot)
@@ -114,7 +114,7 @@ class InventoryService:
         async with self.ctx.db.transaction() as tx:
             piece = await self.piece(tx, player.id, gear_id)
             if piece.slot is None:
-                raise GameError("این تجهیزات پوشیده نیست.")
+                raise GameError("این تجهیزات الان بر تن شما نیست.")
             await repo.set_slot(tx, piece.id, None)
             piece.slot = None
             return piece
@@ -122,13 +122,13 @@ class InventoryService:
     # --- consumables --------------------------------------------------------------------------
     async def use(self, player: Player, item: Item) -> str:
         if item.kind is not Kind.CONSUMABLE:
-            raise GameError(f"{item.label} را نمی‌شود مصرف کرد.")
+            raise GameError(f"{item.label} را نمی‌شود نوشید یا مصرف کرد؛ فقط معجون‌ها قابل مصرف‌اند.")
         async with self.ctx.db.transaction() as tx:
             await self.take(tx, player.id, item.id)
             restored = await self.players.add_energy(tx, player.id, item.energy)
             if restored <= 0:
-                raise GameError("انرژی‌ات پر است!")  # raising rolls the transaction back: nothing is used up
-        return f"{item.label} را مصرف کردی و {restored} انرژی گرفتی ⚡"
+                raise GameError("انرژی شما پر پر است، فرمانده! معجون را برای وقتی نگه دارید که خسته شدید.")  # raising rolls the transaction back: nothing is used up
+        return f"🧪 {item.label} را نوشیدید و {restored} انرژی تازه در رگ‌هایتان دوید! ⚡"
 
 
 def slot_label(slot: str) -> str:

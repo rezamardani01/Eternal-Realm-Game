@@ -27,14 +27,14 @@ def _is_private(message: Message) -> bool:
 async def on_buy(query: CallbackQuery, callback_data: BuyCb, services: Services, bot: Bot) -> None:
     message = query.message
     if message is None or not _is_private(message):
-        raise GameError("برای خرید، وارد پیام خصوصی ربات شو.")
+        raise GameError("خزانه‌ی ویژه فقط در پیام خصوصی ربات باز می‌شود؛ آنجا بیایید و خرید کنید.")
     player = await services.players.require(query.from_user.id)
 
     if callback_data.kind == "crystal":
         currency, total = await services.chests.buy(player, callback_data.id, 1)
         icon = "🪙" if currency == "gold" else "💎"
-        await message.answer(f"✅ صندوقچه خریده شد ({fa(total)} {icon}).\nبرای باز کردن: «باز کردن» + نام صندوقچه")
-        await query.answer("✅ خریداری شد")
+        await message.answer(f"✅ صندوقچه به کوله‌پشتی شما رسید ({fa(total)} {icon} پرداخت شد).\n🗝️ برای گشودنش بنویسید: «باز کردن صندوقچه جادویی»")
+        await query.answer("✅ صندوقچه شما شد")
         return
 
     order = await services.payments.create_order(player, callback_data.id)
@@ -47,7 +47,7 @@ async def on_buy(query: CallbackQuery, callback_data: BuyCb, services: Services,
         provider_token=services.ctx.settings.provider_token,
         prices=[LabeledPrice(label=pack.title[:32], amount=order.amount)],
     )
-    await query.answer("فاکتور پرداخت فرستاده شد 👇")
+    await query.answer("فاکتور پرداخت برایتان فرستاده شد 👇")
 
 
 @router.pre_checkout_query()
@@ -58,7 +58,7 @@ async def on_pre_checkout(query: PreCheckoutQuery, services: Services) -> None:
         )
     except Exception:
         log.exception("pre-checkout failed")
-        error = "خطای موقت؛ لطفاً دوباره تلاش کن."
+        error = "طوفانی در راه است؛ چند لحظه دیگر دوباره تلاش کنید."
     await query.answer(ok=error is None, error_message=error)
 
 
@@ -73,7 +73,7 @@ async def on_successful_payment(message: Message, services: Services, bot: Bot) 
         user.id, payment.invoice_payload, payment.total_amount, charge
     )
     if delivery.duplicate:
-        await message.answer("ℹ️ این پرداخت قبلاً ثبت و تحویل داده شده بود.")
+        await message.answer("ℹ️ این پرداخت پیش‌تر ثبت شده و کالایتان را گرفته‌اید؛ نگران نباشید، پولی دوباره کم نشد.")
         return
     await message.answer(views.delivery(delivery.order))
     with contextlib.suppress(BaleAPIError):

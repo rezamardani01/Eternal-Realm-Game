@@ -72,16 +72,16 @@ class DuelService:
     async def challenge(self, chat_id: int, challenger: Player, target: Player) -> Duel:
         b, now = self.ctx.balance, self.ctx.now()
         if challenger.id == target.id:
-            raise GameError("با خودت که نمی‌شود دوئل کرد! 😅")
+            raise GameError("فرمانده، با سایه‌ی خودتان که نمی‌شود دوئل کرد! 😅 روی پیام یک حریف ریپلای کنید.")
         if target.banned:
-            raise GameError("این بازیکن مسدود شده است.")
+            raise GameError("این بازیکن از قلمرو تبعید شده و نمی‌شود با او کاری داشت.")
         async with self.ctx.db.transaction() as tx:
             pair = (challenger.id, target.id)
             await repo.expire_pending_for(tx, pair, now)
             if await repo.open_for(tx, pair) is not None:
-                raise GameError("یکی از شما همین الان درگیر یک دوئل است. صبر کن تمام شود.")
+                raise GameError("یکی از شما هم‌اکنون در میدان نبرد است. بگذارید آن نبرد تمام شود، بعد دوباره دعوت کنید.")
             if await repo.pair_count_since(tx, challenger.id, target.id, now - DAY) >= b.duel_pair_daily_limit:
-                raise GameError("امروز بین شما بیش از حد دوئل شده؛ فردا دوباره امتحان کنید.")
+                raise GameError("شما دو نفر امروز آن‌قدر با هم جنگیده‌اید که شمشیرها خسته شده‌اند! فردا دوباره بجنگید.")
             duel_id = await repo.create(tx, chat_id, challenger.id, target.id, now, now + b.duel_invite_seconds)
             row = await repo.get(tx, duel_id)
         assert row is not None
@@ -101,11 +101,11 @@ class DuelService:
         async with self.ctx.db.transaction() as tx:
             row = await repo.get(tx, duel_id)
             if row is None:
-                raise GameError("این درخواست دیگر وجود ندارد.")
+                raise GameError("این دعوت‌نامه دیگر وجود ندارد.")
             if by.id not in (row["target_id"], row["challenger_id"]):
-                raise GameError("این درخواست مال تو نیست.")
+                raise GameError("این دعوت‌نامه مال شما نیست.")
             if not await repo.close_pending(tx, duel_id, "declined", now):
-                raise GameError("این درخواست دیگر فعال نیست.")
+                raise GameError("این دعوت‌نامه دیگر معتبر نیست؛ پذیرفته، رد یا منقضی شده است.")
             row = await repo.get(tx, duel_id)
         assert row is not None
         return Duel.from_row(row)
@@ -115,11 +115,11 @@ class DuelService:
         async with self.ctx.db.transaction() as tx:
             row = await repo.get(tx, duel_id)
             if row is None or row["status"] != "pending":
-                raise GameError("این درخواست دیگر فعال نیست.")
+                raise GameError("این دعوت‌نامه دیگر معتبر نیست؛ پذیرفته، رد یا منقضی شده است.")
             if by.id != row["target_id"]:
-                raise GameError("فقط کسی که دعوت شده می‌تواند قبول کند.")
+                raise GameError("فقط کسی که به دوئل فراخوانده شده می‌تواند دعوت را بپذیرد.")
             if row["expires_at"] <= now:
-                raise GameError("زمان این درخواست تمام شده است.")
+                raise GameError("مهلت این دعوت‌نامه تمام شده است. دوباره دعوت کنید.")
             challenger = await player_repo.get(tx, row["challenger_id"])
             target = await player_repo.get(tx, row["target_id"])
             assert challenger is not None and target is not None
@@ -129,10 +129,10 @@ class DuelService:
                 fighters.append(Fighter.for_player(p.id, p.name, p.char_class, stats))
             battle = Battle.start(fighters[0], fighters[1], b.duel_max_rounds, self.ctx.rng)
             if not await repo.start(tx, duel_id, json.dumps(battle.to_dict()), now, now + b.duel_turn_seconds):
-                raise GameError("این درخواست دیگر فعال نیست.")
+                raise GameError("این دعوت‌نامه دیگر معتبر نیست؛ پذیرفته، رد یا منقضی شده است.")
             fresh = await repo.get(tx, duel_id)
         assert fresh is not None
-        return DuelUpdate(Duel.from_row(fresh), battle, [f"⚔️ مبارزه شروع شد! {battle.current.name} اول حمله می‌کند."])
+        return DuelUpdate(Duel.from_row(fresh), battle, [f"⚔️ شیپور نبرد نواخته شد! چون {battle.current.name} چابک‌تر است، اول او حمله می‌کند."])
 
     # --- play ---------------------------------------------------------------------------------
     async def act(self, duel_id: int, by: Player, action: Action) -> DuelUpdate:
@@ -140,18 +140,18 @@ class DuelService:
         async with self.ctx.db.transaction() as tx:
             row = await repo.get(tx, duel_id)
             if row is None or row["status"] != "active":
-                raise GameError("این مبارزه تمام شده است.")
+                raise GameError("این نبرد پایان یافته است.")
             duel = Duel.from_row(row)
             assert duel.battle is not None
             battle = duel.battle
             if by.id not in (duel.challenger_id, duel.target_id):
-                raise GameError("تو در این مبارزه نیستی.")
+                raise GameError("شما در این نبرد حضور ندارید، فرمانده!")
             if battle.current.player_id != by.id:
-                raise GameError("نوبت تو نیست! ✋")
+                raise GameError("✋ صبر کنید فرمانده، نوبت حریف شماست!")
             if row["expires_at"] <= now:
-                raise GameError("وقتت تمام شد؛ مبارزه به‌زودی بسته می‌شود.")
+                raise GameError("زمان شما تمام شد و ریگ‌های ساعت ریختند! نبرد به‌زودی بسته می‌شود.")
             if action is Action.SKILL and battle.current.skill_ready_in > 1:
-                raise GameError(f"مهارت هنوز آماده نیست ({battle.current.skill_ready_in - 1} نوبت دیگر).")
+                raise GameError(f"مهارت ویژه‌ی شما هنوز آماده نیست؛ {battle.current.skill_ready_in - 1} نوبت دیگر صبر کنید یا حمله‌ی معمولی بزنید.")
             lines = combat.act(battle, action, self.ctx.rng)
             return await self._after_turn(tx, duel, battle, lines, now, b.duel_turn_seconds)
 
@@ -165,7 +165,7 @@ class DuelService:
             return DuelUpdate(duel, battle, lines)
         winner_pid = battle.fighters[battle.winner].player_id if battle.winner is not None else None
         if not await repo.finish(tx, duel.id, state, winner_pid, now):
-            raise GameError("این مبارزه قبلاً تمام شده است.")
+            raise GameError("این نبرد پیش‌تر پایان یافته است.")
         duel.status, duel.winner_id = "finished", winner_pid
         payouts = await self._pay(tx, duel, battle, now)
         return DuelUpdate(duel, battle, lines, finished=True, payouts=payouts, timed_out=timed_out)
@@ -218,7 +218,7 @@ class DuelService:
                 battle = duel.battle
                 idler = battle.current
                 battle.finished, battle.winner = True, 1 - battle.actor
-                lines = [f"⌛ {idler.name} در زمان مقرر حرکتی نکرد و مبارزه را باخت."]
+                lines = [f"⌛ فرمانده {idler.name} در زمان مقرر حرکتی نکرد و نبرد را واگذار کرد."]
                 results.append(
                     await self._after_turn(tx, duel, battle, lines, now, 0, timed_out=True)
                 )

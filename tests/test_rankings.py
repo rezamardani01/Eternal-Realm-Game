@@ -64,4 +64,4 @@ async def test_ranking_commands(h, services, db):
         await h.say(10, word, group=True)
         assert "🥇" in h.session.last_text()
     await h.say(10, "رتبه", group=True)
-    assert "هنوز کسی" in h.session.last_text()
+    assert "هنوز هیچ قهرمانی" in h.session.last_text()

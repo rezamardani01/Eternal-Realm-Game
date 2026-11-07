@@ -53,7 +53,7 @@ async def test_transfer_rules(services, db):
         await wallet.apply(tx, a.id, gold=limit * 2, reason="test", now=services.ctx.now())
     a = await services.players.require(10)
     await services.economy.transfer(a, b, limit - 10)
-    with pytest.raises(GameError, match="سقف"):
+    with pytest.raises(GameError, match="خزانه‌دار"):
         await services.economy.transfer(a, b, 100)
 
 
@@ -68,7 +68,7 @@ async def test_daily_limit_resets_next_day(services, db, clock):
 async def test_transfer_command_by_reply(h, services, db):
     await pair(services, db)
     await h.say(10, "انتقال 500", group=True, reply_to=h.message_of(11))
-    assert "فرستاد" in h.session.last_text()
+    assert "بخشید" in h.session.last_text()
     await h.say(10, "انتقال", group=True, reply_to=h.message_of(11))
     assert "ریپلای" in h.session.last_text()
     await h.say(10, "انتقال 500", group=True)

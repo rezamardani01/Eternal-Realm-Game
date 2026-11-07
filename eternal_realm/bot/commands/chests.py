@@ -13,7 +13,7 @@ from .registry import command
 def _chest_item(text: str):  # noqa: ANN202
     item = find_item(text)
     if item is None or item.kind is not Kind.CHEST or item.id not in CHESTS:
-        raise GameError("چنین صندوقچه‌ای وجود ندارد. «صندوقچه» را بزن تا فهرست را ببینی.")
+        raise GameError("چنین صندوقچه‌ای در قلمرو نیست. «صندوقچه» را بنویسید تا فهرست را ببینید.")
     return item
 
 

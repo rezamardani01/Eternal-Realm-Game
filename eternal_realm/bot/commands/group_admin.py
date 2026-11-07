@@ -12,7 +12,7 @@ async def _require_admin(ctx: CommandContext) -> None:
         return
     member = await ctx.bot.get_chat_member(ctx.chat_id, ctx.user.id)
     if not member.is_admin:
-        raise GameError("این دستور فقط برای مدیران گروه است.")
+        raise GameError("این فرمان مخصوص مدیران گروه است، فرمانده. از یکی از مدیران بخواهید آن را بنویسد.")
 
 
 def _toggleable(word: str) -> Command:
@@ -22,7 +22,7 @@ def _toggleable(word: str) -> Command:
             next((a for a in c.aliases if not a.isascii()), c.name)
             for c in REGISTRY.all() if c.toggleable
         )
-        raise GameError(f"این فعالیت قابل تنظیم نیست. فعالیت‌های قابل تنظیم: {names}")
+        raise GameError(f"این یکی را نمی‌شود خاموش کرد. فعالیت‌هایی که می‌توانید تنظیم کنید: {names}")
     return found
 
 
@@ -34,12 +34,12 @@ async def _switch(ctx: CommandContext, enabled: bool) -> None:
     await _require_admin(ctx)
     if is_game:
         await ctx.services.groups.set_enabled(ctx.chat_id, enabled)
-        await ctx.reply("✅ بازی در این گروه فعال شد." if enabled else "⏸️ بازی در این گروه متوقف شد.")
+        await ctx.reply("✅ دروازه‌های قلمرو در این گروه باز شد! ماجراجویان می‌توانند بازی کنند." if enabled else "⏸️ دروازه‌های قلمرو در این گروه بسته شد. با «فعال بازی» دوباره باز می‌شود.")
         return
     cmd = _toggleable(word)
     await ctx.services.groups.set_command(ctx.chat_id, cmd.name, enabled)
     state = "فعال شد ✅" if enabled else "غیرفعال شد ⛔"
-    await ctx.reply(f"«{word}» در این گروه {state}")
+    await ctx.reply(f"فرمان مدیر اجرا شد: «{word}» در این گروه {state}")
 
 
 @command(
@@ -70,9 +70,9 @@ async def group_settings(ctx: CommandContext) -> None:
         for c in REGISTRY.all() if c.name in info.disabled_commands
     ]
     lines = [
-        "⚙️ تنظیمات بازی در این گروه",
-        f"وضعیت کلی: {'✅ فعال' if info.enabled else '⏸️ متوقف'}",
-        "غیرفعال‌ها: " + ("، ".join(off) if off else "هیچ‌کدام"),
-        "مدیران می‌توانند با «غیرفعال <نام>» و «فعال <نام>» تغییر دهند.",
+        "⚙️ دفتر مدیریت قلمرو در این گروه",
+        f"دروازه‌ی قلمرو: {'✅ باز' if info.enabled else '⏸️ بسته'}",
+        "فعالیت‌های بسته: " + ("، ".join(off) if off else "هیچ‌کدام"),
+        "مدیران با «غیرفعال ماهیگیری» و «فعال ماهیگیری» می‌توانند هر فعالیت را ببندند و باز کنند.",
     ]
     await ctx.reply("\n".join(lines))

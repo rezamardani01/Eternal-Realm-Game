@@ -80,14 +80,14 @@ async def test_profile_of_replied_player(h, services):
 
 async def test_unregistered_user_is_sent_to_start(h):
     await h.say(10, "پروفایل", group=True)
-    assert "استارت" in h.session.last_text()
+    assert "قهرمانی نساخته" in h.session.last_text()
     assert h.session.last_buttons()[0]["url"].startswith("https://ble.ir/")
 
 
 async def test_unregistered_reply_target(h, services):
     await services.players.register(10, "a", "آرش", "elf", "archer")
     await h.say(10, "پروفایل", group=True, reply_to=h.message_of(99))
-    assert "شخصیت نساخته" in h.session.last_text()
+    assert "قهرمانی نساخته" in h.session.last_text()
 
 
 async def test_banned_player_blocked(h, services):
@@ -95,15 +95,15 @@ async def test_banned_player_blocked(h, services):
     async with services.ctx.db.transaction() as tx:
         await tx.execute("UPDATE players SET banned = 1 WHERE id = ?", (p.id,))
     await h.say(10, "پروفایل", group=True)
-    assert "مسدود" in h.session.last_text()
+    assert "بسته‌اند" in h.session.last_text()
 
 
 async def test_daily_via_command(h, services):
     await services.players.register(10, "a", "آرش", "elf", "archer")
     await h.say(10, "جایزه", group=True)
-    assert "جایزه روزانه" in h.session.last_text()
+    assert "گنجینه‌ی امروز" in h.session.last_text()
     await h.say(10, "جایزه", group=True)
-    assert "گرفته‌ای" in h.session.last_text()
+    assert "برداشته‌اید" in h.session.last_text()
 
 
 async def test_plain_chatter_is_ignored(h, services):

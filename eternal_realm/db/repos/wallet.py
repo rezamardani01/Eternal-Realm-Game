@@ -11,12 +11,12 @@ from ..database import Tx
 class InsufficientFunds(GameError):
     def __init__(self, gold: bool = False, crystal: bool = False) -> None:
         what = "سکه" if gold and not crystal else "کریستال" if crystal and not gold else "موجودی"
-        super().__init__(f"{what} کافی نداری.")
+        super().__init__(f"{what} کافی در کیسه‌ی شما نیست! با ماهیگیری، معدن و شکار می‌توانید بیشتر به دست آورید.")
 
 
 class DuplicateOperation(GameError):
     def __init__(self) -> None:
-        super().__init__("این عملیات قبلاً انجام شده است.")
+        super().__init__("این کار پیش‌تر انجام شده است و نیازی به تکرار نیست.")
 
 
 async def apply(

@@ -18,4 +18,4 @@ async def on_upgrade(query: CallbackQuery, callback_data: UpgradeCb, services: S
     result = await services.shop.upgrade(player, callback_data.id, callback_data.level)
     if query.message is not None:
         await query.message.edit_text(views.upgrade_result(result))
-    await query.answer("✅ ارتقا موفق!" if result.success else "💥 ارتقا شکست خورد", show_alert=False)
+    await query.answer("✨ ارتقا موفق بود!" if result.success else "💥 این بار نشد، دوباره تلاش کنید", show_alert=False)

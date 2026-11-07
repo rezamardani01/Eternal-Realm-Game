@@ -55,9 +55,9 @@ class ShopService:
     async def buy(self, player: Player, item: Item, qty: int) -> int:
         """Buy ``qty`` of an item from the NPC. Returns the gold paid."""
         if item.buy <= 0:
-            raise GameError(f"{item.label} در فروشگاه فروخته نمی‌شود.")
+            raise GameError(f"{item.label} در بازارچه موجود نیست. شاید در «بازار» از دست بازیکنی پیدا شود یا از هیولاها غنیمت گرفته شود.")
         if not 1 <= qty <= MAX_QTY:
-            raise GameError(f"تعداد باید بین ۱ تا {MAX_QTY} باشد.")
+            raise GameError(f"هر بار فقط می‌توانید بین ۱ تا {MAX_QTY} عدد بخرید.")
         total = item.buy * qty
         async with self.ctx.db.transaction() as tx:
             await wallet.apply(tx, player.id, gold=-total, reason="shop_buy", now=self.ctx.now())
@@ -66,9 +66,9 @@ class ShopService:
 
     async def sell_stack(self, player: Player, item: Item, qty: int) -> int:
         if item.sell <= 0 or item.is_gear:
-            raise GameError(f"{item.label} را نمی‌شود به فروشگاه فروخت.")
+            raise GameError(f"فروشنده‌ی بازارچه {item.label} را نمی‌خرد. شاید در «بازار» خریداری برایش پیدا شود.")
         if not 1 <= qty <= 10_000:
-            raise GameError("تعداد نامعتبر است.")
+            raise GameError("تعداد را درست بنویسید؛ مثلاً: 5")
         total = item.sell * qty
         async with self.ctx.db.transaction() as tx:
             await self.inventory.take(tx, player.id, item.id, qty)
@@ -79,9 +79,9 @@ class ShopService:
         async with self.ctx.db.transaction() as tx:
             piece = await self.inventory.piece(tx, player.id, gear_id)
             if piece.slot is not None:
-                raise GameError("اول این تجهیزات را دربیاور.")
+                raise GameError("اول این تجهیزات را از تن خود دربیاورید؛ با «درآوردن شماره».")
             if piece.item.sell <= 0:
-                raise GameError(f"{piece.item.label} را فقط در بازار می‌شود فروخت.")
+                raise GameError(f"فروشنده‌ی بازارچه {piece.item.label} را نمی‌خرد؛ آن‌قدر ارزشمند است که فقط در «بازار» می‌توانید بفروشیدش.")
             total = round(piece.item.sell * (1 + 0.5 * piece.upgrade))
             await inv_repo.delete_gear(tx, piece.id)
             await wallet.apply(tx, player.id, gold=total, reason="shop_sell", now=self.ctx.now())
@@ -91,7 +91,7 @@ class ShopService:
         async with self.ctx.db.read() as tx:
             piece = await self.inventory.piece(tx, player.id, gear_id)
         if piece.upgrade >= MAX_UPGRADE:
-            raise GameError("این تجهیزات به بیشترین سطح ارتقا رسیده است.")
+            raise GameError("این تجهیزات به بالاترین مرتبه‌ی آهنگری رسیده و دیگر قوی‌تر نمی‌شود. شکوهش را به رخ بکشید!")
         return piece, upgrade_quote(piece.item, piece.upgrade)
 
     async def upgrade(self, player: Player, gear_id: int, expected_level: int) -> UpgradeResult:
@@ -100,16 +100,16 @@ class ShopService:
         async with self.ctx.db.transaction() as tx:
             piece = await self.inventory.piece(tx, player.id, gear_id)
             if piece.upgrade >= MAX_UPGRADE:
-                raise GameError("این تجهیزات به بیشترین سطح ارتقا رسیده است.")
+                raise GameError("این تجهیزات به بالاترین مرتبه‌ی آهنگری رسیده و دیگر قوی‌تر نمی‌شود. شکوهش را به رخ بکشید!")
             if piece.upgrade + 1 != expected_level:
-                raise GameError("وضعیت این تجهیزات تغییر کرده؛ دوباره «ارتقا» بزن.")
+                raise GameError("حال این تجهیزات تغییر کرده است؛ دوباره «ارتقا» و شماره‌اش را بنویسید.")
             quote = upgrade_quote(piece.item, piece.upgrade)
             await wallet.apply(tx, player.id, gold=-quote.gold, reason="upgrade", now=now)
             for item_id, qty in quote.materials.items():
                 try:
                     await self.inventory.take(tx, player.id, item_id, qty)
                 except GameError as err:
-                    raise GameError(f"مواد کافی نداری: {get_item(item_id).label} ×{qty}") from err
+                    raise GameError(f"مواد کافی ندارید: {get_item(item_id).label} ×{qty}. با «معدن» و «شکار» می‌توانید پیدایش کنید.") from err
             success = self.ctx.rng.random() < quote.chance
             if success:
                 await inv_repo.set_upgrade(tx, piece.id, quote.next_level)

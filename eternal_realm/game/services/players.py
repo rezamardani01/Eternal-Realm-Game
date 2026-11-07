@@ -44,21 +44,21 @@ class PlayerService:
         name = clean_name(raw_name)
         async with self.ctx.db.read() as tx:
             if await repo.name_taken(tx, name):
-                raise GameError("این نام قبلاً انتخاب شده، یک نام دیگر امتحان کن.")
+                raise GameError("قهرمان دیگری پیش‌تر این نام را برداشته است. یک نام تازه و یگانه برای خود بنویسید.")
         return name
 
     async def register(
         self, platform_user_id: int, username: str | None, raw_name: str, race_id: str, class_id: str
     ) -> Player:
         if race_id not in RACES or class_id not in CLASSES:
-            raise GameError("نژاد یا کلاس نامعتبر است.")
+            raise GameError("این نژاد یا کلاس در قلمرو شناخته نمی‌شود. یکی از دکمه‌ها را انتخاب کنید.")
         name = clean_name(raw_name)
         balance, now = self.ctx.balance, self.ctx.now()
         async with self.ctx.db.transaction() as tx:
             if await repo.get_by_platform(tx, platform_user_id):
-                raise GameError("تو قبلاً شخصیت ساخته‌ای.")
+                raise GameError("شما پیش‌تر قهرمان خود را ساخته‌اید. هر ماجراجو فقط یک قهرمان دارد!")
             if await repo.name_taken(tx, name):
-                raise GameError("این نام قبلاً انتخاب شده، یک نام دیگر امتحان کن.")
+                raise GameError("قهرمان دیگری پیش‌تر این نام را برداشته است. یک نام تازه و یگانه برای خود بنویسید.")
             player = await repo.create(
                 tx,
                 platform_user_id=platform_user_id,
@@ -129,8 +129,9 @@ class PlayerService:
         if energy < cost:
             wait = progression.seconds_to_next_energy(at, now, self.ctx.balance)
             raise GameError(
-                f"انرژی‌ات کافی نیست ({fa(energy)} از {fa(cost)}).\n"
-                f"انرژی بعدی تا {duration(wait)} دیگر، یا «استراحت» کن."
+                f"⚡ انرژی شما کافی نیست ({fa(energy)} از {fa(cost)}).\n"
+                f"یک انرژی تازه تا {duration(wait)} دیگر می‌رسد. می‌توانید «استراحت» کنید "
+                "یا معجون انرژی بنوشید و دوباره به میدان بیایید!"
             )
         if energy == progression.max_energy(player.level, self.ctx.balance):
             at = now
@@ -169,7 +170,7 @@ class PlayerService:
                 raise NotRegistered
             elapsed = now - player.daily_at
             if player.daily_at and elapsed < DAY:
-                raise GameError(f"جایزه روزانه را گرفته‌ای. {duration(DAY - elapsed)} دیگر برگرد.")
+                raise GameError(f"🎁 گنجینه‌ی روزانه‌ی امروز را برداشته‌اید. {duration(DAY - elapsed)} دیگر بازگردید؛ هدیه‌ی تازه‌ای آماده می‌شود!")
             streak = player.daily_streak + 1 if player.daily_at and elapsed < 2 * DAY else 1
             bonus = min(streak, balance.daily_streak_cap) - 1
             gold = balance.daily_gold + balance.daily_gold_per_level * player.level + 50 * bonus

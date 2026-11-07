@@ -15,7 +15,7 @@ async def premium(ctx: CommandContext) -> None:
     if ctx.is_group:
         username = ctx.services.bot_username
         await ctx.reply(
-            "💎 خرید فقط در پیام خصوصی ربات انجام می‌شود (پرداخت امن با کیف پول بله).",
+            "💎 خزانه‌ی ویژه فقط در پیام خصوصی ربات باز می‌شود؛ آنجا خرید امن است و با کیف پول بله پرداخت می‌کنید. روی دکمه‌ی زیر بزنید!",
             buttons=[keyboards.start_button(username)] if username else None,
         )
         return
