@@ -10,9 +10,8 @@ from baleropy.exceptions import BaleAPIError
 from baleropy.types import CallbackQuery, LabeledPrice, Message, PreCheckoutQuery
 
 from ..shared.errors import GameError
-from ..game.data.items import get_item
-from ..shared.text import bold, fa
-from . import keyboards, views
+from ..shared.text import fa
+from . import views
 from .callbacks import BuyCb
 from .services import Services
 
@@ -30,20 +29,6 @@ async def on_buy(query: CallbackQuery, callback_data: BuyCb, services: Services,
     if message is None or not _is_private(message):
         raise GameError("خزانه‌ی ویژه فقط در پیام خصوصی ربات باز می‌شود؛ آنجا بیایید و خرید کنید.")
     player = await services.players.require(query.from_user.id)
-
-    if callback_data.kind == "crystal":
-        currency, total = await services.chests.buy(player, callback_data.id, 1)
-        icon = "🪙" if currency == "gold" else "💎"
-        owner = query.from_user.id
-        await message.answer(
-            f"✅ {bold('صندوقچه خریده شد')}\n{get_item(callback_data.id).label} به کوله‌پشتی شما رسید ({fa(total)} {icon}).",
-            buttons=[
-                [keyboards.panel_button("🗝️ باز کردن", "open", owner, callback_data.id)],
-                [keyboards.panel_button("🔙 خزانه‌ی ویژه", "premium", owner)],
-            ],
-        )
-        await query.answer("✅ صندوقچه شما شد")
-        return
 
     order = await services.payments.create_order(player, callback_data.id)
     pack = order.pack

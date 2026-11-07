@@ -141,6 +141,8 @@ async def test_cannot_buy_from_a_group_and_crystal_chest_button(h, services, db)
     player_id = (await services.players.require(10)).id  # never call services while a tx is open
     async with db.transaction() as tx:
         await wallet.apply(tx, player_id, crystal=30, reason="t", now=1)
-    await h.click(10, "buy:crystal:magic_chest")
+    await h.panel(10, "cbuyq", "magic_chest")
+    assert "تأیید خرید" in h.session.last_text()
+    await h.tap(10, "بله")
     stacks = {i.id: q for i, q in (await services.inventory.view(1)).stacks}
     assert stacks["magic_chest"] == 1

@@ -168,7 +168,7 @@ def act(battle: Battle, action: Action, rng: random.Random) -> list[str]:
             damage, crit = _strike(me, foe, offense, foe.defense * 0.5, rng)
             foe.hp = max(0, foe.hp - damage)
             lines.append(
-                f"⚔️ {me.name} شمشیر کشید و به {foe.name} حمله کرد! {'🎯 ضربه‌ی کاری! ' if crit else ''}💥 {fa(damage)} آسیب"
+                f"⚔️ {me.name} به {foe.name} حمله کرد! {'🎯 ضربه‌ی کاری! ' if crit else ''}💥 {fa(damage)} آسیب"
             )
 
     if foe.hp <= 0:

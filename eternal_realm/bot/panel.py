@@ -58,6 +58,7 @@ class Ctx:
     is_group: bool
     chat_id: int = 0
     state: FSMContext | None = None
+    message: Message | None = None
 
     def btn(self, label: str, screen: str, a: object = "", b: object = "", style: str | None = None):
         data = PanelCb(s=screen, a=str(a) or None, b=str(b) or None, o=self.owner)
@@ -65,6 +66,13 @@ class Ctx:
 
     def back(self, screen: str, label: str = "🔙 بازگشت", a: object = "", b: object = "") -> list:
         return [self.btn(label, screen, a, b)]
+
+    async def show(self, text: str) -> None:
+        """A progress frame: replaces the panel text and removes the buttons (no double taps)."""
+        if self.message is not None:
+            with contextlib.suppress(BaleAPIError):
+                await self.message.edit_text(text)
+            await self.services.ctx.pause()
 
     async def refresh(self) -> Player:
         self.player = await self.services.players.require(self.player.platform_user_id)
@@ -196,9 +204,15 @@ async def adventure(c: Ctx) -> Screen:
 async def act(c: Ctx) -> Screen:
     services, p = c.services, c.player
     if c.a == "hunt":
-        text = views.hunt_result(p.name, await services.hunting.hunt(p.id))
+        hunted = await services.hunting.hunt(p.id)
+        for frame in views.hunt_frames(p.name, hunted):
+            await c.show(frame)
+        text = views.hunt_result(p.name, hunted)
     else:
-        text = views.activity_result(p.name, await services.activities.perform(p.id, c.a))
+        done = await services.activities.perform(p.id, c.a)
+        for frame in views.activity_frames(p.name, done.activity):
+            await c.show(frame)
+        text = views.activity_result(p.name, done)
     rows = [[c.btn("🔁 دوباره", "act", c.a, style="success")], c.back("adv", "🔙 ماجراجویی")]
     return Screen(text, rows)
 
@@ -324,6 +338,7 @@ async def upgrade_ask(c: Ctx) -> Screen:
 @screen("up")
 async def upgrade(c: Ctx) -> Screen:
     result = await c.services.shop.upgrade(c.player, _int(c.a), _int(c.b))
+    await c.show(views.upgrade_working())
     rows = [[c.btn("🔨 دوباره ارتقا", "upq", result.piece.id)], c.back("piece", "🔙 تجهیزات", result.piece.id)]
     return Screen(views.upgrade_result(result), rows,
                   toast="✨ ارتقا موفق بود" if result.success else "💥 این بار نشد")
@@ -419,6 +434,7 @@ async def odds(c: Ctx) -> Screen:
 async def open_chest(c: Ctx) -> Screen:
     item = get_item(c.a)
     opened = await c.services.chests.open(c.player, item)
+    await c.show(views.chest_opening(item))
     left = await _stack_qty(c, item.id)
     rows = []
     if left:
@@ -449,7 +465,7 @@ async def chest_shop(c: Ctx) -> Screen:
             continue
         icon = "🪙" if chest.price[0] == "gold" else "💎"
         item = get_item(chest.item_id)
-        rows.append([c.btn(f"{item.label} — {fa(chest.price[1])}{icon}", "cbuy", item.id)])
+        rows.append([c.btn(f"{item.label} — {fa(chest.price[1])}{icon}", "cbuyq", item.id)])
     rows.append(c.back("chests"))
     text = (
         f"🛍️ {bold('خرید صندوقچه')}\n🪙 {fa(p.gold)} · 💎 {fa(p.crystal)}\n\n"
@@ -511,9 +527,9 @@ async def _shop_item_screen(c: Ctx, item_id: str, cat: str, toast: str | None = 
         lines.append(f"🎚️ سطح لازم: {fa(item.level_req)}")
     lines += ["", f"🪙 بها: {bold(fa(item.buy))} سکه", f"کیسه‌ی شما: {fa(p.gold)} سکه"]
     if item.is_gear:
-        rows = [[c.btn("🛍️ خرید", "buy", item.id, "1", style="success")]]
+        rows = [[c.btn("🛍️ خرید", "buyq", item.id, "1", style="success")]]
     else:
-        rows = [[c.btn(f"🛍️ ×{fa(n)}", "buy", item.id, str(n), style="success") for n in (1, 5, 10)]]
+        rows = [[c.btn(f"🛍️ ×{fa(n)}", "buyq", item.id, str(n), style="success") for n in (1, 5, 10)]]
     rows.append(c.back("shopcat", "🔙 بازگشت", cat))
     return Screen("\n".join(lines), rows, toast=toast)
 
@@ -521,6 +537,47 @@ async def _shop_item_screen(c: Ctx, item_id: str, cat: str, toast: str | None = 
 @screen("shopitem")
 async def shop_item(c: Ctx) -> Screen:
     return await _shop_item_screen(c, c.a, c.b or "gear")
+
+
+async def _confirm(
+    c: Ctx, what: str, currency: str, total: int, action: str, a: str, b: str, back: tuple[str, str, str]
+) -> Screen:
+    """«Are you sure?» step before spending gold or crystals."""
+    p = await c.refresh()
+    icon = "🪙" if currency == "gold" else "💎"
+    have = p.gold if currency == "gold" else p.crystal
+    undo = c.btn("↩️ نه، برگرد", back[0], back[1], back[2])
+    if have < total:
+        text = (
+            f"💸 {bold('موجودی کافی نیست')}\n\n{what}\n"
+            f"بها: {fa(total)} {icon}\nموجودی شما: {fa(have)} {icon}\nکمبود: {bold(fa(total - have))} {icon}"
+        )
+        return Screen(text, [[undo]])
+    text = (
+        f"🛍️ {bold('تأیید خرید')}\n\n{what}\nبها: {bold(fa(total))} {icon}\n"
+        f"موجودی شما: {fa(have)} {icon} ← پس از خرید {fa(have - total)} {icon}\n\nمطمئنید می‌خواهید بخرید؟"
+    )
+    return Screen(text, [[c.btn("✅ بله، بخر", action, a, b, style="success"), undo]])
+
+
+@screen("buyq")
+async def buy_confirm(c: Ctx) -> Screen:
+    item, qty = get_item(c.a), _int(c.b)
+    if item.buy <= 0:
+        raise GameError("این کالا در بازارچه فروخته نمی‌شود.")
+    cat = "gear" if item.is_gear else "pot"
+    return await _confirm(c, f"{item.label} ×{fa(qty)}", "gold", item.buy * qty, "buy", item.id, str(qty),
+                          ("shopitem", item.id, cat))
+
+
+@screen("cbuyq")
+async def chest_confirm(c: Ctx) -> Screen:
+    item = get_item(c.a)
+    chest = CHESTS.get(item.id)
+    if chest is None or chest.price is None:
+        raise GameError("این صندوقچه فروشی نیست.")
+    currency, unit = chest.price
+    return await _confirm(c, item.label, currency, unit, "cbuy", item.id, "", ("chestshop", "", ""))
 
 
 @screen("buy")
@@ -700,7 +757,7 @@ async def on_panel(
     player = await services.players.require(query.from_user.id)
     ctx = Ctx(
         services, player, callback_data.o, callback_data.a or "", callback_data.b or "",
-        _is_group(message), message.chat.id, state,
+        _is_group(message), message.chat.id, state, message,
     )
     shown = await handler(ctx)
     if shown.text is not None:

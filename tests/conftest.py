@@ -38,3 +38,14 @@ def rng() -> random.Random:
 @pytest.fixture
 def balance() -> Balance:
     return Balance()
+
+
+@pytest.fixture(autouse=True)
+def _no_animation_delay(monkeypatch):
+    """Animations pause between frames; tests must not wait for them."""
+    from eternal_realm.context import AppContext
+
+    async def instant(self, factor: float = 1.0) -> None:
+        return None
+
+    monkeypatch.setattr(AppContext, "pause", instant)

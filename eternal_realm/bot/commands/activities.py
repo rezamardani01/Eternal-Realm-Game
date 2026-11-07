@@ -12,7 +12,7 @@ from .registry import Handler, command
 def _make_handler(activity: Activity) -> Handler:
     async def handler(ctx: CommandContext) -> None:
         result = await ctx.services.activities.perform(ctx.me.id, activity.id)
-        await ctx.reply(views.activity_result(ctx.me.name, result))
+        await ctx.play(views.activity_frames(ctx.me.name, result.activity), views.activity_result(ctx.me.name, result))
 
     return handler
 
@@ -38,4 +38,4 @@ async def rest(ctx: CommandContext) -> None:
 )
 async def hunt(ctx: CommandContext) -> None:
     result = await ctx.services.hunting.hunt(ctx.me.id)
-    await ctx.reply(views.hunt_result(ctx.me.name, result))
+    await ctx.play(views.hunt_frames(ctx.me.name, result), views.hunt_result(ctx.me.name, result))

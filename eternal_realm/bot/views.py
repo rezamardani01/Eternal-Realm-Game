@@ -14,6 +14,7 @@ from ..game.models import Player
 from ..shared.text import bar, bold, duration, fa
 
 LINE = "━━━━━━━━━━━━"
+DIV = "┈┈┈┈┈┈┈┈┈┈"
 
 
 # --- first steps -------------------------------------------------------------------------------
@@ -155,26 +156,39 @@ def level_up_text(level: int) -> str:
     return f"🎉 {bold('سطح تازه')}! به سطح {bold(fa(level))} رسیدید و قدرتی تازه بیدار شد."
 
 
+def activity_frames(name: str, activity) -> list[str]:  # noqa: ANN001 - Activity
+    """What the player sees while the activity is «in progress»."""
+    return [activity.intro.format(name=name)]
+
+
 def activity_result(name: str, result) -> str:  # noqa: ANN001 - ActivityResult
     rolled, player = result.rolled, result.player
-    lines = [result.activity.intro.format(name=name), "", rolled.outcome.text.format(name=name)]
+    lines = [result.activity.intro.format(name=name), "", rolled.outcome.text.format(name=name), "", DIV]
     gains = _gains(rolled.gold, rolled.crystal, rolled.xp)
     if gains:
-        lines += ["", gains]
+        lines.append(gains)
     if result.items:
         lines.append("📦 " + "، ".join(f"{label} ×{fa(qty)}" for label, qty in result.items))
+    lines.append(f"⚡ انرژی: {fa(player.energy)}")
     if result.level_up:
         lines += ["", level_up_text(result.level_up.new_level)]
-    lines += ["", f"⚡ انرژی: {fa(player.energy)}"]
     return "\n".join(lines)
 
 
-def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
-    lines = [
-        f"🌲 فرمانده {name} در سرزمین‌های وحشی با {bold(r.monster.name)} {r.monster.emoji} روبه‌رو شد!",
-        f"نبرد {fa(r.rounds)} دور طول کشید.",
-        "",
+def hunt_frames(name: str, r) -> list[str]:  # noqa: ANN001 - HuntResult
+    """Short story told one edit at a time: searching, meeting the monster, the first blows."""
+    frames = [
+        f"🌲 {bold('در حال شکار')}\nفرمانده {name} در سرزمین‌های وحشی می‌گردد 👣",
+        f"{r.monster.emoji} {bold(r.monster.name + ' پیدا شد!')}\nنبرد شروع می‌شود...",
     ]
+    for count in (2, 4):
+        if len(r.log) >= count:
+            frames.append(f"⚔️ {bold('نبرد')}\n\n" + "\n".join(r.log[:count]))
+    return frames
+
+
+def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
+    lines = [f"{r.monster.emoji} {bold('نبرد با ' + r.monster.name)}", f"فرمانده {name} · {fa(r.rounds)} دور", ""]
     if r.won:
         lines.append(f"🏆 {bold('پیروز شدید')} و هیولا به زانو درآمد.")
     else:
@@ -182,15 +196,15 @@ def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
             f"💔 {bold('این بار هیولا قوی‌تر بود')} و عقب‌نشینی کردید. چیزی از دست ندادید؛ "
             "قوی‌تر شوید و دوباره بیایید!"
         )
-    lines.append(f"❤️ جان باقی‌مانده: {fa(r.hero_hp)} / {fa(r.hero_max_hp)}")
+    lines += ["", DIV, f"❤️ جان باقی‌مانده: {fa(r.hero_hp)} / {fa(r.hero_max_hp)}"]
     gains = _gains(r.gold, 0, r.xp)
     if gains:
-        lines += ["", gains]
+        lines.append(gains)
     if r.items:
         lines.append("📦 " + "، ".join(f"{label} ×{fa(q)}" for label, q in r.items))
+    lines.append(f"⚡ انرژی: {fa(r.player.energy)}")
     if r.level_up:
         lines += ["", level_up_text(r.level_up.new_level)]
-    lines += ["", f"⚡ انرژی: {fa(r.player.energy)}"]
     return "\n".join(lines)
 
 
@@ -250,6 +264,14 @@ def chest_odds(item, odds) -> str:  # noqa: ANN001
         lines.append(f"{pct}٪  " + " + ".join(parts))
     lines += [LINE, "این‌ها شانس واقعی ربات هستند."]
     return "\n".join(lines)
+
+
+def chest_opening(item) -> str:  # noqa: ANN001
+    return f"🗝️ {bold('در حال باز کردن ' + item.name)}\n\nقفل می‌شکند... لطفاً صبر کنید ✨"
+
+
+def upgrade_working() -> str:
+    return f"🔨 {bold('آهنگر در کار است')}\n\nچکش بالا می‌رود... لطفاً صبر کنید ✨"
 
 
 def chest_opened(name: str, opened) -> str:  # noqa: ANN001 - Opened

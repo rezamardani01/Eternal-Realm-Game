@@ -43,6 +43,8 @@ class Balance:
     market_max_listings: int = 10
     market_max_price: int = 10_000_000
     command_gap_seconds: float = 1.0
+    #: pause between the steps of «در حال شکار...»-style animations (0 turns them off)
+    animation_seconds: float = 1.0
     group_flood_window: int = 10
     group_flood_max: int = 25
 

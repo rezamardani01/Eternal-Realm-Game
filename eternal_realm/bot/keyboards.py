@@ -50,7 +50,7 @@ def premium_buttons(payments_enabled: bool, owner: int) -> Rows:
     for chest in CHESTS.values():
         if chest.price and chest.price[0] == "crystal":
             item = get_item(chest.item_id)
-            rows.append([Button.inline(f"{item.label} — {fa(chest.price[1])} 💎", BuyCb(kind="crystal", id=item.id))])
+            rows.append([panel_button(f"{item.label} — {fa(chest.price[1])} 💎", "cbuyq", owner, item.id)])
     rows.append([panel_button("🔙 بازگشت", "home", owner)])
     return rows
 

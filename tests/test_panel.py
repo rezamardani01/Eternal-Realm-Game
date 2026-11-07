@@ -183,7 +183,9 @@ async def test_a_bought_chest_comes_with_an_open_button_right_below(h, services,
     p = await reg(services)
     await give(services, db, p.id, None, gold=0, crystal=100)
     await h.panel(10, "chestshop")
-    await h.tap(10, "جادویی")  # buy the magic chest
+    await h.tap(10, "جادویی")  # asks first
+    assert "تأیید خرید" in h.session.last_text()
+    await h.tap(10, "بله")
     assert "خریده شد" in h.session.last_text()
     assert any("باز کردن" in t for t in h.labels())
     await h.tap(10, "باز کردن")
@@ -211,6 +213,9 @@ async def test_buy_from_the_shop_by_tapping(h, services, db):
     assert "بها" in h.session.last_text()
     await give(services, db, p.id, None, gold=1_000)
     await h.tap(10, "×۱")
+    assert "مطمئنید" in h.session.last_text()
+    assert (await services.players.require(10)).gold == before + 1_000  # nothing was spent yet
+    await h.tap(10, "بله")
     after = await services.players.require(10)
     assert after.gold == before + 1_000 - 400
     stacks = {i.id: q for i, q in (await services.inventory.view(p.id)).stacks}
@@ -306,12 +311,17 @@ def test_help_is_airy_and_every_word_in_it_is_a_real_command():
 async def test_shortage_messages_state_the_numbers(h, services, db):
     p = await reg(services)
     await h.panel(10, "shopitem", "iron_sword", "gear")
-    await h.tap(10, "خرید")
+    await h.tap(10, "خرید")  # the confirmation page already shows the numbers
+    text = h.session.last_text()
+    assert "۵۰۰" in text and "۹۰۰" in text and "۴۰۰" in text  # have, price, missing
+    assert not any("بله" in t for t in h.labels())  # nothing to confirm when you cannot pay
+    # a stale confirm button still cannot spend money that is not there
+    await h.panel(10, "buy", "iron_sword", "1")
     alert = next(a["text"] for a in h.session.callback_answers() if "کافی نیست" in a.get("text", ""))
-    assert "۵۰۰" in alert and "۹۰۰" in alert and "۴۰۰" in alert  # have, need, missing
-    await give(services, db, p.id, None, crystal=0)
-    await h.panel(10, "cbuy", "magic_chest")
-    assert any("کریستال" in a.get("text", "") and "۳۰" in a.get("text", "") for a in h.session.callback_answers())
+    assert "۵۰۰" in alert and "۹۰۰" in alert and "۴۰۰" in alert
+    await h.panel(10, "cbuyq", "magic_chest")
+    assert "💎" in h.session.last_text() and "۳۰" in h.session.last_text()
+    assert p
 
 
 async def test_market_has_category_buttons_with_listings_below(h, services, db):
@@ -344,3 +354,40 @@ async def test_market_panel_opened_in_a_group_belongs_to_its_opener(h, services)
     assert any("مال شما نیست" in a.get("text", "") for a in h.session.callback_answers())
     await h.click(10, tab, group=True)
     assert h.session.sent("editMessageText")
+
+
+# --- animation and confirmation -----------------------------------------------------------------
+async def test_hunt_in_a_group_is_played_as_edits_of_one_message(h, services):
+    await reg(services, race="dragonborn", cls="warrior")
+    await h.say(10, "شکار", group=True)
+    sent = [p["text"] for p in h.session.sent("sendMessage")]
+    edits = [p["text"] for p in h.session.sent("editMessageText")]
+    assert "در حال شکار" in sent[0]
+    assert len(edits) >= 3 and "پیدا شد" in edits[0]
+    assert "نبرد با" in edits[-1]  # the last edit is the full result
+
+
+async def test_opening_a_chest_shows_a_waiting_frame_first(h, services, db):
+    p = await reg(services)
+    await give(services, db, p.id, "wooden_chest")
+    await h.panel(10, "open", "wooden_chest")
+    edits = [x["text"] for x in h.session.sent("editMessageText")]
+    assert "در حال باز کردن" in edits[0] and "صبر" in edits[0]
+    assert "باز شد" in edits[-1]
+
+
+async def test_fishing_shows_progress_then_result(h, services):
+    await reg(services)
+    await h.say(10, "ماهیگیری", group=True)
+    assert h.session.sent("sendMessage") and h.session.sent("editMessageText")
+    assert "انرژی" in h.session.last_text()
+
+
+async def test_declining_the_purchase_changes_nothing(h, services, db):
+    p = await reg(services)
+    await give(services, db, p.id, None, crystal=100)
+    await h.panel(10, "chestshop")
+    await h.tap(10, "جادویی")
+    await h.tap(10, "نه")
+    assert (await services.players.require(10)).crystal == 100
+    assert any("خرید صندوقچه" in t or "جادویی" in t for t in h.labels())

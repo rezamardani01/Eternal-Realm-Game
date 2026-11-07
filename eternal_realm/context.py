@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import random
 import time
 from collections.abc import Callable
@@ -25,6 +26,12 @@ class AppContext:
     @property
     def balance(self) -> Balance:
         return self.settings.balance
+
+    async def pause(self, factor: float = 1.0) -> None:
+        """Wait a beat between animation frames."""
+        delay = self.balance.animation_seconds * factor
+        if delay > 0:
+            await asyncio.sleep(delay)
 
     def now(self) -> int:
         return self.clock()
