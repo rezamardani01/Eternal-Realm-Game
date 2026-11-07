@@ -93,3 +93,22 @@ async def test_group_can_disable_activity(h, services):
     await services.groups.set_command(-500, "fishing", False)
     await h.say(10, "ماهیگیری", group=True)
     assert "غیرفعال" in h.session.last_text()
+
+
+@pytest.mark.parametrize("word", ["معدن", "گیاه", "جستجو"])
+async def test_each_activity_command_works(h, services, word):
+    await reg(services)
+    await h.say(10, word, group=True)
+    assert "انرژی" in h.session.last_text()
+
+
+def test_race_perk_boosts_matching_activity():
+    from eternal_realm.game.data.activities import MINING
+
+    def total_ore(perk):
+        rng = random.Random(11)
+        return sum(
+            loot.roll(MINING, 10, 0, perk, rng).items.get("iron_ore", 0) for _ in range(3000)
+        )
+
+    assert total_ore(1.3) > total_ore(1.0) * 1.15
