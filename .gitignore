@@ -1,0 +1,20 @@
+# secrets and runtime data
+config.toml
+.env
+data/
+backups/
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# editors / os
+.idea/
+.vscode/
+.claude/
+Thumbs.db
