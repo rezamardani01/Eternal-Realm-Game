@@ -27,7 +27,8 @@ from ..game.services.shop import shop_items
 from ..shared.errors import GameError
 from ..shared.text import bold, fa, to_int
 from . import keyboards, views
-from .callbacks import PanelCb
+from ..game.data.packs import PACKS
+from .callbacks import BuyCb, PanelCb
 from .services import Services
 
 log = logging.getLogger("eternal_realm.panel")
@@ -136,7 +137,7 @@ async def home(c: Ctx) -> Screen:
 
 @screen("help")
 async def help_(c: Ctx) -> Screen:
-    return Screen(views.help_text(), [c.back("home", "🔙 منو")])
+    return Screen(views.help_text(), [c.back("home", "🔙 بازگشت")])
 
 
 @screen("daily")
@@ -175,7 +176,7 @@ async def profile(c: Ctx) -> Screen:
         [stat("magic", fa(stats.magic)), stat("speed", fa(stats.speed))],
         [stat("luck", fa(stats.luck))],
         [c.btn("🧰 تجهیزات", "gear"), c.btn("🎒 کوله‌پشتی", "inv")],
-        c.back("home", "🔙 منو"),
+        c.back("home", "🔙 بازگشت"),
     ]
     text = views.profile_header(p, c.services.characters.xp_needed(p)) + "\n\nروی هر ویژگی بزنید تا بدانید چه می‌کند 👇"
     return Screen(text, rows)
@@ -195,7 +196,7 @@ async def adventure(c: Ctx) -> Screen:
         [c.btn(f"{a.emoji} {a.title} · {fa(a.energy)}⚡", "act", a.id)] for a in ACTIVITIES.values()
     ]
     rows.insert(0, [c.btn("🐺 شکار هیولا · ۱۰⚡", "act", "hunt", style="danger")])
-    rows.append(c.back("home", "🔙 منو"))
+    rows.append(c.back("home", "🔙 بازگشت"))
     p = await c.refresh()
     return Screen(f"🗺️ {bold('ماجراجویی')}\n⚡ انرژی شما: {fa(p.energy)}\n\nکجا می‌روید؟", rows)
 
@@ -213,7 +214,7 @@ async def act(c: Ctx) -> Screen:
         for frame in views.activity_frames(p.name, done.activity):
             await c.show(frame)
         text = views.activity_result(p.name, done)
-    rows = [[c.btn("🔁 دوباره", "act", c.a, style="success")], c.back("adv", "🔙 ماجراجویی")]
+    rows = [[c.btn("🔁 دوباره", "act", c.a, style="success")], c.back("adv", "🔙 بازگشت")]
     return Screen(text, rows)
 
 
@@ -239,7 +240,7 @@ async def inventory(c: Ctx) -> Screen:
     rows = [
         [c.btn("⚔️ تجهیزات", "gear"), c.btn("📦 آیتم‌ها", "items")],
         [c.btn("🎁 صندوقچه‌ها", "chests")],
-        c.back("home", "🔙 منو"),
+        c.back("home", "🔙 بازگشت"),
     ]
     return Screen(text, rows)
 
@@ -290,7 +291,7 @@ async def _piece_screen(c: Ctx, gear_id: int, toast: str | None = None) -> Scree
     rows.append(second)
     if not p.slot and not c.is_group:
         rows.append([c.btn("🏷️ عرضه در بازار", "listask", "g", p.id)])
-    rows.append(c.back("gear", "🔙 تجهیزات"))
+    rows.append(c.back("gear", "🔙 بازگشت"))
     return Screen("\n".join(lines), rows, toast=toast)
 
 
@@ -339,7 +340,7 @@ async def upgrade_ask(c: Ctx) -> Screen:
 async def upgrade(c: Ctx) -> Screen:
     result = await c.services.shop.upgrade(c.player, _int(c.a), _int(c.b))
     await c.show(views.upgrade_working())
-    rows = [[c.btn("🔨 دوباره ارتقا", "upq", result.piece.id)], c.back("piece", "🔙 تجهیزات", result.piece.id)]
+    rows = [[c.btn("🔨 دوباره ارتقا", "upq", result.piece.id)], c.back("piece", "🔙 بازگشت", result.piece.id)]
     return Screen(views.upgrade_result(result), rows,
                   toast="✨ ارتقا موفق بود" if result.success else "💥 این بار نشد")
 
@@ -427,6 +428,8 @@ async def odds(c: Ctx) -> Screen:
     if item.id not in CHESTS:
         raise GameError("این صندوقچه شناخته نشد.")
     text = views.chest_odds(item, c.services.chests.odds(CHESTS[item.id]))
+    if c.b == "p":
+        return Screen(text, [c.back("prem", "🔙 بازگشت", "chests")])
     return Screen(text, [c.back("item", "🔙 بازگشت", item.id)])
 
 
@@ -439,7 +442,7 @@ async def open_chest(c: Ctx) -> Screen:
     rows = []
     if left:
         rows.append([c.btn(f"🗝️ باز کردن دوباره ({fa(left)})", "open", item.id, style="success")])
-    rows.append(c.back("chests", "🔙 صندوقچه‌ها"))
+    rows.append(c.back("chests", "🔙 بازگشت"))
     return Screen(views.chest_opened(c.player.name, opened), rows)
 
 
@@ -483,7 +486,7 @@ async def chest_buy(c: Ctx) -> Screen:
     rows = [
         [c.btn("🗝️ باز کردن", "open", item.id, style="success"), c.btn("🎲 شانس‌ها", "odds", item.id)],
         [c.btn("🛍️ خرید دیگر", "chestshop")],
-        c.back("chests", "🔙 صندوقچه‌ها"),
+        c.back("chests", "🔙 بازگشت"),
     ]
     return Screen(text, rows, toast="✅ صندوقچه شما شد")
 
@@ -496,7 +499,7 @@ async def shop(c: Ctx) -> Screen:
     rows = [
         [c.btn("⚔️ سلاح و زره", "shopcat", "gear"), c.btn("🧪 معجون‌ها", "shopcat", "pot")],
         [c.btn("🎁 صندوقچه‌ها", "chestshop"), c.btn("💰 فروش آیتم‌ها", "items")],
-        c.back("home", "🔙 منو"),
+        c.back("home", "🔙 بازگشت"),
     ]
     return Screen(text, rows)
 
@@ -615,7 +618,7 @@ async def market(c: Ctx) -> Screen:
     if nav := _nav(c, "market", page, page > 0, nxt, tab):
         rows.append(nav)
     rows.append([c.btn("📋 آگهی‌های من", "mine"), c.btn("🏷️ فروش کالای من", "inv")])
-    rows.append(c.back("home", "🔙 منو"))
+    rows.append(c.back("home", "🔙 بازگشت"))
     return Screen(text, rows)
 
 
@@ -703,18 +706,95 @@ async def top(c: Ctx) -> Screen:
     if c.is_group:
         rows.append([c.btn("🏰 این گروه", "top", "group")])
     else:
-        rows.append(c.back("home", "🔙 منو"))
+        rows.append(c.back("home", "🔙 بازگشت"))
     return Screen(views.ranking(board), rows)
+
+
+CHEST_BLURB = {
+    "wooden_chest": "سکه، مواد و معجون",
+    "magic_chest": "سکه، کریستال و تجهیزات خوب",
+    "royal_chest": "گنج‌های بزرگ و تجهیزات افسانه‌ای",
+}
+PREMIUM_SECTIONS = {
+    "coins": ("🪙", "خرید سکه", "با سکه سلاح، زره و معجون می‌خرید و تجهیزاتتان را ارتقا می‌دهید."),
+    "crystals": ("💎", "خرید کریستال", "کریستال ارز کمیاب قلمرو است؛ با آن صندوقچه‌های جادویی و سلطنتی می‌خرید."),
+    "bundles": ("🎁", "خرید بسته", "بسته‌های ویژه چند چیز را با هم و به‌صرفه‌تر می‌دهند."),
+}
+
+
+CHEST_BLURB = {
+    "wooden_chest": "سکه، مواد و معجون",
+    "magic_chest": "سکه، کریستال و تجهیزات خوب",
+    "royal_chest": "گنج‌های بزرگ و تجهیزات افسانه‌ای",
+}
+PREMIUM_SECTIONS = {
+    "coins": ("🪙", "خرید سکه", "با سکه سلاح، زره و معجون می‌خرید و تجهیزاتتان را ارتقا می‌دهید."),
+    "crystals": ("💎", "خرید کریستال", "کریستال ارز کمیاب قلمرو است؛ با آن صندوقچه‌های جادویی و سلطنتی می‌خرید."),
+    "bundles": ("🎁", "خرید بسته", "بسته‌های ویژه چند چیز را با هم و به‌صرفه‌تر می‌دهند."),
+}
 
 
 @screen("premium")
 async def premium(c: Ctx) -> Screen:
-    enabled = c.services.ctx.settings.payments_enabled
     if c.is_group:
         username = c.services.bot_username
         rows = [keyboards.start_button(username)] if username else []
         return Screen("💎 خزانه‌ی ویژه فقط در پیام خصوصی باز می‌شود؛ خرید آن‌جا امن است.", rows)
-    return Screen(views.premium_shop(enabled), keyboards.premium_buttons(enabled, c.owner))
+    p = await c.refresh()
+    text = (
+        f"💎 {bold('خزانه‌ی ویژه')}\n\n"
+        "سکه، کریستال، بسته‌ی ویژه و صندوقچه؛ هر چه برای پیشرفت سریع‌تر لازم دارید.\n\n"
+        f"🪙 {fa(p.gold)} سکه · 💎 {fa(p.crystal)} کریستال\n\n"
+        "💳 پرداخت با کیف پول بله است و اطلاعات کارت ذخیره نمی‌شود.\n"
+        "👨‍👩‍👧 زیر ۱۸ سال؟ فقط با اجازه‌ی پدر و مادر خرید کنید.\n\n"
+        "یک بخش را انتخاب کنید 👇"
+    )
+    rows = [
+        [c.btn("🪙 خرید سکه", "prem", "coins"), c.btn("💎 خرید کریستال", "prem", "crystals")],
+        [c.btn("🎁 خرید بسته", "prem", "bundles"), c.btn("📦 خرید صندوق", "prem", "chests")],
+        c.back("home"),
+    ]
+    return Screen(text, rows)
+
+
+@screen("prem")
+async def premium_section(c: Ctx) -> Screen:
+    if c.is_group:
+        return await premium(c)
+    p = await c.refresh()
+    if c.a == "chests":
+        lines = [f"📦 {bold('خرید صندوق')}", "", "در هر صندوقچه گنجی پنهان است. با سکه یا کریستال بخرید.", ""]
+        rows = []
+        for chest in CHESTS.values():
+            if chest.price is None:
+                continue
+            icon = "🪙" if chest.price[0] == "gold" else "💎"
+            item = get_item(chest.item_id)
+            lines.append(f"• {item.label} — {fa(chest.price[1])} {icon}")
+            lines.append(f"   {CHEST_BLURB.get(item.id, '')}")
+            rows.append([
+                c.btn(f"{item.label} · {fa(chest.price[1])}{icon}", "cbuyq", item.id),
+                c.btn("🎲 شانس‌ها", "odds", item.id, "p"),
+            ])
+        lines += ["", f"موجودی شما: 🪙 {fa(p.gold)} · 💎 {fa(p.crystal)}", "شانس دقیق محتویات را با «🎲 شانس‌ها» ببینید."]
+        rows.append(c.back("premium"))
+        return Screen("\n".join(lines), rows)
+
+    emoji, title, blurb = PREMIUM_SECTIONS.get(c.a, PREMIUM_SECTIONS["coins"])
+    enabled = c.services.ctx.settings.payments_enabled
+    lines = [f"{emoji} {bold(title)}", "", blurb, ""]
+    rows = []
+    if not enabled:
+        lines.append("🔒 خرید با پول واقعی فعلاً بسته است. با بازی کردن هم می‌توانید به این‌ها برسید!")
+    else:
+        for pack in (x for x in PACKS.values() if x.section == c.a):
+            lines.append(f"• {pack.label} — {fa(pack.price_toman)} تومان")
+            if c.a == "bundles":
+                lines.append(f"   {views.pack_description(pack)}")
+            rows.append([Button.inline(f"{pack.label} — {fa(pack.price_toman)} تومان", BuyCb(kind="cash", id=pack.id), style="success")])
+        lines += ["", "پس از زدن، فاکتور پرداخت بله برایتان می‌آید."]
+    rows.append(c.back("premium"))
+    return Screen("\n".join(lines), rows)
 
 
 # --- entry points -----------------------------------------------------------------------------
@@ -793,7 +873,7 @@ async def got_listing_numbers(message: Message, state: FSMContext, services: Ser
         f"کارمزد بازار ({fa(fee)} سکه) هنگام فروش کسر می‌شود.",
         buttons=[
             [keyboards.panel_button("🏪 بازار", "market", owner), keyboards.panel_button("📋 آگهی‌های من", "mine", owner)],
-            [keyboards.panel_button("🔙 منو", "home", owner)],
+            [keyboards.panel_button("🔙 بازگشت", "home", owner)],
         ],
     )
 

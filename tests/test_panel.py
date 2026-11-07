@@ -79,7 +79,7 @@ def test_static_texts_follow_the_rules():
     from eternal_realm.game.data.races import RACES
 
     for text in (views.welcome(), views.pick_race(), views.pick_class(RACES["elf"]), views.help_text(),
-                 views.command_help(REGISTRY, True), views.premium_shop(True)):
+                 views.command_help(REGISTRY, True)):
         assert leading_symbols(text) == 1, text.split("\n")[0]
         assert len(text) < 4000
     assert "**" in views.welcome()  # titles are bold
@@ -131,7 +131,7 @@ async def test_start_shows_the_home_panel_with_glass_buttons(h, services):
 
 async def test_group_words_open_panels_and_personal_panel_goes_private(h, services):
     await reg(services)
-    for word, expect in [("کوله‌پشتی", "تجهیزات"), ("فروشگاه", "سلاح"), ("بازار", "منو"), ("صندوقچه", "خرید صندوقچه")]:
+    for word, expect in [("کوله‌پشتی", "تجهیزات"), ("فروشگاه", "سلاح"), ("بازار", "بازگشت"), ("صندوقچه", "خرید صندوقچه")]:
         await h.say(10, word, group=True)
         assert any(expect in t for t in h.labels()), (word, h.labels())
     await h.say(10, "کیف من", group=True)
@@ -391,3 +391,17 @@ async def test_declining_the_purchase_changes_nothing(h, services, db):
     await h.tap(10, "نه")
     assert (await services.players.require(10)).crystal == 100
     assert any("خرید صندوقچه" in t or "جادویی" in t for t in h.labels())
+
+
+async def test_the_word_realm_opens_the_home_panel_in_a_group(h, services):
+    await reg(services)
+    await h.say(10, "قلمرو", group=True)
+    assert any("ماجراجویی" in t for t in h.labels()) and "فرمانده" in h.session.last_text()
+
+
+async def test_back_buttons_are_called_back_not_menu(h, services):
+    await reg(services)
+    for name in ("profile", "inv", "shop", "market", "top", "help", "adv"):
+        await h.panel(10, name)
+        assert all("منو" not in t for t in h.labels()), name
+        assert any("بازگشت" in t for t in h.labels()), name

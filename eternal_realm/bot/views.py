@@ -98,6 +98,7 @@ HELP_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
         ("💎 فروشگاه ویژه", "بسته‌های سکه و کریستال (در پیوی)"),
     ]),
     ("👤 قهرمان", [
+        ("🏰 قلمرو", "منوی اصلی شما با دکمه‌ها؛ از آن‌جا همه‌جا می‌روید"),
         ("👤 پروفایل", "قهرمان شما؛ با ریپلای، قهرمان دیگران"),
         ("🎁 جایزه", "گنجینه‌ی روزانه"),
         ("💸 انتقال 500", "روی پیام دوستتان ریپلای کنید تا سکه ببخشید"),
@@ -298,39 +299,47 @@ def pack_description(pack) -> str:  # noqa: ANN001 - Pack
     return "شامل: " + " + ".join(parts)
 
 
-def premium_shop(payments_enabled: bool) -> str:
-    from ..game.data.chests import CHESTS
-    from ..game.data.items import get_item
-    from ..game.data.packs import PACKS, SECTIONS
-
-    lines = [f"💎 {bold('خزانه‌ی ویژه')}", LINE]
-    if payments_enabled:
-        for section, title in SECTIONS.items():
-            lines.append(bold(title))
-            for pack in (p for p in PACKS.values() if p.section == section):
-                lines.append(f"• {pack.label} — {fa(pack.price_toman)} تومان")
-                if section == "bundles":
-                    lines.append(f"   {pack_description(pack)}")
-            lines.append("")
-    else:
-        lines += ["خرید با پول واقعی فعلاً بسته است.", ""]
-    lines.append(bold("🎁 صندوقچه‌ها (با کریستال)"))
-    for chest in CHESTS.values():
-        if chest.price and chest.price[0] == "crystal":
-            lines.append(f"• {get_item(chest.item_id).label} — {fa(chest.price[1])} 💎")
-    lines += [
-        LINE,
-        "💳 پرداخت با کیف پول بله است و اطلاعات کارت ذخیره نمی‌شود.",
-        "👨‍👩‍👧 زیر ۱۸ سال؟ فقط با اجازه‌ی پدر و مادر خرید کنید.",
-    ]
-    return "\n".join(lines)
-
-
 def delivery(order) -> str:  # noqa: ANN001 - Order
     return (
         f"✅ {bold('پرداخت موفق بود')}\n"
         f"{order.pack.label} به گنجینه‌ی شما رسید.\n{pack_description(order.pack)}\n\n"
         "سپاس از حمایت شما 💛"
+    )
+
+
+SECTION_NAMES = {"coins": "بسته‌ی سکه", "crystals": "بسته‌ی کریستال", "bundles": "بسته‌ی ویژه"}
+
+
+def sale_report(order, player, user, charge_id, when: int, totals) -> str:  # noqa: ANN001
+    """The message the bot owner receives after every successful sale."""
+    from ..shared.jalali import describe
+
+    date, weekday, clock = describe(when)
+    pack = order.pack
+    username = f"@{user.username}" if user.username else "ندارد"
+    return "\n".join(
+        [
+            f"💰 {bold('فروش جدید')}",
+            "",
+            f"🧾 سفارش: {fa(order.id)}",
+            f"📅 تاریخ: {fa(date)} · {weekday}",
+            f"🕒 ساعت: {fa(clock)} (به وقت تهران)",
+            "",
+            f"📦 محصول: {pack.label}",
+            f"🏷️ نوع: {SECTION_NAMES.get(pack.section, pack.section)}",
+            f"🎁 {pack_description(pack)}",
+            f"💵 مبلغ: {bold(fa(order.amount // 10))} تومان ({fa(order.amount)} ریال)",
+            "",
+            f"👤 خریدار: {bold(player.name)}",
+            f"🎮 سطح {fa(player.level)} · {player.race.name} · {player.char_class.name}",
+            f"🪙 {fa(player.gold)} سکه · 💎 {fa(player.crystal)} کریستال",
+            f"🆔 شناسه بله: {fa(user.id)}",
+            f"🔗 نام کاربری: {username}",
+            f"💳 کد پیگیری: {charge_id or 'ندارد'}",
+            "",
+            DIV,
+            f"📊 جمع فروش: {fa(totals.orders)} سفارش · {fa(totals.revenue_rial // 10)} تومان",
+        ]
     )
 
 

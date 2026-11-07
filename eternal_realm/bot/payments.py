@@ -10,7 +10,6 @@ from baleropy.exceptions import BaleAPIError
 from baleropy.types import CallbackQuery, LabeledPrice, Message, PreCheckoutQuery
 
 from ..shared.errors import GameError
-from ..shared.text import fa
 from . import views
 from .callbacks import BuyCb
 from .services import Services
@@ -70,8 +69,7 @@ async def on_successful_payment(message: Message, services: Services, bot: Bot) 
         return
     await message.answer(views.delivery(delivery.order))
     with contextlib.suppress(BaleAPIError):
-        await bot.send_message(
-            services.ctx.settings.owner_id,
-            f"💰 فروش جدید: {delivery.order.pack.label} — {fa(delivery.order.amount // 10)} تومان "
-            f"(کاربر {user.id}، سفارش {delivery.order.id})",
-        )
+        buyer = await services.players.get(delivery.player_id)
+        totals = await services.admin.stats()
+        report = views.sale_report(delivery.order, buyer, user, charge, services.ctx.now(), totals)
+        await bot.send_message(services.ctx.settings.owner_id, report)

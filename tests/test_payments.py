@@ -103,8 +103,11 @@ async def test_invoice_flow_through_the_bot(h, services):
     p = await reg(services)
     await h.say(10, "/start")
     await h.panel(10, "premium")
-    assert "خزانه‌ی ویژه" in h.session.last_text() and "تومان" in h.session.last_text()
-    await h.click(10, h.button_data("۱۰۰ کریستال") if False else "buy:cash:crystal_s")
+    assert "خزانه‌ی ویژه" in h.session.last_text()
+    assert len(h.labels()) == 5  # four sections and a back button
+    await h.tap(10, "خرید کریستال")
+    assert "تومان" in h.session.last_text()
+    await h.click(10, h.button_data("۲۰ کریستال"))
     invoice = h.session.sent("sendInvoice")[-1]
     assert invoice["provider_token"].startswith("WALLET-")
     assert invoice["prices"] == [{"label": "۲۰ کریستال", "amount": 100_000}]
@@ -146,3 +149,41 @@ async def test_cannot_buy_from_a_group_and_crystal_chest_button(h, services, db)
     await h.tap(10, "بله")
     stacks = {i.id: q for i, q in (await services.inventory.view(1)).stacks}
     assert stacks["magic_chest"] == 1
+
+
+async def test_premium_hub_has_four_sections_each_with_its_own_text(h, services):
+    await reg(services)
+    await h.panel(10, "premium")
+    labels = h.labels()
+    for word in ("خرید سکه", "خرید کریستال", "خرید بسته", "خرید صندوق"):
+        assert any(word in t for t in labels), word
+    assert all("منو" not in t for t in labels)
+
+    await h.tap(10, "خرید سکه")
+    assert "سلاح" in h.session.last_text() and "تومان" in h.session.last_text()
+    await h.tap(10, "بازگشت")
+    await h.tap(10, "خرید بسته")
+    assert "شامل" in h.session.last_text()
+    await h.tap(10, "بازگشت")
+    await h.tap(10, "خرید صندوق")
+    assert "گنجی پنهان" in h.session.last_text() and any("شانس" in t for t in h.labels())
+    await h.tap(10, "شانس")
+    assert "٪" in h.session.last_text()
+    await h.tap(10, "بازگشت")
+    assert "خرید صندوق" in h.session.last_text()
+
+
+async def test_owner_gets_a_complete_sale_report(h, services):
+    p = await reg(services)
+    order = await services.payments.create_order(p, "adventurer")
+    await h.paid(10, order.payload, order.amount, "TRACK-77")
+    reports = [m for m in h.session.sent("sendMessage") if m["chat_id"] == 1]  # owner_id of the test settings
+    assert len(reports) == 1
+    text = reports[0]["text"]
+    for needle in ("فروش جدید", "بسته ماجراجو", "بسته‌ی ویژه", "۱۵٬۰۰۰ تومان", "آرش", "TRACK-77", "@u10",
+                   "شناسه بله", "تاریخ", "ساعت", "جمع فروش"):
+        assert needle in text, needle
+    assert text.split("\n")[0].startswith("💰")
+
+    await h.paid(10, order.payload, order.amount, "TRACK-77")  # a repeated update sends no second report
+    assert len([m for m in h.session.sent("sendMessage") if m["chat_id"] == 1]) == 1

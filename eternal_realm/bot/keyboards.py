@@ -5,14 +5,11 @@ from __future__ import annotations
 from baleropy import Button
 from baleropy.types import InlineKeyboardButton
 
-from ..game.data.chests import CHESTS
 from ..game.data.classes import CLASSES
-from ..game.data.items import get_item
-from ..game.data.packs import PACKS
 from ..game.data.races import RACES
 from ..game.engine.combat import Fighter
 from ..shared.text import fa
-from .callbacks import BuyCb, ClassCb, DuelCb, PanelCb, RaceCb
+from .callbacks import ClassCb, DuelCb, PanelCb, RaceCb
 
 Rows = list[list[InlineKeyboardButton]]
 
@@ -39,20 +36,6 @@ def open_panel_button(bot_username: str) -> list[InlineKeyboardButton]:
 
 def panel_button(label: str, screen: str, owner: int, a: str = "", b: str = "") -> InlineKeyboardButton:
     return Button.inline(label, PanelCb(s=screen, a=a or None, b=b or None, o=owner))
-
-
-def premium_buttons(payments_enabled: bool, owner: int) -> Rows:
-    rows: Rows = []
-    if payments_enabled:
-        for pack in PACKS.values():
-            label = f"{pack.label} — {fa(pack.price_toman)} تومان"
-            rows.append([Button.inline(label, BuyCb(kind="cash", id=pack.id), style="success")])
-    for chest in CHESTS.values():
-        if chest.price and chest.price[0] == "crystal":
-            item = get_item(chest.item_id)
-            rows.append([panel_button(f"{item.label} — {fa(chest.price[1])} 💎", "cbuyq", owner, item.id)])
-    rows.append([panel_button("🔙 بازگشت", "home", owner)])
-    return rows
 
 
 def duel_invite(duel_id: int) -> Rows:

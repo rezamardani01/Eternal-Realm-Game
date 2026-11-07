@@ -14,6 +14,7 @@ def _opener(name: str, screen: str, aliases: list[str], description: str, catego
     return command(name, aliases, description, category=category, points=0, **options)(handler)
 
 
+_opener("open_realm", "home", ["قلمرو", "realm"], "منوی اصلی قهرمان با دکمه‌ها", "👤 قهرمان")
 _opener("open_inventory", "inv", ["کوله‌پشتی", "کیف", "کوله", "inventory"], "کوله‌پشتی و تجهیزات", "🎒 کوله‌پشتی")
 _opener("open_gear", "gear", ["تجهیزات", "تجهیزات من", "equipment"], "تجهیزات شما", "🎒 کوله‌پشتی")
 _opener("open_chests", "chests", ["صندوقچه", "صندوقچه‌ها", "chests"], "صندوقچه‌ها", "🎒 کوله‌پشتی")
