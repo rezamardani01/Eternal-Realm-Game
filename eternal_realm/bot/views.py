@@ -162,6 +162,19 @@ def market_listings(listings, item, title: str | None = None) -> str:  # noqa: A
     return "\n".join(lines)
 
 
+def ranking(board) -> str:  # noqa: ANN001 - Board
+    if not board.entries:
+        return f"{board.title}\n{LINE}\nهنوز کسی در این جدول نیست."
+    medals = ["🥇", "🥈", "🥉"]
+    lines = [board.title, LINE]
+    for index, entry in enumerate(board.entries):
+        place = medals[index] if index < 3 else f"{fa(index + 1)}."
+        lines.append(f"{place} {entry.badge} {entry.name} (سطح {fa(entry.level)}) — {fa(entry.value)} {board.unit}")
+    if board.my_position:
+        lines += [LINE, f"📍 رتبه تو: {fa(board.my_position)}"]
+    return "\n".join(lines)
+
+
 def duel_invite(challenger, target, seconds: int) -> str:  # noqa: ANN001 - Player
     return (
         "⚔️ درخواست مبارزه!\n\n"

@@ -14,6 +14,7 @@ from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
 from ..game.services.market import MarketService
 from ..game.services.players import PlayerService
+from ..game.services.rankings import RankingService
 from ..game.services.shop import ShopService
 from .throttle import Throttle
 
@@ -29,6 +30,7 @@ class Services:
     shop: ShopService
     economy: EconomyService
     market: MarketService
+    rankings: RankingService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -51,6 +53,7 @@ class Services:
             shop=ShopService(ctx, inventory),
             economy=EconomyService(ctx),
             market=MarketService(ctx, inventory),
+            rankings=RankingService(ctx),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(
