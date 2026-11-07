@@ -1,0 +1,731 @@
+"""The personal panel: every screen is a message with glass buttons that edits itself in place.
+
+A tap carries the owner's Bale id (``PanelCb.o``). The server compares it with the person who
+tapped, so a panel opened in a group can only be used by its owner.
+Screens double as actions: tapping «پوشیدن» runs the action and re-renders the piece screen.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import logging
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+
+from baleropy import Button, F, Router
+from baleropy.exceptions import BaleAPIError
+from baleropy.filters import ChatTypeFilter
+from baleropy.fsm import FSMContext, State, StatesGroup
+from baleropy.types import CallbackQuery, InlineKeyboardButton, Message
+
+from ..game.data.chests import CHESTS
+from ..game.data.items import Item, Kind, get_item
+from ..game.data.stats import STAT_HELP, STAT_LABELS
+from ..game.models import Player
+from ..game.services.inventory import InventoryView, Piece
+from ..game.services.shop import shop_items
+from ..shared.errors import GameError
+from ..shared.text import bold, fa, to_int
+from . import keyboards, views
+from .callbacks import PanelCb
+from .services import Services
+
+log = logging.getLogger("eternal_realm.panel")
+Rows = list[list[InlineKeyboardButton]]
+PER_PAGE = 6
+
+
+class ListingFlow(StatesGroup):
+    waiting = State()
+
+
+@dataclass
+class Screen:
+    #: ``None`` = do not touch the message, just show the toast
+    text: str | None
+    rows: Rows = field(default_factory=list)
+    toast: str | None = None
+    alert: bool = False
+
+
+@dataclass
+class Ctx:
+    services: Services
+    player: Player
+    owner: int
+    a: str
+    b: str
+    is_group: bool
+    chat_id: int = 0
+    state: FSMContext | None = None
+
+    def btn(self, label: str, screen: str, a: object = "", b: object = "", style: str | None = None):
+        data = PanelCb(s=screen, a=str(a) or None, b=str(b) or None, o=self.owner)
+        return Button.inline(label, data, style=style)
+
+    def back(self, screen: str, label: str = "🔙 بازگشت", a: object = "", b: object = "") -> list:
+        return [self.btn(label, screen, a, b)]
+
+    async def refresh(self) -> Player:
+        self.player = await self.services.players.require(self.player.platform_user_id)
+        return self.player
+
+
+ScreenFn = Callable[[Ctx], Awaitable[Screen]]
+SCREENS: dict[str, ScreenFn] = {}
+
+
+def screen(name: str) -> Callable[[ScreenFn], ScreenFn]:
+    def register(fn: ScreenFn) -> ScreenFn:
+        SCREENS[name] = fn
+        return fn
+
+    return register
+
+
+def _page(seq: list, page: int, per: int = PER_PAGE) -> tuple[list, bool, bool]:
+    page = max(0, page)
+    chunk = seq[page * per : (page + 1) * per]
+    return chunk, page > 0, (page + 1) * per < len(seq)
+
+
+def _nav(c: Ctx, name: str, page: int, has_prev: bool, has_next: bool, b: object = "") -> list:
+    row = []
+    if has_prev:
+        row.append(c.btn("‹ قبلی", name, page - 1, b))
+    if has_next:
+        row.append(c.btn("بعدی ›", name, page + 1, b))
+    return row
+
+
+def _int(text: str, what: str = "شماره") -> int:
+    value = to_int(text)
+    if value is None:
+        raise GameError(f"{what} نامعتبر است؛ دوباره از منو شروع کنید.")
+    return value
+
+
+# --- home -------------------------------------------------------------------------------------
+@screen("home")
+async def home(c: Ctx) -> Screen:
+    p = c.player
+    top = c.services.characters.max_energy(p)
+    text = (
+        f"🏰 فرمانده {bold(p.name)} ، به قلمرو خوش آمدید!\n"
+        f"سطح {fa(p.level)} · {p.race.name} · {p.char_class.name}\n\n"
+        f"⚡ انرژی {fa(p.energy)} / {fa(top)}\n🪙 {fa(p.gold)} سکه · 💎 {fa(p.crystal)} کریستال\n\n"
+        "امروز به کجا حمله می‌کنید؟"
+    )
+    rows = [
+        [c.btn("🗺️ ماجراجویی", "adv", style="primary"), c.btn("👤 شخصیت من", "profile")],
+        [c.btn("🎒 کوله‌پشتی", "inv"), c.btn("🛒 فروشگاه", "shop")],
+        [c.btn("🏪 بازار", "market"), c.btn("🏆 تالار", "top")],
+        [c.btn("💎 خزانه‌ی ویژه", "premium"), c.btn("🎁 جایزه روزانه", "daily")],
+        [c.btn("😴 استراحت", "rest"), c.btn("❓ راهنما", "help")],
+    ]
+    return Screen(text, rows)
+
+
+@screen("help")
+async def help_(c: Ctx) -> Screen:
+    return Screen(views.help_text(), [c.back("home", "🔙 منو")])
+
+
+@screen("daily")
+async def daily(c: Ctx) -> Screen:
+    reward = await c.services.players.claim_daily(c.player.id)
+    await c.refresh()
+    streak = f" ({fa(reward.streak)} روز پشت‌سرهم)" if reward.streak > 1 else ""
+    shown = await home(c)
+    shown.toast, shown.alert = f"🎁 {fa(reward.gold)} سکه به گنجینه‌ی شما آمد{streak}", True
+    return shown
+
+
+@screen("rest")
+async def rest(c: Ctx) -> Screen:
+    restored = await c.services.activities.rest(c.player.id)
+    await c.refresh()
+    shown = await home(c)
+    shown.toast, shown.alert = f"🔥 کنار آتش نشستید و {fa(restored)} انرژی گرفتید", True
+    return shown
+
+
+# --- profile ----------------------------------------------------------------------------------
+@screen("profile")
+async def profile(c: Ctx) -> Screen:
+    p = c.player
+    stats = await c.services.characters.stats(p)
+    top = c.services.characters.max_energy(p)
+
+    def stat(key: str, value: str):
+        label = "⚡ انرژی" if key == "energy" else STAT_LABELS[key]
+        return c.btn(f"{label} {value}", "stat", key, style=None)
+
+    rows = [
+        [stat("hp", fa(stats.hp)), stat("energy", f"{fa(p.energy)}/{fa(top)}")],
+        [stat("atk", fa(stats.atk)), stat("defense", fa(stats.defense))],
+        [stat("magic", fa(stats.magic)), stat("speed", fa(stats.speed))],
+        [stat("luck", fa(stats.luck))],
+        [c.btn("🧰 تجهیزات", "gear"), c.btn("🎒 کوله‌پشتی", "inv")],
+        c.back("home", "🔙 منو"),
+    ]
+    text = views.profile_header(p, c.services.characters.xp_needed(p)) + "\n\nروی هر ویژگی بزنید تا بدانید چه می‌کند 👇"
+    return Screen(text, rows)
+
+
+@screen("stat")
+async def stat(c: Ctx) -> Screen:
+    return Screen(None, toast=STAT_HELP.get(c.a, "این ویژگی را در بازی ببینید."), alert=True)
+
+
+# --- adventure --------------------------------------------------------------------------------
+@screen("adv")
+async def adventure(c: Ctx) -> Screen:
+    from ..game.data.activities import ACTIVITIES
+
+    rows = [
+        [c.btn(f"{a.emoji} {a.title} · {fa(a.energy)}⚡", "act", a.id)] for a in ACTIVITIES.values()
+    ]
+    rows.insert(0, [c.btn("🐺 شکار هیولا · ۱۰⚡", "act", "hunt", style="danger")])
+    rows.append(c.back("home", "🔙 منو"))
+    p = await c.refresh()
+    return Screen(f"🗺️ {bold('ماجراجویی')}\n⚡ انرژی شما: {fa(p.energy)}\n\nکجا می‌روید؟", rows)
+
+
+@screen("act")
+async def act(c: Ctx) -> Screen:
+    services, p = c.services, c.player
+    if c.a == "hunt":
+        text = views.hunt_result(p.name, await services.hunting.hunt(p.id))
+    else:
+        text = views.activity_result(p.name, await services.activities.perform(p.id, c.a))
+    rows = [[c.btn("🔁 دوباره", "act", c.a, style="success")], c.back("adv", "🔙 ماجراجویی")]
+    return Screen(text, rows)
+
+
+# --- backpack ---------------------------------------------------------------------------------
+def _split(view: InventoryView) -> tuple[list[tuple[Item, int]], list[tuple[Item, int]]]:
+    chests = [(i, q) for i, q in view.stacks if i.kind is Kind.CHEST]
+    others = [(i, q) for i, q in view.stacks if i.kind is not Kind.CHEST]
+    return others, chests
+
+
+@screen("inv")
+async def inventory(c: Ctx) -> Screen:
+    view = await c.services.inventory.view(c.player.id)
+    others, chests = _split(view)
+    worn = sum(1 for p in view.gear if p.slot)
+    text = (
+        f"🎒 {bold('کوله‌پشتی')}\n\n"
+        f"⚔️ تجهیزات: {fa(len(view.gear))} ({fa(worn)} پوشیده)\n"
+        f"📦 آیتم‌ها: {fa(sum(q for _, q in others))}\n"
+        f"🎁 صندوقچه‌ها: {fa(sum(q for _, q in chests))}\n\n"
+        "یک بخش را انتخاب کنید 👇"
+    )
+    rows = [
+        [c.btn("⚔️ تجهیزات", "gear"), c.btn("📦 آیتم‌ها", "items")],
+        [c.btn("🎁 صندوقچه‌ها", "chests")],
+        c.back("home", "🔙 منو"),
+    ]
+    return Screen(text, rows)
+
+
+@screen("gear")
+async def gear(c: Ctx) -> Screen:
+    view = await c.services.inventory.view(c.player.id)
+    pieces = sorted(view.gear, key=lambda p: (p.slot is None, p.id))
+    if not pieces:
+        text = f"⚔️ {bold('تجهیزات')}\n\nهنوز تجهیزاتی ندارید. از «فروشگاه» بخرید یا از هیولاها غنیمت بگیرید."
+        return Screen(text, [[c.btn("🛒 فروشگاه", "shop")], c.back("inv")])
+    page = _int(c.a or "0", "صفحه")
+    chunk, prev, nxt = _page(pieces, page)
+    rows = [[c.btn(f"{'✅ ' if p.slot else ''}{p.label}", "piece", p.id)] for p in chunk]
+    if nav := _nav(c, "gear", page, prev, nxt):
+        rows.append(nav)
+    rows.append(c.back("inv"))
+    return Screen(f"⚔️ {bold('تجهیزات')}\n✅ یعنی پوشیده است. یکی را انتخاب کنید 👇", rows)
+
+
+async def _piece(c: Ctx, gear_id: int) -> Piece:
+    view = await c.services.inventory.view(c.player.id)
+    for p in view.gear:
+        if p.id == gear_id:
+            return p
+    raise GameError("این تجهیزات دیگر در کوله‌پشتی شما نیست.")
+
+
+def _sell_price(piece: Piece) -> int:
+    return round(piece.item.sell * (1 + 0.5 * piece.upgrade)) if piece.item.sell > 0 else 0
+
+
+async def _piece_screen(c: Ctx, gear_id: int, toast: str | None = None) -> Screen:
+    p = await _piece(c, gear_id)
+    lines = [
+        f"{p.item.emoji} {bold(p.item.name + (f' +{fa(p.upgrade)}' if p.upgrade else ''))}",
+        f"{p.item.rarity_label} · سطح لازم {fa(p.item.level_req)}",
+        "",
+        *p.stats.bonus_lines(),
+    ]
+    if p.slot:
+        lines += ["", "✅ الان بر تن شماست"]
+    rows = [[c.btn("↩️ درآوردن" if p.slot else "🛡️ پوشیدن", "unequip" if p.slot else "equip", p.id,
+                   style=None if p.slot else "success")]]
+    second = [c.btn("🔨 ارتقا", "upq", p.id)]
+    if not p.slot and (price := _sell_price(p)):
+        second.append(c.btn(f"💰 فروش {fa(price)}🪙", "sellq", p.id))
+    rows.append(second)
+    if not p.slot and not c.is_group:
+        rows.append([c.btn("🏷️ عرضه در بازار", "listask", "g", p.id)])
+    rows.append(c.back("gear", "🔙 تجهیزات"))
+    return Screen("\n".join(lines), rows, toast=toast)
+
+
+@screen("piece")
+async def piece(c: Ctx) -> Screen:
+    return await _piece_screen(c, _int(c.a))
+
+
+@screen("equip")
+async def equip(c: Ctx) -> Screen:
+    worn, replaced = await c.services.inventory.equip(c.player, _int(c.a))
+    note = f" و {replaced.item.name} را کنار گذاشتید" if replaced else ""
+    return await _piece_screen(c, worn.id, f"🛡️ {worn.item.name} را پوشیدید{note}")
+
+
+@screen("unequip")
+async def unequip(c: Ctx) -> Screen:
+    taken = await c.services.inventory.unequip(c.player, _int(c.a))
+    return await _piece_screen(c, taken.id, f"↩️ {taken.item.name} را درآوردید")
+
+
+@screen("sellq")
+async def sell_confirm(c: Ctx) -> Screen:
+    p = await _piece(c, _int(c.a))
+    text = f"💰 {bold('فروش به بازارچه')}\n\n{p.label} را می‌فروشید و {bold(fa(_sell_price(p)))} سکه می‌گیرید.\nمطمئنید؟"
+    return Screen(text, [[c.btn("✅ بله، بفروش", "sell", p.id, style="danger"), c.btn("↩️ نه", "piece", p.id)]])
+
+
+@screen("sell")
+async def sell_gear(c: Ctx) -> Screen:
+    sold, total = await c.services.shop.sell_gear(c.player, _int(c.a))
+    shown = await gear(c)
+    shown.toast = f"💰 {sold.item.name} فروخته شد: {fa(total)} سکه"
+    return shown
+
+
+@screen("upq")
+async def upgrade_ask(c: Ctx) -> Screen:
+    p, quote = await c.services.shop.quote(c.player, _int(c.a))
+    rows = [[c.btn(f"🔨 ارتقا به +{fa(quote.next_level)}", "up", p.id, quote.next_level, style="success")],
+            c.back("piece", "🔙 بازگشت", p.id)]
+    return Screen(views.upgrade_quote(p, quote), rows)
+
+
+@screen("up")
+async def upgrade(c: Ctx) -> Screen:
+    result = await c.services.shop.upgrade(c.player, _int(c.a), _int(c.b))
+    rows = [[c.btn("🔨 دوباره ارتقا", "upq", result.piece.id)], c.back("piece", "🔙 تجهیزات", result.piece.id)]
+    return Screen(views.upgrade_result(result), rows,
+                  toast="✨ ارتقا موفق بود" if result.success else "💥 این بار نشد")
+
+
+# --- items and chests -------------------------------------------------------------------------
+def _describe(item: Item) -> list[str]:
+    if item.kind is Kind.CONSUMABLE:
+        return [f"⚡ {fa(item.energy)} انرژی بازمی‌گرداند"]
+    if item.kind is Kind.CHEST:
+        return ["🎁 درونش گنجی پنهان است"]
+    if item.is_gear:
+        return item.stats.bonus_lines()
+    return ["📦 ماده‌ی اولیه؛ برای ارتقا و معامله"]
+
+
+async def _stack_qty(c: Ctx, item_id: str) -> int:
+    view = await c.services.inventory.view(c.player.id)
+    return next((q for i, q in view.stacks if i.id == item_id), 0)
+
+
+@screen("items")
+async def items(c: Ctx) -> Screen:
+    view = await c.services.inventory.view(c.player.id)
+    others, _ = _split(view)
+    if not others:
+        text = f"📦 {bold('آیتم‌ها')}\n\nهنوز آیتمی ندارید. ماجراجویی کنید و کوله‌تان را پر کنید!"
+        return Screen(text, [[c.btn("🗺️ ماجراجویی", "adv")], c.back("inv")])
+    page = _int(c.a or "0", "صفحه")
+    chunk, prev, nxt = _page(others, page)
+    rows = [[c.btn(f"{i.label} ×{fa(q)}", "item", i.id)] for i, q in chunk]
+    if nav := _nav(c, "items", page, prev, nxt):
+        rows.append(nav)
+    rows.append(c.back("inv"))
+    return Screen(f"📦 {bold('آیتم‌ها')}\nیکی را انتخاب کنید 👇", rows)
+
+
+async def _item_screen(c: Ctx, item_id: str, toast: str | None = None) -> Screen:
+    item = get_item(item_id)
+    qty = await _stack_qty(c, item_id)
+    if qty <= 0:
+        shown = await (chests(c) if item.kind is Kind.CHEST else items(c))
+        shown.toast = toast
+        return shown
+    lines = [f"{item.emoji} {bold(item.name)}", f"{item.rarity_label} · در کوله‌پشتی: {bold(fa(qty))}", "", *_describe(item)]
+    if item.sell > 0:
+        lines.append(f"💰 بها در بازارچه: {fa(item.sell)} سکه")
+    rows: Rows = []
+    if item.kind is Kind.CONSUMABLE:
+        rows.append([c.btn("🧪 مصرف", "use", item.id, style="success")])
+    if item.kind is Kind.CHEST:
+        rows.append([c.btn("🗝️ باز کردن", "open", item.id, style="success"), c.btn("🎲 شانس‌ها", "odds", item.id)])
+    if item.sell > 0:
+        sell_row = [c.btn("💰 فروش ۱", "isell", item.id, "1")]
+        if qty > 1:
+            sell_row.append(c.btn(f"💰 فروش همه ({fa(qty)})", "isell", item.id, "all"))
+        rows.append(sell_row)
+    if not c.is_group and item.tradable:
+        rows.append([c.btn("🏷️ عرضه در بازار", "listask", "s", item.id)])
+    rows.append(c.back("chests" if item.kind is Kind.CHEST else "items", "🔙 بازگشت"))
+    return Screen("\n".join(lines), rows, toast=toast)
+
+
+@screen("item")
+async def item_detail(c: Ctx) -> Screen:
+    return await _item_screen(c, c.a)
+
+
+@screen("use")
+async def use(c: Ctx) -> Screen:
+    message = await c.services.inventory.use(c.player, get_item(c.a))
+    return await _item_screen(c, c.a, message)
+
+
+@screen("isell")
+async def item_sell(c: Ctx) -> Screen:
+    item = get_item(c.a)
+    qty = await _stack_qty(c, item.id) if c.b == "all" else 1
+    total = await c.services.shop.sell_stack(c.player, item, qty)
+    return await _item_screen(c, item.id, f"💰 {item.name} ×{fa(qty)} فروخته شد: {fa(total)} سکه")
+
+
+@screen("odds")
+async def odds(c: Ctx) -> Screen:
+    item = get_item(c.a)
+    if item.id not in CHESTS:
+        raise GameError("این صندوقچه شناخته نشد.")
+    text = views.chest_odds(item, c.services.chests.odds(CHESTS[item.id]))
+    return Screen(text, [c.back("item", "🔙 بازگشت", item.id)])
+
+
+@screen("open")
+async def open_chest(c: Ctx) -> Screen:
+    item = get_item(c.a)
+    opened = await c.services.chests.open(c.player, item)
+    left = await _stack_qty(c, item.id)
+    rows = []
+    if left:
+        rows.append([c.btn(f"🗝️ باز کردن دوباره ({fa(left)})", "open", item.id, style="success")])
+    rows.append(c.back("chests", "🔙 صندوقچه‌ها"))
+    return Screen(views.chest_opened(c.player.name, opened), rows)
+
+
+@screen("chests")
+async def chests(c: Ctx) -> Screen:
+    view = await c.services.inventory.view(c.player.id)
+    _, owned = _split(view)
+    rows = [[c.btn(f"{i.label} ×{fa(q)}", "item", i.id)] for i, q in owned]
+    rows.append([c.btn("🛍️ خرید صندوقچه", "chestshop", style="success")])
+    rows.append(c.back("inv"))
+    text = f"🎁 {bold('صندوقچه‌ها')}\n" + (
+        "یکی را بزنید تا باز کنید 👇" if owned else "هنوز صندوقچه‌ای ندارید. می‌توانید بخرید یا در ماجراجویی پیدا کنید!"
+    )
+    return Screen(text, rows)
+
+
+@screen("chestshop")
+async def chest_shop(c: Ctx) -> Screen:
+    p = await c.refresh()
+    rows = []
+    for chest in CHESTS.values():
+        if chest.price is None:
+            continue
+        icon = "🪙" if chest.price[0] == "gold" else "💎"
+        item = get_item(chest.item_id)
+        rows.append([c.btn(f"{item.label} — {fa(chest.price[1])}{icon}", "cbuy", item.id)])
+    rows.append(c.back("chests"))
+    text = (
+        f"🛍️ {bold('خرید صندوقچه')}\n🪙 {fa(p.gold)} · 💎 {fa(p.crystal)}\n\n"
+        "شانس محتویات هر صندوقچه با دکمه‌ی «شانس‌ها» دیده می‌شود."
+    )
+    return Screen(text, rows)
+
+
+@screen("cbuy")
+async def chest_buy(c: Ctx) -> Screen:
+    item = get_item(c.a)
+    currency, total = await c.services.chests.buy(c.player, item.id, 1)
+    icon = "🪙" if currency == "gold" else "💎"
+    text = f"✅ {bold('صندوقچه خریده شد')}\n{item.label} به کوله‌پشتی شما رسید ({fa(total)}{icon})."
+    rows = [
+        [c.btn("🗝️ باز کردن", "open", item.id, style="success"), c.btn("🎲 شانس‌ها", "odds", item.id)],
+        [c.btn("🛍️ خرید دیگر", "chestshop")],
+        c.back("chests", "🔙 صندوقچه‌ها"),
+    ]
+    return Screen(text, rows, toast="✅ صندوقچه شما شد")
+
+
+# --- shop -------------------------------------------------------------------------------------
+@screen("shop")
+async def shop(c: Ctx) -> Screen:
+    p = await c.refresh()
+    text = f"🛒 {bold('بازارچه')}\n«بفرمایید فرمانده!»\n\n🪙 سکه‌ی شما: {fa(p.gold)}"
+    rows = [
+        [c.btn("⚔️ سلاح و زره", "shopcat", "gear"), c.btn("🧪 معجون‌ها", "shopcat", "pot")],
+        [c.btn("🎁 صندوقچه‌ها", "chestshop"), c.btn("💰 فروش آیتم‌ها", "items")],
+        c.back("home", "🔙 منو"),
+    ]
+    return Screen(text, rows)
+
+
+@screen("shopcat")
+async def shop_category(c: Ctx) -> Screen:
+    want_gear = c.a == "gear"
+    goods = [i for i in shop_items() if i.is_gear == want_gear]
+    page = _int(c.b or "0", "صفحه")
+    chunk, prev, nxt = _page(goods, page)
+    rows = [[c.btn(f"{i.label} — {fa(i.buy)}🪙", "shopitem", i.id, c.a)] for i in chunk]
+    # paging keeps the category in `a` and the page in `b`
+    nav = ([c.btn("‹ قبلی", "shopcat", c.a, page - 1)] if prev else []) + (
+        [c.btn("بعدی ›", "shopcat", c.a, page + 1)] if nxt else []
+    )
+    if nav:
+        rows.append(nav)
+    rows.append(c.back("shop"))
+    title = "⚔️ سلاح و زره" if want_gear else "🧪 معجون‌ها"
+    return Screen(f"{title.split(' ', 1)[0]} {bold(title.split(' ', 1)[1])}\nیکی را انتخاب کنید 👇", rows)
+
+
+async def _shop_item_screen(c: Ctx, item_id: str, cat: str, toast: str | None = None) -> Screen:
+    item = get_item(item_id)
+    p = await c.refresh()
+    lines = [f"{item.emoji} {bold(item.name)}", item.rarity_label, "", *_describe(item)]
+    if item.is_gear and item.level_req > 1:
+        lines.append(f"🎚️ سطح لازم: {fa(item.level_req)}")
+    lines += ["", f"🪙 بها: {bold(fa(item.buy))} سکه", f"کیسه‌ی شما: {fa(p.gold)} سکه"]
+    if item.is_gear:
+        rows = [[c.btn("🛍️ خرید", "buy", item.id, "1", style="success")]]
+    else:
+        rows = [[c.btn(f"🛍️ ×{fa(n)}", "buy", item.id, str(n), style="success") for n in (1, 5, 10)]]
+    rows.append(c.back("shopcat", "🔙 بازگشت", cat))
+    return Screen("\n".join(lines), rows, toast=toast)
+
+
+@screen("shopitem")
+async def shop_item(c: Ctx) -> Screen:
+    return await _shop_item_screen(c, c.a, c.b or "gear")
+
+
+@screen("buy")
+async def buy(c: Ctx) -> Screen:
+    item, qty = get_item(c.a), _int(c.b)
+    paid = await c.services.shop.buy(c.player, item, qty)
+    cat = "gear" if item.is_gear else "pot"
+    return await _shop_item_screen(c, item.id, cat, f"🛍️ {item.name} ×{fa(qty)} خریدید ({fa(paid)} سکه)")
+
+
+# --- market -----------------------------------------------------------------------------------
+@screen("market")
+async def market(c: Ctx) -> Screen:
+    page = _int(c.a or "0", "صفحه")
+    found = await c.services.market.browse(None, PER_PAGE + 1, page * PER_PAGE)
+    chunk, nxt = found[:PER_PAGE], len(found) > PER_PAGE
+    if not chunk:
+        text = f"🏪 {bold('بازار')}\n\nآگهی فعالی نیست. شما می‌توانید اولین فروشنده باشید!"
+    else:
+        text = f"🏪 {bold('بازار')}\nیک آگهی را انتخاب کنید 👇"
+    rows = [[c.btn(f"{lst.label} — {fa(lst.price)}🪙", "listing", lst.id)] for lst in chunk]
+    if nav := _nav(c, "market", page, page > 0, nxt):
+        rows.append(nav)
+    rows.append([c.btn("📋 آگهی‌های من", "mine")])
+    rows.append(c.back("home", "🔙 منو"))
+    return Screen(text, rows)
+
+
+@screen("mine")
+async def mine(c: Ctx) -> Screen:
+    mine_ = await c.services.market.mine(c.player)
+    rows = [[c.btn(f"{lst.label} — {fa(lst.price)}🪙", "listing", lst.id)] for lst in mine_]
+    rows.append(c.back("market"))
+    text = f"📋 {bold('آگهی‌های من')}\n" + ("یکی را بزنید تا لغو کنید 👇" if mine_ else "آگهی فعالی ندارید.")
+    return Screen(text, rows)
+
+
+@screen("listing")
+async def listing(c: Ctx) -> Screen:
+    lst = await c.services.market.get(_int(c.a))
+    if lst is None:
+        shown = await market(c)
+        shown.toast = "این آگهی دیگر روی تخته نیست"
+        return shown
+    own = lst.seller_id == c.player.id
+    lines = [
+        f"{lst.item.emoji} {bold(lst.item.name + (f' +{fa(lst.upgrade)}' if lst.upgrade else ''))}",
+        f"{lst.item.rarity_label}" + (f" · تعداد {fa(lst.qty)}" if lst.qty > 1 else ""),
+        "",
+        *_describe(lst.item),
+        "",
+        f"💰 بها: {bold(fa(lst.price))} سکه",
+        f"👤 فروشنده: {lst.seller_name}",
+    ]
+    rows = (
+        [[c.btn("↩️ لغو آگهی", "mcancel", lst.id, style="danger")]]
+        if own
+        else [[c.btn(f"🛍️ خرید با {fa(lst.price)}🪙", "mbuy", lst.id, style="success")]]
+    )
+    rows.append(c.back("market"))
+    return Screen("\n".join(lines), rows)
+
+
+@screen("mbuy")
+async def market_buy(c: Ctx) -> Screen:
+    bought = await c.services.market.buy(c.player, _int(c.a))
+    shown = await market(c)
+    shown.toast, shown.alert = f"🛍️ معامله مبارک! {bought.item.name} از آن شماست", True
+    return shown
+
+
+@screen("mcancel")
+async def market_cancel(c: Ctx) -> Screen:
+    done = await c.services.market.cancel(c.player, _int(c.a))
+    shown = await mine(c)
+    shown.toast = f"↩️ آگهی لغو شد و {done.item.name} برگشت"
+    return shown
+
+
+@screen("listask")
+async def listing_ask(c: Ctx) -> Screen:
+    if c.is_group or c.state is None:
+        raise GameError("برای عرضه در بازار وارد پیام خصوصی ربات شوید.")
+    kind, ref = c.a, c.b
+    await c.state.set_state(ListingFlow.waiting)
+    await c.state.update_data(kind=kind, ref=ref)
+    if kind == "g":
+        text = f"🏷️ {bold('عرضه در بازار')}\n\nبهای فروش را به سکه بنویسید.\nمثال: 5000"
+        cancel = c.btn("❌ انصراف", "piece", ref)
+    else:
+        text = (
+            f"🏷️ {bold('عرضه در بازار')}\n\nتعداد و بهای کل را بنویسید.\n"
+            "مثال: «10 900» یعنی ۱۰ عدد روی هم ۹۰۰ سکه"
+        )
+        cancel = c.btn("❌ انصراف", "item", ref)
+    return Screen(text, [[cancel]])
+
+
+# --- rankings and premium ---------------------------------------------------------------------
+@screen("top")
+async def top(c: Ctx) -> Screen:
+    board_id = c.a or ("group" if c.is_group else "level")
+    ranking = c.services.rankings
+    if board_id == "group" and c.is_group:
+        board = await ranking.group_board(c.chat_id)
+    else:
+        board = await ranking.global_board("level" if board_id == "group" else board_id, c.player)
+    tabs = [c.btn("🏆 سطح", "top", "level"), c.btn("💰 ثروت", "top", "rich"), c.btn("⚔️ دوئل", "top", "wins")]
+    rows = [tabs]
+    if c.is_group:
+        rows.append([c.btn("🏰 این گروه", "top", "group")])
+    else:
+        rows.append(c.back("home", "🔙 منو"))
+    return Screen(views.ranking(board), rows)
+
+
+@screen("premium")
+async def premium(c: Ctx) -> Screen:
+    enabled = c.services.ctx.settings.payments_enabled
+    if c.is_group:
+        username = c.services.bot_username
+        rows = [keyboards.start_button(username)] if username else []
+        return Screen("💎 خزانه‌ی ویژه فقط در پیام خصوصی باز می‌شود؛ خرید آن‌جا امن است.", rows)
+    return Screen(views.premium_shop(enabled), keyboards.premium_buttons(enabled, c.owner))
+
+
+# --- entry points -----------------------------------------------------------------------------
+def _is_group(message: Message) -> bool:
+    return str(getattr(message.chat.type, "value", message.chat.type)) != "private"
+
+
+async def send(
+    message: Message, services: Services, player: Player, name: str, a: str = "", b: str = "",
+    *, reply: bool = False, state: FSMContext | None = None,
+) -> Message:
+    """Open a screen as a new message (private /start, or a group command)."""
+    ctx = Ctx(services, player, player.platform_user_id, a, b, _is_group(message), message.chat.id, state)
+    shown = await SCREENS[name](ctx)
+    text = shown.text or ""
+    if reply:
+        return await message.reply(text, buttons=shown.rows or None)
+    return await message.answer(text, buttons=shown.rows or None)
+
+
+router = Router(name="panel")
+
+
+@router.callback_query(PanelCb.filter())
+async def on_panel(
+    query: CallbackQuery, callback_data: PanelCb, services: Services, state: FSMContext
+) -> None:
+    if query.from_user.id != callback_data.o:
+        await query.answer("این پنل مال شما نیست؛ برای خودتان یکی باز کنید 🙂", show_alert=True)
+        return
+    message = query.message
+    if message is None:
+        await query.answer()
+        return
+    handler = SCREENS.get(callback_data.s)
+    if handler is None:
+        await query.answer("این دکمه قدیمی است؛ منو را دوباره باز کنید.", show_alert=True)
+        return
+    await state.clear()  # tapping anything cancels a half-finished text prompt
+    player = await services.players.require(query.from_user.id)
+    ctx = Ctx(
+        services, player, callback_data.o, callback_data.a or "", callback_data.b or "",
+        _is_group(message), message.chat.id, state,
+    )
+    shown = await handler(ctx)
+    if shown.text is not None:
+        with contextlib.suppress(BaleAPIError):  # "message is not modified" and similar
+            await message.edit_text(shown.text, buttons=shown.rows or None)
+    await query.answer((shown.toast or "")[:190] or None, show_alert=shown.alert)
+
+
+# --- text prompt: price of a market listing ---------------------------------------------------
+listing_router = Router(name="listing-flow")
+
+
+@listing_router.message(ListingFlow.waiting, F.text, ChatTypeFilter("private"))
+async def got_listing_numbers(message: Message, state: FSMContext, services: Services) -> None:
+    player = await services.players.require(message.from_user.id)  # type: ignore[union-attr]
+    data = await state.get_data()
+    numbers = [to_int(word) for word in (message.text or "").split()]
+    if not numbers or None in numbers:
+        raise GameError("فقط عدد بنویسید؛ مثلاً: 5000")
+    if data.get("kind") == "g":
+        if len(numbers) != 1:
+            raise GameError("فقط بهای فروش را بنویسید؛ مثلاً: 5000")
+        made = await services.market.list_gear(player, int(data["ref"]), numbers[0])
+    else:
+        if len(numbers) != 2:
+            raise GameError("تعداد و بها را بنویسید؛ مثلاً: 10 900")
+        made = await services.market.list_stack(player, get_item(data["ref"]), numbers[0], numbers[1])
+    await state.clear()
+    fee = services.market.fee_for(made.price)
+    owner = player.platform_user_id
+    await message.answer(
+        f"🏷️ {bold('آگهی شما نصب شد')}\n{made.label} به بهای {fa(made.price)} سکه.\n"
+        f"کارمزد بازار ({fa(fee)} سکه) هنگام فروش کسر می‌شود.",
+        buttons=[
+            [keyboards.panel_button("🏪 بازار", "market", owner), keyboards.panel_button("📋 آگهی‌های من", "mine", owner)],
+            [keyboards.panel_button("🔙 منو", "home", owner)],
+        ],
+    )
+
+
+__all__ = ["SCREENS", "Screen", "listing_router", "router", "send"]

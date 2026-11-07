@@ -128,7 +128,7 @@ async def test_daily_reward_cap(services):
 async def test_duel_via_chat_buttons(h, services):
     a, b = await two_players(services)
     await h.say(10, "مبارزه", group=True, reply_to=h.message_of(11))
-    assert "طبل جنگ" in h.session.last_text()
+    assert "فراخوان دوئل" in h.session.last_text()
     accept = h.button_data("قبول")
 
     await services.players.register(12, "c", "رها", "elf", "archer")

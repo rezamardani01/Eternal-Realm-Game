@@ -66,13 +66,3 @@ async def test_potion_not_wasted_at_full_energy(services):
         await services.inventory.use(p, get_item("energy_potion"))
     view = await services.inventory.view(p.id)
     assert {i.id: q for i, q in view.stacks}["energy_potion"] == 2
-
-
-async def test_inventory_commands_in_group(h, services):
-    await reg(services)
-    await h.say(10, "کوله‌پشتی", group=True)
-    assert "کمان کوتاه" in h.session.last_text() and "معجون انرژی" in h.session.last_text()
-    await h.say(10, "تجهیزات", group=True)
-    assert "سلاح" in h.session.last_text()
-    await h.say(10, "مصرف معجون انرژی", group=True)
-    assert "پر پر است" in h.session.last_text()

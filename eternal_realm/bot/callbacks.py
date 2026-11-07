@@ -13,8 +13,13 @@ class ClassCb(CallbackData, prefix="cls"):
     id: str
 
 
-class MenuCb(CallbackData, prefix="m"):
-    page: str
+class PanelCb(CallbackData, prefix="p"):
+    """One tap in the personal panel: ``s`` screen, ``a``/``b`` arguments, ``o`` owner's Bale id."""
+
+    s: str
+    a: str | None = None
+    b: str | None = None
+    o: int
 
 
 class DuelCb(CallbackData, prefix="d"):
@@ -25,8 +30,3 @@ class DuelCb(CallbackData, prefix="d"):
 class BuyCb(CallbackData, prefix="buy"):
     kind: str
     id: str
-
-
-class UpgradeCb(CallbackData, prefix="up"):
-    id: int
-    level: int

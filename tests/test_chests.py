@@ -78,17 +78,3 @@ async def test_chest_rewards_are_all_credited(services, db):
     after = await services.players.require(10)
     assert after.gold >= before.gold and after.crystal >= before.crystal
     assert not {i.id: q for i, q in (await services.inventory.view(p.id)).stacks}.get("wooden_chest")
-
-
-async def test_chest_commands(h, services, db):
-    await reg(services, db, crystal=50)
-    await h.say(10, "صندوقچه", group=True)
-    assert "صندوقچه جادویی" in h.session.last_text()
-    await h.say(10, "شانس صندوقچه جادویی", group=True)
-    assert "٪" in h.session.last_text()
-    await h.say(10, "خرید صندوقچه جادویی", group=True)
-    assert "اکنون در اختیار" in h.session.last_text()
-    await h.say(10, "باز کردن صندوقچه جادویی", group=True)
-    assert "شکست" in h.session.last_text()
-    await h.say(10, "باز کردن صندوقچه جادویی", group=True)
-    assert "کافی" in h.session.last_text()

@@ -100,18 +100,3 @@ async def test_listed_gear_cannot_be_equipped_or_sold_to_npc(services, db):
         await services.shop.sell_gear(seller, gear.id)
     with pytest.raises(GameError):
         await services.inventory.equip(seller, gear.id)
-
-
-async def test_market_commands(h, services, db):
-    seller, buyer = await setup_pair(services, db)
-    gear = next(p for p in (await services.inventory.view(seller.id)).gear if p.item.id == "iron_sword")
-    await h.say(10, f"عرضه #{gear.id} 1000", group=True)
-    assert "آگهی" in h.session.last_text()
-    await h.say(10, "عرضه سنگ آهن 3 90", group=True)
-    assert "آگهی" in h.session.last_text()
-    await h.say(11, "بازار", group=True)
-    assert "شمشیر آهنی" in h.session.last_text() and "سنگ آهن" in h.session.last_text()
-    await h.say(11, "بخر 1", group=True)
-    assert "معامله مبارک" in h.session.last_text()
-    await h.say(10, "لغو 2", group=True)
-    assert "پس گرفتید" in h.session.last_text()

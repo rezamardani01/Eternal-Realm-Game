@@ -12,8 +12,7 @@ from baleropy.exceptions import BaleUnauthorized
 from ..config import ConfigError, Settings
 from ..context import AppContext
 from ..db.database import Database
-from . import duels, maintenance, menu, onboarding, payments
-from . import shop as shop_buttons
+from . import duels, maintenance, onboarding, panel, payments
 from .commands import REGISTRY
 from .commands import router as commands_router
 from .middlewares import ErrorMiddleware
@@ -37,7 +36,7 @@ def build_dispatcher(services: Services) -> Dispatcher:
     REGISTRY.configure(services.ctx.settings.command_overrides)
     # order matters: FSM-bound onboarding first, free-text commands last
     _attach(
-        dp, onboarding.router, menu.router, payments.router, duels.router, shop_buttons.router,
+        dp, onboarding.router, panel.listing_router, panel.router, payments.router, duels.router,
         commands_router,
     )
     return dp

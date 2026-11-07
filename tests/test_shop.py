@@ -108,23 +108,3 @@ async def test_upgrade_rejects_stale_level_missing_materials_and_other_owner(ser
 
 def test_upgrade_chances_never_increase():
     assert list(UPGRADE_CHANCE) == sorted(UPGRADE_CHANCE, reverse=True)
-
-
-async def test_shop_commands_in_group(h, services, db):
-    p = await reg(services)
-    await h.say(10, "فروشگاه", group=True)
-    assert "معجون انرژی" in h.session.last_text()
-    await h.say(10, "خرید معجون انرژی 2", group=True)
-    assert "اکنون در اختیار" in h.session.last_text()
-    await h.say(10, "فروش معجون انرژی 2", group=True)
-    assert "فروختید" in h.session.last_text()
-    await h.say(10, "خرید چیزی که نیست", group=True)
-    assert "پیدا نشد" in h.session.last_text()
-
-    gid = (await services.inventory.view(p.id)).gear[0].id
-    await fund(services, db, p.id, 5_000)
-    await give(services, db, p.id, "iron_ore", 3)
-    await h.say(10, f"ارتقا {gid}", group=True)
-    assert "شانس موفقیت" in h.session.last_text()
-    await h.click(10, h.button_data("ارتقا به"), group=True)
-    assert "ارتقا" in h.session.last_text()

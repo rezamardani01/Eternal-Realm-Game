@@ -84,9 +84,21 @@ class MarketService:
             listing_id = await repo.create(tx, seller.id, item.id, qty, None, price, self.ctx.now())
             return Listing(listing_id, seller.id, seller.name, item, qty, price, None, 0)
 
-    async def browse(self, item: Item | None = None, limit: int = 15) -> list[Listing]:
+    async def browse(self, item: Item | None = None, limit: int = 15, offset: int = 0) -> list[Listing]:
         async with self.ctx.db.read() as tx:
-            return [_listing(r) for r in await repo.browse(tx, item.id if item else None, limit)]
+            rows = await repo.browse(tx, item.id if item else None, limit, offset)
+        return [_listing(r) for r in rows]
+
+    async def get(self, listing_id: int) -> Listing | None:
+        """One active listing, with the seller's name (``None`` once it is sold or cancelled)."""
+        async with self.ctx.db.read() as tx:
+            row = await tx.fetchone(
+                "SELECT m.*, p.display_name AS seller_name, g.upgrade AS upgrade FROM market_listings m"
+                " JOIN players p ON p.id = m.seller_id LEFT JOIN gear g ON g.id = m.gear_id"
+                " WHERE m.id = ? AND m.status = 'active'",
+                (listing_id,),
+            )
+        return _listing(row) if row else None
 
     async def mine(self, seller: Player) -> list[Listing]:
         async with self.ctx.db.read() as tx:

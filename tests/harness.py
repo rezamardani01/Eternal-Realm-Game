@@ -10,6 +10,7 @@ from baleropy import Bot
 from baleropy.client.session.base import BaseSession
 
 from eternal_realm.bot.app import build_dispatcher
+from eternal_realm.bot.callbacks import PanelCb
 from eternal_realm.bot.services import Services
 
 
@@ -64,6 +65,12 @@ class FakeSession(BaseSession):
         for name, payload in reversed(self.calls):
             if name in ("sendMessage", "editMessageText") and "reply_markup" in payload:
                 return [b for row in payload["reply_markup"]["inline_keyboard"] for b in row]
+        return []
+
+    def last_markup_rows(self) -> list[list[dict[str, Any]]]:
+        for name, payload in reversed(self.calls):
+            if name in ("sendMessage", "editMessageText") and "reply_markup" in payload:
+                return payload["reply_markup"]["inline_keyboard"]
         return []
 
     def callback_answers(self) -> list[dict[str, Any]]:
@@ -183,6 +190,18 @@ class Harness:
                 },
             },
         )
+
+    async def panel(self, uid: int, screen: str, a: str = "", b: str = "", *, group: bool = False) -> None:
+        """Tap a panel button by screen name (as the owner)."""
+        data = PanelCb(s=screen, a=a or None, b=b or None, o=uid).pack()
+        await self.click(uid, data, group=group)
+
+    async def tap(self, uid: int, label_part: str, *, group: bool = False) -> None:
+        """Tap the button whose label contains ``label_part`` on the latest message."""
+        await self.click(uid, self.button_data(label_part), group=group)
+
+    def labels(self) -> list[str]:
+        return [b["text"] for b in self.session.last_buttons()]
 
     def button_data(self, label_part: str) -> str:
         for button in self.session.last_buttons():

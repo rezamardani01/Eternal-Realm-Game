@@ -23,6 +23,11 @@ def normalize(text: str) -> str:
     return _SPACES.sub(" ", text.translate(_CHAR_FIX).translate(_FROM_FA)).strip()
 
 
+def bold(value: object) -> str:
+    """Bale Markdown bold. Put a space before it and after it (as the Bale docs require)."""
+    return f"**{value}**"
+
+
 def to_int(text: str) -> int | None:
     """Parse ``'۱٬۲۰۰'`` / ``'1,200'`` / ``'1200'`` into an int (``None`` if it is not a number)."""
     cleaned = normalize(text).replace(",", "").replace("٬", "").replace("،", "")

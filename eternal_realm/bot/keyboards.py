@@ -1,57 +1,47 @@
-"""Inline keyboard builders."""
+"""Inline keyboard builders that are not part of the personal panel."""
 
 from __future__ import annotations
 
 from baleropy import Button
 from baleropy.types import InlineKeyboardButton
 
-from ..game.data.classes import CLASSES
-from ..game.data.races import RACES
-from ..game.engine.combat import Fighter
 from ..game.data.chests import CHESTS
+from ..game.data.classes import CLASSES
 from ..game.data.items import get_item
 from ..game.data.packs import PACKS
+from ..game.data.races import RACES
+from ..game.engine.combat import Fighter
 from ..shared.text import fa
-from .callbacks import BuyCb, ClassCb, DuelCb, MenuCb, RaceCb, UpgradeCb
+from .callbacks import BuyCb, ClassCb, DuelCb, PanelCb, RaceCb
 
 Rows = list[list[InlineKeyboardButton]]
 
-#: (page id, label) of the private main menu. Feature modules append their own entries.
-MENU_ENTRIES: list[tuple[str, str]] = [
-    ("profile", "👤 شخصیت من"),
-    ("inventory", "🎒 کوله‌پشتی"),
-    ("equipment", "🧰 تجهیزات"),
-    ("shop", "🛒 فروشگاه"),
-    ("premium", "💎 فروشگاه ویژه"),
-    ("help", "❓ راهنما"),
-]
 
-
-def _grid(buttons: list[InlineKeyboardButton], per_row: int = 2) -> Rows:
+def grid(buttons: list[InlineKeyboardButton], per_row: int = 2) -> Rows:
     return [buttons[i : i + per_row] for i in range(0, len(buttons), per_row)]
 
 
 def race_buttons() -> Rows:
-    return _grid([Button.inline(f"{r.emoji} {r.name}", RaceCb(id=r.id)) for r in RACES.values()])
+    return grid([Button.inline(f"{r.emoji} {r.name}", RaceCb(id=r.id)) for r in RACES.values()])
 
 
 def class_buttons() -> Rows:
-    return _grid([Button.inline(f"{c.emoji} {c.name}", ClassCb(id=c.id)) for c in CLASSES.values()])
+    return grid([Button.inline(f"{c.emoji} {c.name}", ClassCb(id=c.id)) for c in CLASSES.values()])
 
 
 def start_button(bot_username: str) -> list[InlineKeyboardButton]:
     return [Button.url("🎮 شروع بازی", f"https://ble.ir/{bot_username}?start=1")]
 
 
-def main_menu() -> Rows:
-    return _grid([Button.inline(label, MenuCb(page=page)) for page, label in MENU_ENTRIES])
+def open_panel_button(bot_username: str) -> list[InlineKeyboardButton]:
+    return [Button.url("📲 باز کردن پنل شخصی", f"https://ble.ir/{bot_username}?start=panel")]
 
 
-def back_to_menu() -> Rows:
-    return [[Button.inline("🔙 منوی اصلی", MenuCb(page="home"))]]
+def panel_button(label: str, screen: str, owner: int, a: str = "", b: str = "") -> InlineKeyboardButton:
+    return Button.inline(label, PanelCb(s=screen, a=a or None, b=b or None, o=owner))
 
 
-def premium_buttons(payments_enabled: bool) -> Rows:
+def premium_buttons(payments_enabled: bool, owner: int) -> Rows:
     rows: Rows = []
     if payments_enabled:
         for pack in PACKS.values():
@@ -61,12 +51,8 @@ def premium_buttons(payments_enabled: bool) -> Rows:
         if chest.price and chest.price[0] == "crystal":
             item = get_item(chest.item_id)
             rows.append([Button.inline(f"{item.label} — {fa(chest.price[1])} 💎", BuyCb(kind="crystal", id=item.id))])
-    rows += back_to_menu()
+    rows.append([panel_button("🔙 بازگشت", "home", owner)])
     return rows
-
-
-def upgrade_confirm(gear_id: int, level: int) -> Rows:
-    return [[Button.inline(f"🔨 ارتقا به +{level}", UpgradeCb(id=gear_id, level=level), style="success")]]
 
 
 def duel_invite(duel_id: int) -> Rows:
@@ -80,7 +66,7 @@ def duel_invite(duel_id: int) -> Rows:
 
 def duel_actions(duel_id: int, fighter: Fighter) -> Rows:
     wait = fighter.skill_ready_in - 1
-    skill = f"{fighter.skill_emoji} {fighter.skill_name}" + (f" ({wait})" if wait > 0 else "")
+    skill = f"{fighter.skill_emoji} {fighter.skill_name}" + (f" ({fa(wait)})" if wait > 0 else "")
     return [
         [
             Button.inline("⚔️ حمله", DuelCb(action="attack", id=duel_id), style="primary"),

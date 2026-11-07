@@ -10,8 +10,9 @@ from baleropy.exceptions import BaleAPIError
 from baleropy.types import CallbackQuery, LabeledPrice, Message, PreCheckoutQuery
 
 from ..shared.errors import GameError
-from ..shared.text import fa
-from . import views
+from ..game.data.items import get_item
+from ..shared.text import bold, fa
+from . import keyboards, views
 from .callbacks import BuyCb
 from .services import Services
 
@@ -33,7 +34,14 @@ async def on_buy(query: CallbackQuery, callback_data: BuyCb, services: Services,
     if callback_data.kind == "crystal":
         currency, total = await services.chests.buy(player, callback_data.id, 1)
         icon = "🪙" if currency == "gold" else "💎"
-        await message.answer(f"✅ صندوقچه به کوله‌پشتی شما رسید ({fa(total)} {icon} پرداخت شد).\n🗝️ برای گشودنش بنویسید: «باز کردن صندوقچه جادویی»")
+        owner = query.from_user.id
+        await message.answer(
+            f"✅ {bold('صندوقچه خریده شد')}\n{get_item(callback_data.id).label} به کوله‌پشتی شما رسید ({fa(total)} {icon}).",
+            buttons=[
+                [keyboards.panel_button("🗝️ باز کردن", "open", owner, callback_data.id)],
+                [keyboards.panel_button("🔙 خزانه‌ی ویژه", "premium", owner)],
+            ],
+        )
         await query.answer("✅ صندوقچه شما شد")
         return
 

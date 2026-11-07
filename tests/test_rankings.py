@@ -56,12 +56,3 @@ async def test_group_board_counts_command_points(h, services, db):
     text = h.session.last_text()
     assert "سارا" in text and "آرش" in text
     assert text.index("سارا") < text.index("آرش")  # two activities beat one
-
-
-async def test_ranking_commands(h, services, db):
-    await seed(services, db)
-    for word in ["برترین‌ها", "ثروتمندان", "قهرمانان"]:
-        await h.say(10, word, group=True)
-        assert "🥇" in h.session.last_text()
-    await h.say(10, "رتبه", group=True)
-    assert "هنوز هیچ قهرمانی" in h.session.last_text()

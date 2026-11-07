@@ -101,7 +101,7 @@ async def test_banned_player_blocked(h, services):
 async def test_daily_via_command(h, services):
     await services.players.register(10, "a", "آرش", "elf", "archer")
     await h.say(10, "جایزه", group=True)
-    assert "گنجینه‌ی امروز" in h.session.last_text()
+    assert "گنجینه‌ی روزانه" in h.session.last_text()
     await h.say(10, "جایزه", group=True)
     assert "برداشته‌اید" in h.session.last_text()
 
