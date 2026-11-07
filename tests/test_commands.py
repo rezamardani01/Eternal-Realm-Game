@@ -67,6 +67,8 @@ async def test_profile_and_help_in_group(h, services):
     await h.say(10, "پروفایل", group=True)
     assert "آرش" in h.session.last_text()
     await h.say(10, "راهنما", group=True)
+    assert any("باس" in t for t in h.labels())  # the help is a glass panel of topics
+    await h.tap(10, "همه‌ی دستورها", group=True)
     assert "پروفایل" in h.session.last_text()
     assert await services.groups.get(-500) is not None
 

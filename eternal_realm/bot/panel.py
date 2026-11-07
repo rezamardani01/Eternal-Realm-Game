@@ -137,7 +137,23 @@ async def home(c: Ctx) -> Screen:
 
 @screen("help")
 async def help_(c: Ctx) -> Screen:
-    return Screen(views.help_text(), [c.back("home", "🔙 بازگشت")])
+    pages = views.help_pages(c.services.ctx.balance)
+    rows = keyboards.grid([c.btn(label, "helpsec", key) for key, (label, _) in pages.items()], 2)
+    rows.append([c.btn("📖 همه‌ی دستورها", "helpsec", "all")])
+    rows.append(c.back("home"))
+    return Screen(views.help_hub(), rows)
+
+
+@screen("helpsec")
+async def help_section(c: Ctx) -> Screen:
+    from .commands import REGISTRY
+
+    if c.a == "all":
+        return Screen(views.command_help(REGISTRY, c.is_group), [c.back("help")])
+    pages = views.help_pages(c.services.ctx.balance)
+    if c.a not in pages:
+        raise GameError("این بخش راهنما پیدا نشد.")
+    return Screen(pages[c.a][1], [c.back("help")])
 
 
 @screen("daily")

@@ -405,3 +405,21 @@ async def test_back_buttons_are_called_back_not_menu(h, services):
         await h.panel(10, name)
         assert all("منو" not in t for t in h.labels()), name
         assert any("بازگشت" in t for t in h.labels()), name
+
+
+async def test_help_panel_has_a_page_for_every_topic(h, services):
+    from eternal_realm.bot import views
+
+    await reg(services)
+    await h.say(10, "راهنما", group=True)
+    topics = views.help_pages(services.ctx.balance)
+    labels = h.labels()
+    assert all(any(label in t for t in labels) for label, _ in topics.values())
+    for label, _ in topics.values():
+        await h.say(10, "راهنما", group=True)
+        await h.tap(10, label.split(" ", 1)[1], group=True)
+        assert len(h.session.last_text()) > 60
+        assert any("بازگشت" in t for t in h.labels())
+    await h.say(10, "راهنما", group=True)
+    await h.tap(10, "باس گروهی", group=True)
+    assert "باس" in h.session.last_text() and "احضار" in h.session.last_text()

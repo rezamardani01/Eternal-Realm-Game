@@ -45,6 +45,14 @@ class Balance:
     command_gap_seconds: float = 1.0
     #: pause between the steps of «در حال شکار...»-style animations (0 turns them off)
     animation_seconds: float = 1.0
+    boss_summon_gold: int = 200
+    boss_min_level: int = 3
+    boss_cooldown_seconds: int = 7200
+    boss_duration_seconds: int = 1800
+    boss_hit_energy: int = 5
+    boss_heavy_energy: int = 12
+    boss_hit_cooldown: int = 20
+    boss_heavy_cooldown: int = 60
     group_flood_window: int = 10
     group_flood_max: int = 25
 
