@@ -24,6 +24,8 @@ class Balance:
     xp_exponent: float = 1.4
     start_gold: int = 500
     start_energy_potions: int = 2
+    rest_energy: int = 25
+    rest_cooldown_seconds: int = 1800
     daily_gold: int = 300
     daily_gold_per_level: int = 20
     daily_streak_cap: int = 7

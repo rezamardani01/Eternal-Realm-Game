@@ -112,3 +112,18 @@ def test_race_perk_boosts_matching_activity():
         )
 
     assert total_ore(1.3) > total_ore(1.0) * 1.15
+
+
+async def test_rest_restores_energy_once_per_cooldown(h, services, db, clock):
+    p = await reg(services)
+    await h.say(10, "استراحت", group=True)
+    assert "پر است" in h.session.last_text()
+    async with db.transaction() as tx:
+        await services.players.spend_energy(tx, p.id, 60)
+    await h.say(10, "استراحت", group=True)
+    assert "۲۵" in h.session.last_text()
+    await h.say(10, "استراحت", group=True)
+    assert "دیگر" in h.session.last_text()
+    clock.advance(1801)  # natural regeneration also tops the bar up, so only part of 25 fits
+    await h.say(10, "استراحت", group=True)
+    assert "انرژی گرفت" in h.session.last_text()

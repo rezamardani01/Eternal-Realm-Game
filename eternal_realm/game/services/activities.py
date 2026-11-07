@@ -33,6 +33,19 @@ class ActivityService:
         self.players = players
         self.inventory = inventory
 
+    async def rest(self, player_id: int) -> int:
+        """Rest to regain some energy now. Returns the energy actually restored."""
+        balance, now = self.ctx.balance, self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            until = await inv_repo.cooldown_until(tx, player_id, "rest")
+            if until > now:
+                raise GameError(f"😴 تازه استراحت کرده‌ای؛ {duration(until - now)} دیگر دوباره می‌توانی.")
+            restored = await self.players.add_energy(tx, player_id, balance.rest_energy)
+            if restored <= 0:
+                raise GameError("انرژی‌ات پر است، استراحت لازم نداری!")
+            await inv_repo.set_cooldown(tx, player_id, "rest", now + balance.rest_cooldown_seconds)
+        return restored
+
     async def perform(self, player_id: int, activity_id: str) -> ActivityResult:
         activity = ACTIVITIES[activity_id]
         now = self.ctx.now()

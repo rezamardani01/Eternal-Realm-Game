@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ...game.data.activities import ACTIVITIES, Activity
+from ...shared.text import fa
 from .. import views
 from .context import CommandContext
 from .registry import Handler, command
@@ -24,3 +25,9 @@ for _activity in ACTIVITIES.values():
         category="🌍 فعالیت‌ها",
         toggleable=True,
     )(_make_handler(_activity))
+
+
+@command("rest", ["استراحت", "بخواب", "rest"], "بازیابی انرژی (هر ۳۰ دقیقه)", category="🌍 فعالیت‌ها", points=0)
+async def rest(ctx: CommandContext) -> None:
+    restored = await ctx.services.activities.rest(ctx.me.id)
+    await ctx.reply(f"😴 {ctx.me.name} کمی استراحت کرد و {fa(restored)} انرژی گرفت ⚡")
