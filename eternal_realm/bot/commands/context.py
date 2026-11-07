@@ -11,6 +11,7 @@ from baleropy.types import Message, User
 
 from ...game.models import Player
 from ...shared.errors import GameError
+from ...shared.text import headline
 from ..keyboards import Rows
 from ..services import Services
 from .registry import Command
@@ -46,6 +47,7 @@ class CommandContext:
         return self.player
 
     async def reply(self, text: str, buttons: Rows | None = None) -> Message:
+        text = headline(text)
         if buttons:
             return await self.message.reply(text, buttons=buttons)
         return await self.message.reply(text)
@@ -64,6 +66,7 @@ class CommandContext:
         await _edit(sent, final, buttons)
 
     async def say(self, text: str, buttons: Rows | None = None) -> Message:
+        text = headline(text)
         """Send to the chat without quoting the command."""
         if buttons:
             return await self.message.answer(text, buttons=buttons)
@@ -84,5 +87,6 @@ class CommandContext:
 
 
 async def _edit(message: Message, text: str, buttons: Rows | None = None) -> None:
+    text = headline(text)
     with contextlib.suppress(BaleAPIError):  # e.g. the message was deleted meanwhile
         await message.edit_text(text, buttons=buttons) if buttons else await message.edit_text(text)

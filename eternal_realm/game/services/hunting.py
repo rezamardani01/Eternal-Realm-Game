@@ -37,7 +37,7 @@ class HuntResult:
     hero_max_hp: int
     gold: int
     xp: int
-    items: list[tuple[str, int]]
+    items: list[tuple[str, int, str]]
     level_up: LevelUp | None
     player: Player
     highlights: list[str]
@@ -101,6 +101,6 @@ class HuntService:
         return HuntResult(
             monster=monster, won=won, rounds=min(battle.round, battle.max_rounds),
             hero_hp=max(0, hero.hp), hero_max_hp=hero.max_hp, gold=gold, xp=xp,
-            items=[(get_item(i).label, q) for i, q in items.items()], level_up=level_up,
+            items=[(get_item(i).label, q, i) for i, q in items.items()], level_up=level_up,
             player=self.players.with_energy(after), highlights=log[-3:], log=log,
         )

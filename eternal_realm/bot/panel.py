@@ -25,7 +25,7 @@ from ..game.models import Player
 from ..game.services.inventory import InventoryView, Piece
 from ..game.services.shop import shop_items
 from ..shared.errors import GameError
-from ..shared.text import bold, fa, to_int
+from ..shared.text import bold, fa, headline, to_int
 from . import keyboards, views
 from ..game.data.packs import PACKS
 from .callbacks import BuyCb, PanelCb
@@ -72,7 +72,7 @@ class Ctx:
         """A progress frame: replaces the panel text and removes the buttons (no double taps)."""
         if self.message is not None:
             with contextlib.suppress(BaleAPIError):
-                await self.message.edit_text(text)
+                await self.message.edit_text(headline(text))
             await self.services.ctx.pause()
 
     async def refresh(self) -> Player:
@@ -201,6 +201,25 @@ async def adventure(c: Ctx) -> Screen:
     return Screen(f"🗺️ {bold('ماجراجویی')}\n⚡ انرژی شما: {fa(p.energy)}\n\nکجا می‌روید؟", rows)
 
 
+NOTES = {
+    "gold": "🪙 سکه‌هایی که همین الان گرفتید. در فروشگاه خرجشان کنید.",
+    "xp": "⭐ تجربه‌ای که گرفتید. با پر شدنش یک سطح بالاتر می‌روید.",
+    "crystal": "💎 کریستال ناب؛ ارز کمیاب قلمرو.",
+    "energy": "⚡ انرژی باقی‌مانده. با گذر زمان، استراحت یا معجون پر می‌شود.",
+    "hp": "❤️ جانی که در پایان نبرد برایتان مانده بود. جان بعد از نبرد خودبه‌خود پر می‌شود.",
+}
+
+
+@screen("note")
+async def note(c: Ctx) -> Screen:
+    if c.a == "item":
+        item = get_item(c.b)
+        text = f"{item.label}: " + "، ".join(_describe(item))
+    else:
+        text = NOTES.get(c.a, "این هم از غنیمت‌های شما.")
+    return Screen(None, toast=text, alert=True)
+
+
 @screen("act")
 async def act(c: Ctx) -> Screen:
     services, p = c.services, c.player
@@ -209,13 +228,21 @@ async def act(c: Ctx) -> Screen:
         for frame in views.hunt_frames(p.name, hunted):
             await c.show(frame)
         text = views.hunt_result(p.name, hunted)
+        rows = keyboards.result_rows(
+            c.owner, gold=hunted.gold, xp=hunted.xp, items=hunted.items, energy=hunted.player.energy,
+            again="hunt", hp=(hunted.hero_hp, hunted.hero_max_hp),
+        )
+        return Screen(text, rows)
     else:
         done = await services.activities.perform(p.id, c.a)
         for frame in views.activity_frames(p.name, done.activity):
             await c.show(frame)
         text = views.activity_result(p.name, done)
-    rows = [[c.btn("🔁 دوباره", "act", c.a, style="success")], c.back("adv", "🔙 بازگشت")]
-    return Screen(text, rows)
+        rows = keyboards.result_rows(
+            c.owner, gold=done.rolled.gold, xp=done.rolled.xp, crystal=done.rolled.crystal, items=done.items,
+            energy=done.player.energy, again=c.a,
+        )
+        return Screen(text, rows)
 
 
 # --- backpack ---------------------------------------------------------------------------------
@@ -254,7 +281,7 @@ async def gear(c: Ctx) -> Screen:
         return Screen(text, [[c.btn("🛒 فروشگاه", "shop")], c.back("inv")])
     page = _int(c.a or "0", "صفحه")
     chunk, prev, nxt = _page(pieces, page)
-    rows = [[c.btn(f"{'✅ ' if p.slot else ''}{p.label}", "piece", p.id)] for p in chunk]
+    rows = [[c.btn(f"{p.label}{' ✅' if p.slot else ''}", "piece", p.id)] for p in chunk]
     if nav := _nav(c, "gear", page, prev, nxt):
         rows.append(nav)
     rows.append(c.back("inv"))
@@ -809,7 +836,7 @@ async def send(
     """Open a screen as a new message (private /start, or a group command)."""
     ctx = Ctx(services, player, player.platform_user_id, a, b, _is_group(message), message.chat.id, state)
     shown = await SCREENS[name](ctx)
-    text = shown.text or ""
+    text = headline(shown.text or "")
     if reply:
         return await message.reply(text, buttons=shown.rows or None)
     return await message.answer(text, buttons=shown.rows or None)
@@ -842,7 +869,7 @@ async def on_panel(
     shown = await handler(ctx)
     if shown.text is not None:
         with contextlib.suppress(BaleAPIError):  # "message is not modified" and similar
-            await message.edit_text(shown.text, buttons=shown.rows or None)
+            await message.edit_text(headline(shown.text), buttons=shown.rows or None)
     await query.answer((shown.toast or "")[:190] or None, show_alert=shown.alert)
 
 

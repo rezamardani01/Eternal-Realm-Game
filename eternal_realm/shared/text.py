@@ -28,6 +28,30 @@ def bold(value: object) -> str:
     return f"**{value}**"
 
 
+_BASE = "[↩↪⌀-⏿☀-➿⭐⭕\U0001f000-\U0001faff]"
+#: one emoji, including variation selectors and joined sequences such as 👨‍👩‍👧
+EMOJI = f"{_BASE}️?(?:‍{_BASE}️?)*"
+_LEAD = re.compile(rf"^((?:{EMOJI})+)\s+(.+)$", re.S)
+
+
+def emphasize(line: str) -> str:
+    """Bold a line, keeping a leading emoji outside the markers. Lines already bold stay as they are."""
+    if "**" in line or not line.strip():
+        return line
+    match = _LEAD.match(line.strip())
+    if match:
+        return f"{match.group(1)} **{match.group(2).strip()}**"
+    return f"**{line.strip()}**"
+
+
+def headline(text: str) -> str:
+    """Make the first line of a message a bold title (unless the text already has bold)."""
+    if "**" in text:
+        return text
+    first, sep, rest = text.partition("\n")
+    return emphasize(first) + sep + rest
+
+
 def to_int(text: str) -> int | None:
     """Parse ``'۱٬۲۰۰'`` / ``'1,200'`` / ``'1200'`` into an int (``None`` if it is not a number)."""
     cleaned = normalize(text).replace(",", "").replace("٬", "").replace("،", "")

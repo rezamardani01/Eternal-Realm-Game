@@ -82,7 +82,7 @@ async def test_fishing_command_in_group(h, services):
     await reg(services)
     await h.say(10, "ماهیگیری", group=True)
     text = h.session.last_text()
-    assert "قلاب" in text and "انرژی" in text
+    assert "قلاب" in text and any("انرژی" in t for t in h.labels())
     await h.say(10, "ماهی", group=True)  # alias, but still on cooldown
     assert "خسته" in h.session.last_text()
 
@@ -99,7 +99,7 @@ async def test_group_can_disable_activity(h, services):
 async def test_each_activity_command_works(h, services, word):
     await reg(services)
     await h.say(10, word, group=True)
-    assert "انرژی" in h.session.last_text()
+    assert any("انرژی" in t for t in h.labels())
 
 
 def test_race_perk_boosts_matching_activity():

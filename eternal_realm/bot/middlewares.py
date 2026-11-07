@@ -10,6 +10,7 @@ from baleropy.exceptions import BaleAPIError
 from baleropy.types import CallbackQuery, Message
 
 from ..shared.errors import GameError
+from ..shared.text import headline
 
 log = logging.getLogger("eternal_realm.bot")
 
@@ -42,6 +43,6 @@ class ErrorMiddleware(BaseMiddleware):
                     if event.message is not None:
                         await event.message.answer(text)
             elif isinstance(event, Message):
-                await event.reply(text)
+                await event.reply(headline(text))
         except BaleAPIError:
             log.warning("could not deliver an error message", exc_info=True)

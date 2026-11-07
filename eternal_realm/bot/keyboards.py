@@ -38,6 +38,29 @@ def panel_button(label: str, screen: str, owner: int, a: str = "", b: str = "") 
     return Button.inline(label, PanelCb(s=screen, a=a or None, b=b or None, o=owner))
 
 
+def result_rows(
+    owner: int, *, gold: int = 0, crystal: int = 0, xp: int = 0, items=(), energy: int, again: str,  # noqa: ANN001
+    hp: tuple[int, int] | None = None,
+) -> Rows:
+    """Glass buttons under an activity result: what you got, your energy, and what to do next."""
+    chips = []
+    if gold:
+        chips.append(panel_button(f"🪙 {fa(gold)} سکه", "note", owner, "gold"))
+    if xp:
+        chips.append(panel_button(f"⭐ {fa(xp)} تجربه", "note", owner, "xp"))
+    if crystal:
+        chips.append(panel_button(f"💎 {fa(crystal)} کریستال", "note", owner, "crystal"))
+    for label, qty, item_id in items:
+        chips.append(panel_button(f"{label} ×{fa(qty)}", "note", owner, "item", item_id))
+    rows = grid(chips, 2)
+    status = [panel_button(f"⚡ انرژی شما: {fa(energy)}", "note", owner, "energy")]
+    if hp is not None:
+        status.insert(0, panel_button(f"❤️ جان: {fa(hp[0])}/{fa(hp[1])}", "note", owner, "hp"))
+    rows.append(status)
+    rows.append([panel_button("🔁 دوباره", "act", owner, again), panel_button("🗺️ ماجراجویی", "adv", owner)])
+    return rows
+
+
 def duel_invite(duel_id: int) -> Rows:
     return [
         [

@@ -24,7 +24,7 @@ class ActivityResult:
     rolled: loot.Rolled
     level_up: LevelUp | None
     player: Player
-    items: list[tuple[str, int]]
+    items: list[tuple[str, int, str]]
 
 
 class ActivityService:
@@ -75,5 +75,5 @@ class ActivityService:
 
             after = await player_repo.get(tx, player_id)
             assert after is not None
-        items = [(get_item(i).label, q) for i, q in rolled.items.items()]
+        items = [(get_item(i).label, q, i) for i, q in rolled.items.items()]
         return ActivityResult(activity, rolled, level_up, self.players.with_energy(after), items)

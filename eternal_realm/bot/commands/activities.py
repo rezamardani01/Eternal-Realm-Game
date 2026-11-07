@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ...game.data.activities import ACTIVITIES, Activity
 from ...shared.text import fa
-from .. import views
+from .. import keyboards, views
 from .context import CommandContext
 from .registry import Handler, command
 
@@ -12,7 +12,13 @@ from .registry import Handler, command
 def _make_handler(activity: Activity) -> Handler:
     async def handler(ctx: CommandContext) -> None:
         result = await ctx.services.activities.perform(ctx.me.id, activity.id)
-        await ctx.play(views.activity_frames(ctx.me.name, result.activity), views.activity_result(ctx.me.name, result))
+        rows = keyboards.result_rows(
+            ctx.me.platform_user_id, gold=result.rolled.gold, xp=result.rolled.xp, crystal=result.rolled.crystal,
+            items=result.items, energy=result.player.energy, again=activity.id,
+        )
+        await ctx.play(
+            views.activity_frames(ctx.me.name, result.activity), views.activity_result(ctx.me.name, result), rows
+        )
 
     return handler
 
@@ -38,4 +44,8 @@ async def rest(ctx: CommandContext) -> None:
 )
 async def hunt(ctx: CommandContext) -> None:
     result = await ctx.services.hunting.hunt(ctx.me.id)
-    await ctx.play(views.hunt_frames(ctx.me.name, result), views.hunt_result(ctx.me.name, result))
+    rows = keyboards.result_rows(
+        ctx.me.platform_user_id, gold=result.gold, xp=result.xp, items=result.items,
+        energy=result.player.energy, again="hunt", hp=(result.hero_hp, result.hero_max_hp),
+    )
+    await ctx.play(views.hunt_frames(ctx.me.name, result), views.hunt_result(ctx.me.name, result), rows)

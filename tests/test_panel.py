@@ -282,7 +282,7 @@ async def test_adventure_buttons(h, services):
     await reg(services)
     await h.panel(10, "adv")
     await h.tap(10, "ماهیگیری")
-    assert "انرژی" in h.session.last_text()
+    assert any("انرژی شما" in t for t in h.labels())
     assert any("دوباره" in t for t in h.labels())
 
 
@@ -380,7 +380,7 @@ async def test_fishing_shows_progress_then_result(h, services):
     await reg(services)
     await h.say(10, "ماهیگیری", group=True)
     assert h.session.sent("sendMessage") and h.session.sent("editMessageText")
-    assert "انرژی" in h.session.last_text()
+    assert any("انرژی شما" in t for t in h.labels())
 
 
 async def test_declining_the_purchase_changes_nothing(h, services, db):

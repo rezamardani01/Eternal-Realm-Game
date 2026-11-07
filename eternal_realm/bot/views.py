@@ -11,7 +11,7 @@ from ..game.data.classes import CLASSES
 from ..game.data.races import RACES, Race
 from ..game.data.stats import Stats
 from ..game.models import Player
-from ..shared.text import bar, bold, duration, fa
+from ..shared.text import bar, bold, duration, emphasize, fa
 
 LINE = "━━━━━━━━━━━━"
 DIV = "┈┈┈┈┈┈┈┈┈┈"
@@ -157,20 +157,36 @@ def level_up_text(level: int) -> str:
     return f"🎉 {bold('سطح تازه')}! به سطح {bold(fa(level))} رسیدید و قدرتی تازه بیدار شد."
 
 
+WORKING = {
+    "fishing": "🌊 قلاب در آب است... لطفاً صبر کنید",
+    "mining": "⛏️ ضربه به ضربه جلو می‌روید... لطفاً صبر کنید",
+    "herb": "🌿 لابه‌لای برگ‌ها می‌گردید... لطفاً صبر کنید",
+    "search": "🔍 زیر هر سنگ را نگاه می‌کنید... لطفاً صبر کنید",
+}
+
+
+def _activity_head(name: str, activity) -> str:  # noqa: ANN001 - Activity
+    story = activity.intro.format(name=name).split("\n")
+    story[0] = story[0].removeprefix(activity.emoji).lstrip()
+    return f"{activity.emoji} {bold(activity.title)}\n" + "\n".join(story)
+
+
 def activity_frames(name: str, activity) -> list[str]:  # noqa: ANN001 - Activity
-    """What the player sees while the activity is «in progress»."""
-    return [activity.intro.format(name=name)]
+    """What the player sees while the activity is «in progress»: the story, then a waiting line."""
+    head = _activity_head(name, activity)
+    return [head, f"{head}\n\n{WORKING.get(activity.id, '⏳ در حال انجام... لطفاً صبر کنید')}"]
 
 
 def activity_result(name: str, result) -> str:  # noqa: ANN001 - ActivityResult
-    rolled, player = result.rolled, result.player
-    lines = [result.activity.intro.format(name=name), "", rolled.outcome.text.format(name=name), "", DIV]
-    gains = _gains(rolled.gold, rolled.crystal, rolled.xp)
-    if gains:
-        lines.append(gains)
-    if result.items:
-        lines.append("📦 " + "، ".join(f"{label} ×{fa(qty)}" for label, qty in result.items))
-    lines.append(f"⚡ انرژی: {fa(player.energy)}")
+    """Story and outcome; the numbers (coins, xp, items, energy) are glass buttons below."""
+    lines = [
+        _activity_head(name, result.activity),
+        "",
+        emphasize(result.rolled.outcome.text.format(name=name)),
+        "",
+        DIV,
+        "🎁 چیزهایی که پیدا کردید یا به دست آوردید 👇",
+    ]
     if result.level_up:
         lines += ["", level_up_text(result.level_up.new_level)]
     return "\n".join(lines)
@@ -197,13 +213,7 @@ def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
             f"💔 {bold('این بار هیولا قوی‌تر بود')} و عقب‌نشینی کردید. چیزی از دست ندادید؛ "
             "قوی‌تر شوید و دوباره بیایید!"
         )
-    lines += ["", DIV, f"❤️ جان باقی‌مانده: {fa(r.hero_hp)} / {fa(r.hero_max_hp)}"]
-    gains = _gains(r.gold, 0, r.xp)
-    if gains:
-        lines.append(gains)
-    if r.items:
-        lines.append("📦 " + "، ".join(f"{label} ×{fa(q)}" for label, q in r.items))
-    lines.append(f"⚡ انرژی: {fa(r.player.energy)}")
+    lines += ["", DIV, "🎁 چیزهایی که به دست آوردید 👇"]
     if r.level_up:
         lines += ["", level_up_text(r.level_up.new_level)]
     return "\n".join(lines)
@@ -241,7 +251,7 @@ def ranking(board) -> str:  # noqa: ANN001 - Board
     lines = [board.title, LINE]
     for index, entry in enumerate(board.entries):
         place = medals[index] if index < 3 else f"{fa(index + 1)}."
-        lines.append(f"{place} {entry.badge} {entry.name} · سطح {fa(entry.level)} · {fa(entry.value)} {board.unit}")
+        lines.append(f"{place} {entry.name} {entry.badge} · سطح {fa(entry.level)} · {fa(entry.value)} {board.unit}")
     if board.my_position:
         lines += [LINE, f"📍 جایگاه شما: {bold(fa(board.my_position))}"]
     return "\n".join(lines)
