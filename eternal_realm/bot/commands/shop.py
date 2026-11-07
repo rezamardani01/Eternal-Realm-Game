@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...game.data.items import find_item
+from ...game.data.items import Kind, find_item
 from ...shared.errors import GameError
 from ...shared.text import fa, to_int
 from .. import keyboards, views
@@ -40,6 +40,11 @@ async def shop(ctx: CommandContext) -> None:
 async def buy(ctx: CommandContext) -> None:
     name, qty = _split_qty(ctx.args)
     item = _item(name)
+    if item.kind is Kind.CHEST:
+        currency, total = await ctx.services.chests.buy(ctx.me, item.id, qty)
+        icon = "🪙" if currency == "gold" else "💎"
+        await ctx.reply(f"✅ {item.label} ×{fa(qty)} خریدی؛ {fa(total)} {icon} پرداخت شد.\nبرای باز کردن: «باز کردن {item.name}»")
+        return
     paid = await ctx.services.shop.buy(ctx.me, item, qty)
     await ctx.reply(f"✅ {item.label} ×{fa(qty)} خریدی؛ {fa(paid)} 🪙 پرداخت شد.")
 

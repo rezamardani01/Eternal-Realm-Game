@@ -175,6 +175,49 @@ def ranking(board) -> str:  # noqa: ANN001 - Board
     return "\n".join(lines)
 
 
+def chest_list(owned: dict[str, int]) -> str:
+    from ..game.data.chests import CHESTS
+    from ..game.data.items import get_item
+
+    lines = ["🎁 صندوقچه‌ها", LINE]
+    for chest in CHESTS.values():
+        item = get_item(chest.item_id)
+        icon = "🪙" if chest.price and chest.price[0] == "gold" else "💎"
+        price = f"{fa(chest.price[1])} {icon}" if chest.price else "—"
+        lines.append(f"{item.label} — قیمت: {price} — داری: {fa(owned.get(item.id, 0))}")
+    lines += [LINE, "خرید: «خرید صندوقچه جادویی»", "باز کردن: «باز کردن صندوقچه جادویی»", "شانس محتویات: «شانس صندوقچه جادویی»"]
+    return "\n".join(lines)
+
+
+def chest_odds(item, odds) -> str:  # noqa: ANN001
+    from ..game.data.items import get_item
+
+    lines = [f"🎲 شانس محتویات {item.label}", LINE]
+    for prize, share in sorted(odds, key=lambda x: -x[1]):
+        parts = []
+        if prize.gold[1]:
+            parts.append(f"🪙 {fa(prize.gold[0])} تا {fa(prize.gold[1])} سکه")
+        if prize.crystal[1]:
+            parts.append(f"💎 {fa(prize.crystal[0])} تا {fa(prize.crystal[1])} کریستال")
+        if prize.item_id:
+            qty = f" ×{fa(prize.qty[0])}" + (f" تا {fa(prize.qty[1])}" if prize.qty[1] > prize.qty[0] else "")
+            parts.append(get_item(prize.item_id).label + qty)
+        lines.append(f"{share * 100:.1f}٪  ".translate(str.maketrans("0123456789.", "۰۱۲۳۴۵۶۷۸۹٫")) + " + ".join(parts))
+    lines += [LINE, "این درصدها همان شانس واقعی ربات است."]
+    return "\n".join(lines)
+
+
+def chest_opened(name: str, opened) -> str:  # noqa: ANN001 - Opened
+    got = []
+    if opened.gold:
+        got.append(f"🪙 {fa(opened.gold)} سکه")
+    if opened.crystal:
+        got.append(f"💎 {fa(opened.crystal)} کریستال")
+    if opened.item:
+        got.append(f"{opened.item.label} ×{fa(opened.qty)} ({opened.item.rarity_label})")
+    return f"🎁 {name} {opened.chest.label} را باز کرد...\n✨ " + " + ".join(got)
+
+
 def duel_invite(challenger, target, seconds: int) -> str:  # noqa: ANN001 - Player
     return (
         "⚔️ درخواست مبارزه!\n\n"
