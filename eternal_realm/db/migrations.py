@@ -379,6 +379,10 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE gear ADD COLUMN bond_uses INTEGER NOT NULL DEFAULT 0;
     """,
+    # 25: the last path tier a player was told about
+    """
+    ALTER TABLE season_progress ADD COLUMN notified INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

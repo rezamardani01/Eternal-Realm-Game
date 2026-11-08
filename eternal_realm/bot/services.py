@@ -96,7 +96,7 @@ class Services:
             pets=PetService(ctx),
             dungeon=DungeonService(ctx, players, inventory, characters),
             crafting=CraftingService(ctx, inventory),
-            season=SeasonService(ctx, inventory),
+            season=SeasonService(ctx, inventory, cards),
             offers=offers,
             missions=MissionService(ctx, offers),
             characters=characters,

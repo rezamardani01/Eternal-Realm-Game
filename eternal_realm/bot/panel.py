@@ -117,6 +117,12 @@ def _int(text: str, what: str = "شماره") -> int:
 
 
 # --- home -------------------------------------------------------------------------------------
+@screen("noop")
+async def noop(c: Ctx) -> Screen:
+    """A button that only decorates or explains: nothing happens when it is tapped."""
+    return Screen(None)
+
+
 @screen("home")
 async def home(c: Ctx) -> Screen:
     p = c.player
@@ -234,6 +240,7 @@ async def profile(c: Ctx) -> Screen:
         [stat("luck", fa(stats.luck))],
     ]
     if target is me:
+        rows.append([c.btn("▫️▫️▫️▫️▫️▫️▫️", "noop")])
         rows.append([c.btn("🧰 تجهیزات", "gear"), c.btn("🎒 کوله‌پشتی", "inv")])
         rows.append([c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")])
         rows.append([c.btn("📅 مأموریت‌های امروز", "missions")])

@@ -8,13 +8,15 @@ from ...db.repos import wallet
 from ...shared.errors import GameError
 from ..data.season import TIERS, PathState, TierReward, reward_for
 from ..models import Player
+from .cards import CardService
 from .inventory import InventoryService
 
 
 class SeasonService:
-    def __init__(self, ctx: AppContext, inventory: InventoryService) -> None:
+    def __init__(self, ctx: AppContext, inventory: InventoryService, cards: CardService) -> None:
         self.ctx = ctx
         self.inventory = inventory
+        self.cards = cards
 
     async def state(self, player: Player) -> PathState:
         async with self.ctx.db.read() as tx:
@@ -48,6 +50,8 @@ class SeasonService:
             )
         for item_id, qty in reward.items:
             await self.inventory.grant(tx, player_id, item_id, qty)
+        for card_id in reward.cards:
+            await self.cards.grant(tx, player_id, card_id)
         if reward.title:
             await tx.execute("UPDATE players SET title = ? WHERE id = ?", (reward.title, player_id))
         return reward

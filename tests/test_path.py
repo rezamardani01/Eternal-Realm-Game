@@ -108,5 +108,75 @@ async def test_glass_flow(h, services, db):
     await h.tap(6, "دریافت همه", group=True)
     assert (await services.season.state(p)).claimed
     await h.tap(6, "مراحل و جایزه‌ها", group=True)
-    assert "مراحل مسیر قهرمانی" in h.session.sent("editMessageText")[-1]["text"]
+    assert "مسیر قهرمانی" in h.session.sent("editMessageText")[-1]["text"]
     assert POINTS_PER_TIER == 100
+
+
+def test_tier_one_matches_the_sketch_and_cards_come_with_golden_tiers():
+    assert reward_for("free", 1).gold == 23 and reward_for("ticket", 1).gold == 110
+    golden_cards = [t for t in range(1, TIERS + 1) if reward_for("ticket", t).cards]
+    assert golden_cards and all(t % 4 == 0 for t in golden_cards)
+    assert any("کارت" in line for line in reward_for("ticket", 4).lines())
+
+
+async def test_tier_panel_has_two_columns_and_navigation(h, services, db):
+    p = await hero(services, db, 7, "کیان")
+    await add(db, services, p, "boss", 8)  # 240 points = tier 2
+    await h.panel(7, "pathtiers", "4")
+    rows = h.session.last_markup_rows()
+    assert [b["text"] for b in rows[0]] == ["🆓 رایگان", "👑 طلایی"]
+    assert "سکه" in rows[1][0]["text"] and "سکه" in rows[1][1]["text"] and len(rows[1]) == 2
+    flat = [b["text"] for row in rows for b in row]
+    assert "مرحله بعدی ›" in flat and "‹ مرحله قبلی" in flat and any("کارت" in t for t in flat)
+    await h.tap(7, "مرحله بعدی")
+    assert "مرحله‌ی ۵ از ۱۰۰" in h.session.last_text()
+    # a button for a tier you have not reached explains instead of paying
+    await h.tap(7, "سکه")
+    assert (await services.season.state(p)).claimed == set()
+
+
+async def test_tapping_a_reward_pays_the_free_track_and_marks_it(h, services, db):
+    p = await hero(services, db, 8, "مینا")
+    await add(db, services, p, "boss", 4)  # tier 1
+    gold = (await services.players.require(8)).gold
+    await h.panel(8, "pathtiers", "1")
+    await h.click(8, h.session.last_markup_rows()[1][0]["callback_data"])
+    assert (await services.players.require(8)).gold == gold + 23
+    assert "✔" in h.session.last_markup_rows()[1][0]["text"]
+    await h.click(8, h.session.last_markup_rows()[1][1]["callback_data"])  # the golden one needs the ticket
+    assert (await services.players.require(8)).gold == gold + 23
+
+
+async def test_a_golden_card_reward_lands_in_the_album(services, db):
+    p = await hero(services, db, 9, "رها")
+    async with db.transaction() as tx:
+        await repo.grant_ticket(tx, p.id, services.ctx.now())
+    await add(db, services, p, "boss", 14)  # 420 points = tier 4
+    reward = await services.season.claim(p, "ticket", 4)
+    assert reward.cards and (await services.cards.owned(p.id)).get(reward.cards[0]) == 1
+
+
+async def test_new_tier_message_is_sent_once_per_tier(h, services, db):
+    from eternal_realm.bot.path_panel import notify_new_tiers
+
+    p = await hero(services, db, 10, "پویا")
+    assert await notify_new_tiers(h.bot, services) == 0
+    await add(db, services, p, "boss", 8)  # tier 2
+    assert await notify_new_tiers(h.bot, services) == 1
+    sent = h.session.sent("sendMessage")[-1]
+    assert str(sent["chat_id"]) == "10" and "*۲*" in sent["text"]
+    labels = [b["text"] for row in sent["reply_markup"]["inline_keyboard"] for b in row]
+    assert any("دریافت جوایز" in t for t in labels)
+    assert await notify_new_tiers(h.bot, services) == 0
+    await add(db, services, p, "boss", 4)
+    assert await notify_new_tiers(h.bot, services) == 1
+
+
+async def test_profile_has_a_decorative_separator(h, services, db):
+    await hero(services, db, 11, "نگار")
+    await h.panel(11, "profile")
+    labels = [b["text"] for row in h.session.last_markup_rows() for b in row]
+    at = labels.index("▫️▫️▫️▫️▫️▫️▫️")
+    assert "شانس" in labels[at - 1] and "تجهیزات" in labels[at + 1]
+    await h.tap(11, "▫️▫️")
+    assert h.session.last_text().startswith("👤")  # tapping it changes nothing
