@@ -26,6 +26,7 @@ def prune(folder: Path, keep: int = KEEP) -> list[Path]:
 
 async def make_backup(db: Database, folder: Path = Path("backups")) -> Path:
     target = folder / f"game-{time.strftime('%Y%m%d-%H%M%S')}.db"
+    target.unlink(missing_ok=True)  # two backups within one second replace each other
     path = await db.backup(target)
     prune(folder)
     return path

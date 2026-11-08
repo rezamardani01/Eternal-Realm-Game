@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from ...context import AppContext
@@ -30,6 +31,8 @@ class AdminService:
     def __init__(self, ctx: AppContext, inventory: InventoryService) -> None:
         self.ctx = ctx
         self.inventory = inventory
+        #: bumped whenever maintenance mode changes, so the bot notices at once
+        self.maintenance_version = 0
 
     async def _log(self, tx, admin_id: int, action: str, detail: str) -> None:  # noqa: ANN001
         await tx.execute(
@@ -106,6 +109,56 @@ class AdminService:
             await player_repo.set_energy(tx, player.id, progression.max_energy(level, self.ctx.balance), self.ctx.now())
             await self._log(tx, admin_id, "set_level", f"{player.name} -> {level}")
             return player
+
+    async def rename_id(self, admin_id: int, player_id: int, new_name: str) -> Player:
+        """Give a hero a new (already validated and free) name."""
+        async with self.ctx.db.transaction() as tx:
+            player = await self._by_id(tx, player_id)
+            await tx.execute("UPDATE players SET display_name = ? WHERE id = ?", (new_name, player.id))
+            await self._log(tx, admin_id, "rename", f"{player.name} -> {new_name}")
+            return player
+
+    async def give_all(self, admin_id: int, *, gold: int = 0, crystal: int = 0, vip_days: int = 0) -> int:
+        """A gift for every player who is not banned (an event prize, an apology...). Returns how many got it."""
+        if not (0 <= gold <= 1_000_000 and 0 <= crystal <= 10_000 and 0 <= vip_days <= 365) or not (gold or crystal or vip_days):
+            raise GameError("مقدار هدیه درست نیست (سکه تا ۱٬۰۰۰٬۰۰۰، کریستال تا ۱۰٬۰۰۰، VIP تا ۳۶۵ روز).")
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            rows = await tx.fetchall("SELECT id, vip_until FROM players WHERE banned = 0")
+            for row in rows:
+                if gold or crystal:
+                    await wallet.apply(tx, row["id"], gold=gold, crystal=crystal, reason="admin_gift", now=now)
+                if vip_days:
+                    base = max(row["vip_until"], now)
+                    await tx.execute("UPDATE players SET vip_until = ? WHERE id = ?", (base + vip_days * 86400, row["id"]))
+            await self._log(tx, admin_id, "give_all", f"{len(rows)} players gold={gold} crystal={crystal} vip_days={vip_days}")
+            return len(rows)
+
+    async def player_ids(self) -> list[int]:
+        """Bale ids of everybody who may be messaged in private."""
+        async with self.ctx.db.read() as tx:
+            rows = await tx.fetchall("SELECT platform_user_id FROM players WHERE banned = 0")
+        return [int(r["platform_user_id"]) for r in rows]
+
+    # --- maintenance mode: only managers can play while it is on -------------------------------------------------
+    async def maintenance(self) -> tuple[bool, str]:
+        async with self.ctx.db.read() as tx:
+            row = await tx.fetchone("SELECT value FROM app_settings WHERE key = 'maintenance'")
+        if row is None:
+            return False, ""
+        data = json.loads(row["value"])
+        return bool(data.get("enabled")), str(data.get("text", ""))
+
+    async def set_maintenance(self, admin_id: int, enabled: bool, text: str | None = None) -> None:
+        _, old = await self.maintenance()
+        payload = json.dumps({"enabled": enabled, "text": old if text is None else text[:300]}, ensure_ascii=False)
+        async with self.ctx.db.transaction() as tx:
+            await tx.execute(
+                "INSERT INTO app_settings (key, value) VALUES ('maintenance', ?)"
+                " ON CONFLICT (key) DO UPDATE SET value = excluded.value", (payload,),
+            )
+            await self._log(tx, admin_id, "maintenance", f"enabled={enabled}")
+        self.maintenance_version += 1
 
     async def group_ids(self) -> list[int]:
         async with self.ctx.db.read() as tx:

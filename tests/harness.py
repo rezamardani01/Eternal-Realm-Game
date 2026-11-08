@@ -27,7 +27,7 @@ class FakeSession(BaseSession):
 
     async def _send(self, bot: Any, method: Any) -> tuple[int, bytes]:
         name = method.__api_method__
-        payload = json.loads(method.model_dump_json(exclude_none=True, by_alias=True))
+        payload = json.loads(method.model_dump_json(exclude_none=True, by_alias=True, exclude={"document"} if name == "sendDocument" else None))
         self.calls.append((name, payload))
         if name == "getMe":
             result: Any = {"id": 1, "is_bot": True, "first_name": "bot", "username": "er_bot"}

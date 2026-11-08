@@ -7,12 +7,14 @@ Anything that needs typing (a name to search, an amount, a message) uses a one-s
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+from dataclasses import replace
 
-from baleropy import F, Router
+from baleropy import Router
 from baleropy.exceptions import BaleAPIError, SkipHandler
 from baleropy.fsm import FSMContext, State, StatesGroup
-from baleropy.types import Message
+from baleropy.types import FSInputFile, Message
 
 from ..db.repos import players as player_repo
 from ..game.data.items import find_item
@@ -24,6 +26,7 @@ from ..shared.text import bold, fa, headline, to_int
 from . import events as events_ui
 from . import keyboards
 from .commands.owner import OWNER_COMMANDS
+from .maintenance import make_backup
 from .commands.registry import REGISTRY
 from .panel import Ctx, Screen, _nav, screen
 from .services import Services
@@ -43,6 +46,12 @@ class AdminFlow(StatesGroup):
 
 #: the broadcast text waiting for the admin's «yes» (the panel clears the prompt state on every tap)
 _drafts: dict[int, str] = {}
+#: the message the admin wants to forward to every group: (chat id, message id)
+_forwards: dict[int, tuple[int, int]] = {}
+#: the text for the private-message broadcast to all players
+_dm_drafts: dict[int, str] = {}
+#: the gift for every player waiting for the admin's «yes»
+_gifts: dict[int, dict[str, int]] = {}
 
 
 def fmt(ts: int | None) -> str:
@@ -108,9 +117,10 @@ async def home(c: Ctx) -> Screen:
     rows = [
         [c.btn("👥 بازیکنان", "admp"), c.btn("🏢 گروه‌ها", "admg")],
         [c.btn("🏯 خاندان‌ها", "admcl"), c.btn("💰 فروش", "admo")],
-        [c.btn("📣 پیام همگانی", "admbc"), c.btn("🔒 عضویت اجباری", "admm")],
-        [c.btn("📜 گزارش مدیریت", "adma"), c.btn("🛠️ دستورات مالک", "admc")],
-        [c.btn("🔄 بروزرسانی", "adm", style="primary")],
+        [c.btn("📣 همگانی", "admbc"), c.btn("🎁 هدیه‌ی همگانی", "admgf")],
+        [c.btn("🔒 عضویت اجباری", "admm"), c.btn("🚧 حالت تعمیر", "admmn")],
+        [c.btn("💾 پشتیبان‌گیری", "admbk"), c.btn("📜 گزارش مدیریت", "adma")],
+        [c.btn("🛠️ دستورات مالک", "admc"), c.btn("🔄 بروزرسانی", "adm", style="primary")],
     ]
     return Screen(text, rows)
 
@@ -201,6 +211,7 @@ async def _card(c: Ctx, pid: int, note: str = "") -> Screen:
         [c.btn("💠 VIP", "admask", "vip", p.id), c.btn("🎟️ بلیط طلایی", "admtk", p.id)],
         [c.btn("🐱 حیوان", "admpet", p.id), c.btn("🏷️ عنوان", "admask", "title", p.id)],
         [c.btn("⚡ انرژی پر", "admen", p.id), c.btn("⏱️ ریست زمان‌ها", "admcd", p.id)],
+        [c.btn("✉️ پیام به او", "admask", "pmsg", p.id), c.btn("✏️ تغییر نام", "admask", "rename", p.id)],
         [c.btn("✅ رفع مسدودی" if p.banned else "🚫 مسدود کردن", "admban", p.id, style="success" if p.banned else "danger")],
         _back(c, "admp"),
     ]
@@ -286,10 +297,20 @@ PROMPTS = {
     "title": ("🏷️ عنوان", "عنوان تازه را بنویسید (برای پاک کردن بنویسید: -)."),
     "gmsg": ("✉️ پیام به گروه", "متن پیام را بنویسید (۳ تا ۱۰۰۰ حرف)."),
     "bcast": ("📣 پیام همگانی", "متن پیام را بنویسید؛ بعد از دیدن پیش‌نمایش تأیید می‌کنید (۳ تا ۱۰۰۰ حرف)."),
+    "fwd": ("📩 فوروارد همگانی", "یک پیام را برای من فوروارد کنید یا بفرستید (متن، عکس، فایل، هر چیزی)؛ همان پیام برای همه‌ی گروه‌های فعال فرستاده می‌شود."),
+    "dm": ("📨 پیام به همه‌ی بازیکنان", "متن پیام را بنویسید؛ در پیوی همه‌ی بازیکنان فرستاده می‌شود (۳ تا ۱۰۰۰ حرف)."),
+    "gift_gold": ("🪙 سکه برای همه", "تعداد سکه برای هر بازیکن را بنویسید (تا ۱٬۰۰۰٬۰۰۰).\nمثال: 500"),
+    "gift_crystal": ("💎 کریستال برای همه", "تعداد کریستال برای هر بازیکن را بنویسید (تا ۱۰٬۰۰۰).\nمثال: 20"),
+    "gift_vip": ("💠 VIP برای همه", "تعداد روز VIP برای هر بازیکن را بنویسید (تا ۳۶۵).\nمثال: 7"),
+    "mntext": ("🚧 متن حالت تعمیر", "متنی را بنویسید که در زمان تعمیر به بازیکنان نشان داده می‌شود (تا ۳۰۰ حرف)."),
+    "pmsg": ("✉️ پیام به بازیکن", "متن پیام را بنویسید؛ در پیوی همین بازیکن فرستاده می‌شود."),
+    "rename": ("✏️ تغییر نام قهرمان", "نام تازه را بنویسید (۲ تا ۱۶ حرف، بدون تکراری بودن)."),
     "chan": ("➕ افزودن کانال", "شناسه‌ی کانال را بنویسید و در صورت دلخواه عنوان.\nمثال: @mychannel کانال رسمی"),
 }
 _BACK_OF = {
     "find": ("admp", ""), "gmsg": ("admg", ""), "bcast": ("admbc", ""), "chan": ("admm", ""),
+    "fwd": ("admbc", ""), "dm": ("admbc", ""), "gift_gold": ("admgf", ""), "gift_crystal": ("admgf", ""),
+    "gift_vip": ("admgf", ""), "mntext": ("admmn", ""),
 }
 
 
@@ -321,13 +342,13 @@ async def _result(message: Message, services: Services, text: str, rows: list) -
     await message.answer(headline(text), buttons=rows)
 
 
-@router.message(AdminFlow.waiting, F.text)
+@router.message(AdminFlow.waiting)
 async def got_input(message: Message, state: FSMContext, services: Services) -> None:
     user = message.from_user
     assert user is not None
-    text = (message.text or "").strip()
+    text = (message.text or message.caption or "").strip()
     is_group = str(getattr(message.chat.type, "value", message.chat.type)) != "private"
-    if is_group and REGISTRY.resolve(text) is not None:
+    if is_group and message.text and REGISTRY.resolve(text) is not None:
         raise SkipHandler  # a game word, not the answer
     settings = services.ctx.settings
     if not settings.is_admin(user.id):
@@ -344,6 +365,8 @@ async def got_input(message: Message, state: FSMContext, services: Services) -> 
         await _result(message, services, note, rows if rows is not None else (back_card or [[keyboards.panel_button("🛠️ پنل مدیریت", "adm", uid)]]))
 
     pid = int(target) if target.lstrip("-").isdigit() and op not in ("gmsg",) else 0
+    if op != "fwd" and not message.text:
+        raise GameError("برای این کار باید متن بنویسید.")
     if op == "find":
         await _search(message, services, uid, text)
     elif op in ("gold", "crystal"):
@@ -397,6 +420,60 @@ async def got_input(message: Message, state: FSMContext, services: Services) -> 
             f"📣 {bold('پیش‌نمایش پیام همگانی')}\n\n{text}\n\n— — —\nبه {fa(len(ids))} گروه فعال فرستاده می‌شود. تأیید می‌کنید؟",
             [[keyboards.panel_button("✅ ارسال به همه", "admbcok", uid), keyboards.panel_button("❌ انصراف", "admbc", uid)]],
         )
+    elif op == "fwd":
+        _forwards[uid] = (message.chat.id, message.message_id)
+        ids = await admin.group_ids()
+        await done(
+            f"📩 {bold('فوروارد همگانی')}\n\nهمین پیام به {fa(len(ids))} گروه فعال می‌رسد.\n"
+            "«فوروارد» با نام فرستنده می‌رود و «کپی» بدون نام فرستنده. کدام؟",
+            [
+                [keyboards.panel_button("↪️ فوروارد", "admfwok", uid, "fwd"), keyboards.panel_button("📋 کپی بدون برچسب", "admfwok", uid, "copy")],
+                [keyboards.panel_button("❌ انصراف", "admbc", uid)],
+            ],
+        )
+    elif op == "dm":
+        if not 3 <= len(text) <= 1000:
+            raise GameError("متن پیام باید بین ۳ تا ۱۰۰۰ حرف باشد.")
+        _dm_drafts[uid] = text
+        count = len(await admin.player_ids())
+        await done(
+            f"📨 {bold('پیش‌نمایش پیام به بازیکنان')}\n\n{text}\n\n— — —\nدر پیوی {fa(count)} بازیکن فرستاده می‌شود. تأیید می‌کنید؟",
+            [[keyboards.panel_button("✅ ارسال به همه", "admdmok", uid), keyboards.panel_button("❌ انصراف", "admbc", uid)]],
+        )
+    elif op in ("gift_gold", "gift_crystal", "gift_vip"):
+        amount = to_int(text)
+        if amount is None or amount <= 0:
+            raise GameError("یک عدد درست بنویسید؛ مثلاً 500")
+        key = {"gift_gold": "gold", "gift_crystal": "crystal", "gift_vip": "vip_days"}[op]
+        limit = {"gold": 1_000_000, "crystal": 10_000, "vip_days": 365}[key]
+        if amount > limit:
+            raise GameError(f"حداکثر {fa(limit)} است.")
+        _gifts[uid] = {key: amount}
+        count = len(await admin.player_ids())
+        what = {"gold": f"🪙 {fa(amount)} سکه", "crystal": f"💎 {fa(amount)} کریستال", "vip_days": f"💠 {fa(amount)} روز VIP"}[key]
+        await done(
+            f"🎁 {bold('تأیید هدیه‌ی همگانی')}\n\nبه هر یک از {fa(count)} بازیکن {what} داده می‌شود.\nاین کار برگشت ندارد. مطمئنید؟",
+            [[keyboards.panel_button("✅ بله، بده", "admgfok", uid), keyboards.panel_button("❌ انصراف", "admgf", uid)]],
+        )
+    elif op == "mntext":
+        enabled, _ = await admin.maintenance()
+        await admin.set_maintenance(uid, enabled, text)
+        await done("✅ متن حالت تعمیر ذخیره شد.", [[keyboards.panel_button("🚧 حالت تعمیر", "admmn", uid)]])
+    elif op == "pmsg":
+        async with services.ctx.db.read() as tx:
+            player = await player_repo.get(tx, pid)
+        if player is None:
+            raise GameError("این بازیکن دیگر وجود ندارد.")
+        try:
+            await message.bot.send_message(player.platform_user_id, headline(f"✉️ {bold('پیام از مدیریت قلمرو')}\n\n{text}"))
+        except BaleAPIError as exc:
+            raise GameError("پیام نرسید؛ شاید بازیکن ربات را بسته است.") from exc
+        await admin.log_action(uid, "player_message", player.name)
+        await done(f"✅ پیام برای {bold(player.name)} رسید.")
+    elif op == "rename":
+        name = await services.players.name_available(text)
+        player = await admin.rename_id(uid, pid, name)
+        await done(f"✅ نام {bold(player.name)} شد {bold(name)}.")
     elif op == "chan":
         chat, _, title = text.partition(" ")
         enabled, channels = await services.membership.settings()
@@ -459,6 +536,7 @@ async def _group_card(c: Ctx, chat_id: int, note: str = "") -> Screen:
     rows = [
         [c.btn("🔴 غیرفعال کردن" if on else "🟢 فعال کردن", "admgt", chat_id, style="danger" if on else "success")],
         [c.btn("✉️ پیام به گروه", "admask", "gmsg", chat_id), c.btn("🎲 ساخت رویداد", "admge", chat_id)],
+        [c.btn("🚪 ترک گروه", "admgl", chat_id, style="danger")],
         _back(c, "admg"),
     ]
     return Screen("\n".join(lines), rows)
@@ -480,6 +558,30 @@ async def group_toggle(c: Ctx) -> Screen:
         raise GameError("گروه پیدا نشد.")
     await c.services.admin.set_group_enabled(c.owner, chat_id, not g["enabled"])
     return await _group_card(c, chat_id, "🔴 گروه غیرفعال شد" if g["enabled"] else "🟢 گروه فعال شد")
+
+
+@screen("admgl")
+async def group_leave_ask(c: Ctx) -> Screen:
+    _guard(c)
+    chat_id = _chat_id(c.a)
+    text = f"🚪 {bold('ترک گروه')}\n\nربات از این گروه بیرون می‌رود و گروه غیرفعال می‌شود. مطمئنید؟"
+    return Screen(text, [[c.btn("✅ بله، ترک کن", "admglok", chat_id, style="danger"), c.btn("↩️ نه", "admgc", chat_id)]])
+
+
+@screen("admglok")
+async def group_leave(c: Ctx) -> Screen:
+    _guard(c)
+    chat_id = _chat_id(c.a)
+    if c.message is None:
+        raise GameError("ربات در دسترس نیست.")
+    with contextlib.suppress(BaleAPIError):
+        await c.message.bot.leave_chat(chat_id)
+    with contextlib.suppress(GameError):
+        await c.services.admin.set_group_enabled(c.owner, chat_id, False)
+    await c.services.admin.log_action(c.owner, "leave_group", str(chat_id))
+    shown = await groups(replace(c, a="0", b=""))
+    shown.toast = "🚪 ربات از گروه خارج شد"
+    return shown
 
 
 @screen("admge")
@@ -563,9 +665,22 @@ async def audit(c: Ctx) -> Screen:
 @screen("admbc")
 async def broadcast(c: Ctx) -> Screen:
     _guard(c)
-    ids = await c.services.admin.group_ids()
-    text = f"📣 {bold('پیام همگانی')}\n\nیک پیام به همه‌ی {fa(len(ids))} گروه فعال فرستاده می‌شود. پیش‌نمایش را قبل از ارسال می‌بینید."
-    return Screen(text, [[c.btn("✍️ نوشتن پیام", "admask", "bcast", style="primary")], _back(c)])
+    groups_n = len(await c.services.admin.group_ids())
+    players_n = len(await c.services.admin.player_ids())
+    text = (
+        f"📣 {bold('پیام همگانی')}\n\n"
+        f"🏢 گروه‌های فعال: {fa(groups_n)}\n"
+        f"👥 بازیکنان: {fa(players_n)}\n\n"
+        "یکی را انتخاب کنید؛ پیش‌نمایش و تأیید دارد 👇"
+    )
+    rows = [
+        [c.btn("✍️ ارسال همگانی به گروه‌ها", "admask", "bcast", style="primary")],
+        [c.btn("📩 فوروارد همگانی به گروه‌ها", "admask", "fwd")],
+        [c.btn("📨 پیام به همه‌ی بازیکنان (پیوی)", "admask", "dm")],
+        [c.btn("🎲 رویداد در همه‌ی گروه‌ها", "admbe")],
+        _back(c),
+    ]
+    return Screen(text, rows)
 
 
 @screen("admbcok")
@@ -586,7 +701,157 @@ async def broadcast_send(c: Ctx) -> Screen:
             failed += 1
         await asyncio.sleep(0.15)
     await c.services.admin.log_action(c.owner, "broadcast", f"bot sent={sent} failed={failed}")
-    return Screen(f"✅ {bold('پیام همگانی فرستاده شد')}\n\nموفق: {fa(sent)} · ناموفق: {fa(failed)}", [_back(c)])
+    return Screen(f"✅ {bold('پیام همگانی فرستاده شد')}\n\nموفق: {fa(sent)}\nناموفق: {fa(failed)}", [_back(c, "admbc")])
+
+
+@screen("admfwok")
+async def forward_send(c: Ctx) -> Screen:
+    _guard(c)
+    source = _forwards.pop(c.owner, None)
+    if source is None:
+        raise GameError("پیامی برای فوروارد نیست؛ دوباره از «فوروارد همگانی» شروع کنید.")
+    if c.message is None:
+        raise GameError("ربات برای ارسال در دسترس نیست.")
+    bot = c.message.bot
+    sent = failed = 0
+    for chat_id in await c.services.admin.group_ids():
+        try:
+            if c.a == "copy":
+                await bot.copy_message(chat_id, source[0], source[1])
+            else:
+                await bot.forward_message(chat_id, source[0], source[1])
+            sent += 1
+        except BaleAPIError:
+            failed += 1
+        await asyncio.sleep(0.15)
+    await c.services.admin.log_action(c.owner, "forward_all", f"{c.a} sent={sent} failed={failed}")
+    return Screen(f"✅ {bold('فوروارد همگانی انجام شد')}\n\nموفق: {fa(sent)}\nناموفق: {fa(failed)}", [_back(c, "admbc")])
+
+
+async def _dm_all(bot, services: Services, admin_id: int, text: str) -> None:  # noqa: ANN001
+    sent = failed = 0
+    for uid in await services.admin.player_ids():
+        try:
+            await bot.send_message(uid, headline(f"📢 {text}"))
+            sent += 1
+        except BaleAPIError:
+            failed += 1
+        await asyncio.sleep(0.1)
+    await services.admin.log_action(admin_id, "dm_all", f"sent={sent} failed={failed}")
+    with contextlib.suppress(BaleAPIError):
+        await bot.send_message(admin_id, headline(f"✅ {bold('پیام به بازیکنان تمام شد')}\n\nموفق: {fa(sent)}\nناموفق: {fa(failed)}"))
+
+
+@screen("admdmok")
+async def dm_send(c: Ctx) -> Screen:
+    _guard(c)
+    text = _dm_drafts.pop(c.owner, "")
+    if not text:
+        raise GameError("پیامی برای ارسال نیست؛ دوباره بنویسید.")
+    if c.message is None:
+        raise GameError("ربات برای ارسال در دسترس نیست.")
+    task = asyncio.create_task(_dm_all(c.message.bot, c.services, c.owner, text), name="dm-broadcast")
+    _background.add(task)
+    task.add_done_callback(_background.discard)
+    count = len(await c.services.admin.player_ids())
+    return Screen(f"📨 {bold('ارسال شروع شد')}\n\nپیام در پیوی {fa(count)} بازیکن فرستاده می‌شود؛ وقتی تمام شد خبرتان می‌کنم.", [_back(c, "admbc")])
+
+
+_background: set[asyncio.Task] = set()
+
+
+@screen("admbe")
+async def broadcast_event(c: Ctx) -> Screen:
+    _guard(c)
+    if c.a:
+        kind = None if c.a == "random" else c.a
+        if kind is not None and kind not in KINDS:
+            raise GameError("نوع رویداد درست نیست.")
+        if c.message is None:
+            raise GameError("ربات برای ارسال در دسترس نیست.")
+        made = 0
+        for chat_id in await c.services.admin.group_ids():
+            view = await c.services.events.spawn(chat_id, kind, force=True)
+            if view is not None:
+                await events_ui.announce(c.message.bot, c.services, EventAction("spawned", view))
+                made += 1
+            await asyncio.sleep(0.15)
+        await c.services.admin.log_action(c.owner, "event_all", f"{c.a} groups={made}")
+        return Screen(f"🎲 {bold('رویداد ساخته شد')}\n\nدر {fa(made)} گروه رویداد شروع شد.", [_back(c, "admbc")])
+    rows = [[c.btn("🎲 تصادفی", "admbe", "random", style="primary")]]
+    rows += keyboards.grid([c.btn(name, "admbe", kind) for kind, name in EVENT_NAMES.items()], 2)
+    rows.append(_back(c, "admbc"))
+    return Screen(f"🎲 {bold('رویداد در همه‌ی گروه‌ها')}\n\nنوع رویداد را انتخاب کنید؛ فوراً در همه‌ی گروه‌های فعال ساخته می‌شود 👇", rows)
+
+
+# --- gifts for everybody ---------------------------------------------------------------------------------------
+@screen("admgf")
+async def gifts(c: Ctx) -> Screen:
+    _guard(c)
+    count = len(await c.services.admin.player_ids())
+    text = f"🎁 {bold('هدیه‌ی همگانی')}\n\nبه همه‌ی {fa(count)} بازیکن (به‌جز مسدودها) هدیه بدهید؛ مثلاً جایزه‌ی یک رویداد.\nقبل از اجرا تأیید می‌گیرم 👇"
+    rows = [
+        [c.btn("🪙 سکه", "admask", "gift_gold"), c.btn("💎 کریستال", "admask", "gift_crystal")],
+        [c.btn("💠 روز VIP", "admask", "gift_vip")],
+        _back(c),
+    ]
+    return Screen(text, rows)
+
+
+@screen("admgfok")
+async def gifts_apply(c: Ctx) -> Screen:
+    _guard(c)
+    gift = _gifts.pop(c.owner, None)
+    if not gift:
+        raise GameError("هدیه‌ای برای ارسال نیست؛ دوباره شروع کنید.")
+    count = await c.services.admin.give_all(c.owner, **gift)
+    return Screen(f"✅ {bold('هدیه داده شد')}\n\nبه {fa(count)} بازیکن رسید.", [_back(c, "admgf")])
+
+
+# --- maintenance mode and backup --------------------------------------------------------------------------------
+@screen("admmn")
+async def maintenance(c: Ctx) -> Screen:
+    _guard(c)
+    enabled, text = await c.services.admin.maintenance()
+    lines = [
+        f"🚧 {bold('حالت تعمیر')}",
+        "",
+        "وقتی روشن باشد فقط مدیران می‌توانند از ربات استفاده کنند و بقیه پیام تعمیر می‌بینند.",
+        "",
+        f"وضعیت: {'روشن 🚧' if enabled else 'خاموش ✅'}",
+        f"پیام: {text or 'پیش‌فرض'}",
+    ]
+    rows = [
+        [c.btn("✅ خاموش کردن" if enabled else "🚧 روشن کردن", "admmnt", style="success" if enabled else "danger")],
+        [c.btn("✍️ تغییر متن پیام", "admask", "mntext")],
+        _back(c),
+    ]
+    return Screen("\n".join(lines), rows)
+
+
+@screen("admmnt")
+async def maintenance_toggle(c: Ctx) -> Screen:
+    _guard(c)
+    enabled, _ = await c.services.admin.maintenance()
+    await c.services.admin.set_maintenance(c.owner, not enabled)
+    return await maintenance(c)
+
+
+@screen("admbk")
+async def backup(c: Ctx) -> Screen:
+    _guard(c)
+    if c.a == "send":
+        if c.owner != c.services.ctx.settings.owner_id or c.message is None:
+            raise GameError("فایل پشتیبان فقط برای مالک فرستاده می‌شود.")
+        path = await make_backup(c.services.ctx.db)
+        await c.message.bot.send_document(c.owner, FSInputFile(path), caption="💾 نسخه‌ی پشتیبان دیتابیس")
+        await c.services.admin.log_action(c.owner, "backup_send", path.name)
+        return Screen(f"💾 {bold('فایل پشتیبان فرستاده شد')}\n\nهمین الان در پیوی شما رسید.", [_back(c)])
+    path = await make_backup(c.services.ctx.db)
+    await c.services.admin.log_action(c.owner, "backup", path.name)
+    size = path.stat().st_size // 1024
+    rows = [[c.btn("📤 دریافت فایل", "admbk", "send")], _back(c)] if c.owner == c.services.ctx.settings.owner_id else [_back(c)]
+    return Screen(f"💾 {bold('نسخه‌ی پشتیبان ساخته شد')}\n\n📁 {path.name}\n📦 {fa(size)} کیلوبایت\n\nنسخه‌های قدیمی خودکار پاک می‌شوند.", rows)
 
 
 # --- forced membership ---------------------------------------------------------------------------------------
