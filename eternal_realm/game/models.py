@@ -31,6 +31,7 @@ class Player:
     created_at: int
     class2_id: str = ""
     awakened: bool = False
+    honor: str = ""
 
     @classmethod
     def from_row(cls, row: Row) -> Player:
@@ -55,6 +56,7 @@ class Player:
             created_at=row["created_at"],
             class2_id=row["class2"],
             awakened=bool(row["awakened"]),
+            honor=row["title"],
         )
 
     @property

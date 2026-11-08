@@ -276,6 +276,25 @@ MIGRATIONS: list[str] = [
     ALTER TABLE players ADD COLUMN class2 TEXT NOT NULL DEFAULT '';
     ALTER TABLE players ADD COLUMN awakened INTEGER NOT NULL DEFAULT 0;
     """,
+    # 17: the card collection
+    """
+    ALTER TABLE players ADD COLUMN title TEXT NOT NULL DEFAULT '';
+
+    CREATE TABLE player_cards (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        card_id   TEXT    NOT NULL,
+        qty       INTEGER NOT NULL DEFAULT 1,
+        first_at  INTEGER NOT NULL,
+        PRIMARY KEY (player_id, card_id)
+    );
+
+    CREATE TABLE card_rewards (
+        player_id  INTEGER NOT NULL REFERENCES players (id),
+        set_id     TEXT    NOT NULL,
+        claimed_at INTEGER NOT NULL,
+        PRIMARY KEY (player_id, set_id)
+    );
+    """,
 ]
 
 

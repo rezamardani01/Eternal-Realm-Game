@@ -8,6 +8,7 @@ from ..context import AppContext
 from ..game.services.activities import ActivityService
 from ..game.services.admin import AdminService
 from ..game.services.bosses import BossService
+from ..game.services.cards import CardService
 from ..game.services.characters import CharacterService
 from ..game.services.chests import ChestService
 from ..game.services.clans import ClanService
@@ -45,6 +46,7 @@ class Services:
     events: EventService
     clans: ClanService
     quests: QuestService
+    cards: CardService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -57,13 +59,14 @@ class Services:
         inventory = InventoryService(ctx, players)
         players.after_register.append(inventory.on_registered)
         characters = CharacterService(ctx, inventory)
-        bosses = BossService(ctx, players, inventory, characters)
+        cards = CardService(ctx)
+        bosses = BossService(ctx, players, inventory, characters, cards)
         return cls(
             ctx=ctx,
             players=players,
             inventory=inventory,
             activities=ActivityService(ctx, players, inventory),
-            hunting=HuntService(ctx, players, inventory, characters),
+            hunting=HuntService(ctx, players, inventory, characters, cards),
             duels=DuelService(ctx, players, characters),
             shop=ShopService(ctx, inventory),
             economy=EconomyService(ctx),
@@ -76,6 +79,7 @@ class Services:
             events=EventService(ctx, inventory, bosses),
             clans=ClanService(ctx),
             quests=QuestService(ctx, players, inventory),
+            cards=cards,
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(

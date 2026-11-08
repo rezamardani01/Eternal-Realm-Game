@@ -50,6 +50,7 @@ class Payout:
     chest: str | None = None
     level_up: int | None = None
     trophy: str | None = None
+    card: str | None = None
 
 
 @dataclass
@@ -106,11 +107,13 @@ class BossUpdate:
 
 class BossService:
     def __init__(
-        self, ctx: AppContext, players: PlayerService, inventory: InventoryService, characters: CharacterService
+        self, ctx: AppContext, players: PlayerService, inventory: InventoryService, characters: CharacterService,
+        cards: object | None = None,
     ) -> None:
         self.ctx = ctx
         self.players = players
         self.inventory = inventory
+        self.cards = cards
         self.characters = characters
 
     # --- views --------------------------------------------------------------------------------
@@ -385,9 +388,15 @@ class BossService:
                     await self.inventory.grant(
                         tx, pid, trophy, 1, origin=f"غنیمت شکست {kind.name} · {date}\nنخستین صاحب: {r['name']}"
                     )
+            card_name = None
+            if status == "defeated" and self.cards is not None:
+                dropped = await self.cards.drop_for_boss(
+                    tx, pid, boss_by_id(row["boss_type"]).element.id, 0.35 if index == 0 else 0.15
+                )
+                card_name = f"{dropped.emoji} {dropped.name}" if dropped else None
             payouts.append(
                 Payout(r["name"], f"[{r['name']}](uid:{r['platform_user_id']})", r["damage"], share, gold, xp, chest,
-                       level_up.new_level if level_up else None, trophy)
+                       level_up.new_level if level_up else None, trophy, card_name)
             )
         return payouts
 

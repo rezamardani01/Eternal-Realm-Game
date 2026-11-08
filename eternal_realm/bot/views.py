@@ -56,7 +56,8 @@ def created(player: Player) -> str:
 def profile_header(player: Player, xp_needed: int) -> str:
     return (
         f"👤 {bold(player.name)} · سطح {fa(player.level)}\n"
-        f"{player.race.emoji} {player.race.name} · {player.char_class.emoji} {player.char_class.name}\n"
+        + (f"🏅 عنوان: {player.honor}\n" if player.honor else "")
+        + f"{player.race.emoji} {player.race.name} · {player.char_class.emoji} {player.char_class.name}\n"
         + (f"🎭 کلاس دوم: {player.class2.emoji} {player.class2.name}\n" if player.class2 else "")
         + ("✨ قدرت پنهان بیدار شده\n" if player.awakened else "")
         + f"⭐ تجربه {fa(player.xp)} / {fa(xp_needed)}\n{bar(player.xp, xp_needed, 10)}\n"
@@ -288,6 +289,8 @@ def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
     lines += ["", DIV, f"⏰ شکار بعدی: {duration(r.next_in)} دیگر"]
     if r.double_xp:
         lines += ["", "✨ ستاره‌ی تجربه فعال است؛ تجربه‌ی این شکار دو برابر شد!"]
+    if r.card is not None:
+        lines += ["", f"🃏 {bold('کارت تازه پیدا کردید!')}", f"{r.card.emoji} {r.card.name}"]
     lines += ["", "🎁 چیزهایی که به دست آوردید 👇"]
     if r.level_up:
         lines += ["", level_up_text(r.level_up.new_level)]
@@ -616,6 +619,8 @@ def boss_final(v) -> str:  # noqa: ANN001 - BossView
             entry.append(f"🎉 رسید به سطح {fa(p.level_up)}")
         if p.trophy:
             entry.append(f"🏆 غنیمت ویژه: {get_item(p.trophy).label}")
+        if p.card:
+            entry.append(f"🃏 کارت تازه: {p.card}")
         blocks.append("\n".join(entry))
     blocks.append("🪙 پاداش هر نفر در دکمه‌های زیر است 👇")
     return "\n\n".join(blocks)

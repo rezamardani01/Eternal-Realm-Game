@@ -45,17 +45,19 @@ class HuntResult:
     log: list[str]
     next_in: int = 0
     double_xp: bool = False
+    card: object | None = None
 
 
 class HuntService:
     def __init__(
         self, ctx: AppContext, players: PlayerService, inventory: InventoryService,
-        characters: CharacterService,
+        characters: CharacterService, cards: object | None = None,
     ) -> None:
         self.ctx = ctx
         self.players = players
         self.inventory = inventory
         self.characters = characters
+        self.cards = cards
 
     def pick_monster(self, level: int, hero: Fighter) -> Monster:
         """Random monster of the hero's level band that is not far stronger than the hero."""
@@ -103,6 +105,9 @@ class HuntService:
             for item_id, qty in items.items():
                 await self.inventory.grant(tx, player_id, item_id, qty)
             level_up = await self.players.grant_xp(tx, player_id, xp) if xp else None
+            card = None
+            if won and self.cards is not None:
+                card = await self.cards.drop_for_monster(tx, player_id, monster.id)
             wait = await self.players.schedule_cooldown(tx, player_id, "hunt")
             after = await player_repo.get(tx, player_id)
             assert after is not None
@@ -110,5 +115,5 @@ class HuntService:
             monster=monster, won=won, rounds=min(battle.round, battle.max_rounds),
             hero_hp=max(0, hero.hp), hero_max_hp=hero.max_hp, gold=gold, xp=xp,
             items=[(get_item(i).label, q, i) for i, q in items.items()], level_up=level_up,
-            player=self.players.with_energy(after), highlights=log[-3:], log=log, next_in=wait, double_xp=double,
+            player=self.players.with_energy(after), highlights=log[-3:], log=log, next_in=wait, double_xp=double, card=card,
         )
