@@ -69,9 +69,23 @@ async def on_event_button(query: CallbackQuery, callback_data: EventCb, services
         await _show(query, view)
         await query.answer("🎉 صندوقچه را گشودید!" if success else "🔑 رمز درست نبود؛ کمی بعد دوباره تلاش کنید.")
     elif callback_data.action == "buy":
+        before = await services.events.get(callback_data.id)
+        stock = before.state.get("stock", []) if before else []
+        item_id = stock[callback_data.arg]["item"] if 0 <= callback_data.arg < len(stock) else ""
         view, label = await services.events.buy(callback_data.id, player, callback_data.arg)
         await _show(query, view)
-        await query.answer(f"🛒 {label} خریداری شد!")
+        where = views.backpack_section(get_item(item_id)) if item_id else "کوله‌پشتی"
+        await query.answer(f"🛒 {label} خریداری شد و در کوله‌پشتی (بخش {where}) است.")
+        if item_id and query.message is not None:  # a receipt in private, so nobody wonders where the goods went
+            receipt = headline(
+                f"🧾 {bold('رسید خرید از تاجر')}\n\n"
+                f"📦 {label}\n📍 جایش: کوله‌پشتی ← {where}\n\n"
+                "اگر بخش «تجهیزات» چند صفحه است، دکمه‌ی «بعدی ›» را بزنید."
+            )
+            with contextlib.suppress(BaleAPIError):
+                await query.message.bot.send_message(
+                    player.platform_user_id, receipt, buttons=[[keyboards.panel_button("🎒 باز کردن کوله‌پشتی", "inv", player.platform_user_id)]]
+                )
     elif callback_data.action == "search":
         before = await services.events.get(callback_data.id)
         if before is None or not 0 <= callback_data.arg < len(before.state.get("places", [])):

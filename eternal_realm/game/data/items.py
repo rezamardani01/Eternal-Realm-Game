@@ -160,6 +160,12 @@ def get_item(item_id: str) -> Item:
     return ITEMS[item_id]
 
 
+def item_value(item: Item, upgrade: int = 0) -> int:
+    """What an item is roughly worth in coins: its shop price, else a multiple of what the shop pays for it."""
+    base = item.buy if item.buy > 0 else (item.sell * 3 if item.sell > 0 else 50 * item.rarity)
+    return max(1, round(base * (1 + 0.5 * upgrade)))
+
+
 def find_item(text: str) -> Item | None:
     """Look an item up by its Persian name (exact, then unique prefix)."""
     query = normalize(text)

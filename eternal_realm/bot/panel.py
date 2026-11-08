@@ -18,7 +18,7 @@ from baleropy.fsm import FSMContext, State, StatesGroup
 from baleropy.types import CallbackQuery, InlineKeyboardButton, Message
 
 from ..game.data.chests import CHESTS
-from ..game.data.items import GEAR_KINDS, Item, Kind, get_item
+from ..game.data.items import GEAR_KINDS, Item, Kind, get_item, item_value
 from ..game.data.stats import STAT_HELP, STAT_LABELS
 from ..game.models import Player
 from ..game.services.inventory import InventoryView, Piece
@@ -1219,21 +1219,42 @@ async def got_listing_price(message: Message, state: FSMContext, services: Servi
         piece_ = await services.inventory.view(player.id)
         owned = next((p_ for p_ in piece_.gear if p_.id == int(ref)), None)
         what = owned.label if owned else "تجهیزات"
+        worth = item_value(owned.item, owned.upgrade) if owned else 0
     else:
         item_id, _, qty = ref.partition(".")
         what = f"{get_item(item_id).label} ×{fa(int(qty))}"
+        worth = item_value(get_item(item_id)) * int(qty)
     fee = services.market.fee_for(price)
     owner = player.platform_user_id
+    lines = [f"🏷️ {bold('تأیید آگهی')}", "", f"📦 {what}", ""]
+    if worth:
+        lines += [f"💎 ارزش واقعی: {bold(fa(worth))} سکه", f"💰 قیمتی که زدید: {bold(fa(price))} سکه"]
+        gap = round(100 * (price - worth) / worth)
+        if gap > 0:
+            lines.append(f"📈 {fa(gap)}٪ بالاتر از ارزش واقعی")
+        elif gap < 0:
+            lines.append(f"📉 {fa(-gap)}٪ پایین‌تر از ارزش واقعی")
+        else:
+            lines.append("✅ برابر ارزش واقعی")
+        if price > 2 * worth:
+            lines.append("⚠️ قیمت خیلی بالاست؛ احتمال فروش کم است.")
+        elif price * 2 < worth:
+            lines.append("⚠️ قیمت خیلی پایین است؛ ارزان‌تر از ارزش واقعی می‌فروشید.")
+    else:
+        lines.append(f"💰 قیمتی که زدید: {bold(fa(price))} سکه")
+    lines += [
+        "",
+        f"🏦 کارمزد بازار: {fa(fee)} سکه (هنگام فروش کسر می‌شود)",
+        f"🪙 دریافتی شما پس از فروش: {bold(fa(max(0, price - fee)))} سکه",
+        "",
+        "این کالا با همین قیمت در «بازارچه» برای همه گذاشته شود؟",
+    ]
     await message.reply(
-        f"🏷️ {bold('تأیید آگهی')}\n\n{what}\n\n"
-        f"قیمت: {bold(fa(price))} سکه\n\n"
-        f"کارمزد بازار: {fa(fee)} سکه (هنگام فروش کسر می‌شود)\n\n"
-        f"دریافتی شما پس از فروش: {bold(fa(max(0, price - fee)))} سکه\n\n"
-        "ثبت شود؟",
+        "\n".join(lines),
         buttons=[
             [
-                keyboards.panel_button("✅ ثبت آگهی", "lconfirm", owner, kind, f"{ref}~{price}"),
-                keyboards.panel_button("❌ انصراف", "market", owner),
+                keyboards.panel_button("✅ بله، در بازارچه بگذار", "lconfirm", owner, kind, f"{ref}~{price}"),
+                keyboards.panel_button("❌ نه، رد کن", "market", owner),
             ]
         ],
     )

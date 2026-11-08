@@ -52,6 +52,17 @@ def welcome() -> str:
     )
 
 
+def backpack_section(item) -> str:  # noqa: ANN001 - Item
+    """Where in «کوله‌پشتی» an item shows up."""
+    from ..game.data.items import Kind
+
+    if item.is_gear:
+        return "⚔️ تجهیزات"
+    if item.kind is Kind.CHEST:
+        return "🎁 صندوقچه‌ها"
+    return "📦 آیتم‌ها"
+
+
 def streak_note(reward) -> str:  # noqa: ANN001 - DailyReward
     """The «days in a row» lines of the daily reward: the streak, a chest when one was paid and what comes next."""
     if reward.streak < 2 and not reward.chest:
