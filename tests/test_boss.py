@@ -350,7 +350,7 @@ async def test_full_fight_in_a_group_with_buttons(h, services, db, clock):
     assert any("فقط احضارکننده" in a.get("text", "") for a in h.session.callback_answers())
 
     await h.click(10, start, group=True)
-    assert "نبرد آغاز شد" in h.session.last_text() and "تماشا می‌کنیم" in h.session.last_text()
+    assert "نبرد آغاز شد" in h.session.last_text() and "ویژگی باس" in h.session.last_text()
     assert any(name == "deleteMessage" for name, _ in h.session.calls)  # the sign-up message is gone
     assert not h.session.sent("sendMessage")[-1].get("reply_markup")
 

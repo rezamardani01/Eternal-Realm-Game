@@ -573,32 +573,25 @@ def _clock(seconds: int) -> str:
 
 
 def boss_recruiting(v, min_players: int, max_players: int) -> str:  # noqa: ANN001 - BossView
-    roster = "\n".join(f"{f.emoji} {f.mention}" for f in v.fighters)
-    return "\n".join(
-        [
-            f"{v.type.emoji} {bold(v.type.name + ' بیدار شده است!')}",
-            *(["🔥 انتقام! این باس پس از شکست قبلی خشمگین‌تر برگشته؛ قوی‌تر است ولی پاداش پیروزی ۱٫۵ برابر می‌شود."] if v.revenge else []),
-            "",
-            v.type.story,
-            "فرمانده، متحدان خود را فرا بخوانید!",
-            "",
-            f"🔮 عنصر: {v.type.element.emoji} {v.type.element.noun} · نقطه‌ضعف: کلاس {CLASSES[v.type.weak_class].name}",
-            "🎲 قدرت واقعی باس تا شروع نبرد پنهان است؛ ممکن است ضعیف باشد و ممکن است افسانه‌ای!",
-            *(
-                ["🌑 باس مخفی خودش وارد گروه شد! هر جنگجو می‌تواند نبرد را شروع کند."]
-                if v.free
-                else [f"👤 احضارکننده: {v.summoner_mention}"]
-            ),
-            f"👥 جنگجویان: {bold(fa(len(v.fighters)))} / {fa(max_players)} (حداقل {fa(min_players)})",
-            f"⏳ زمان ثبت‌نام: {_clock(v.seconds_left)}",
-            "❤️ جان باس با تعداد جنگجویان بیشتر می‌شود.",
-            "",
-            f"🛡️ {bold('در صف نبرد')}",
-            roster,
-            "",
-            "همه‌ی جنگجویان «پیوستن» را بزنند؛ احضارکننده نبرد را شروع می‌کند 👇",
-        ]
-    )
+    t = v.type
+    lines = [f"{t.emoji} {bold(t.name + ' بیدار شده است!')}", f"«{t.story}»", ""]
+    if v.revenge:
+        lines += ["🔥 انتقام! این باس خشمگین‌تر برگشته؛ پاداش پیروزی ۱٫۵ برابر است.", ""]
+    lines += [
+        f"🔮 عنصر: {t.element.emoji} {t.element.noun}",
+        f"🎯 نقطه‌ضعف: کلاس {CLASSES[t.weak_class].name}",
+        "🎲 قدرت واقعی باس تا شروع نبرد پنهان است.",
+        "",
+        "🌑 باس مخفی است؛ هر جنگجو می‌تواند نبرد را شروع کند." if v.free else f"👤 احضارکننده: {v.summoner_mention}",
+        f"👥 جنگجویان: {bold(fa(len(v.fighters)))} از {fa(max_players)} (حداقل {fa(min_players)})",
+        f"⏳ ثبت‌نام: {_clock(v.seconds_left)}",
+        "",
+        f"🛡️ {bold('در صف نبرد')}",
+        *(f"{f.emoji} {f.mention}" for f in v.fighters),
+        "",
+        "👇 «پیوستن» را بزنید؛ احضارکننده نبرد را شروع می‌کند.",
+    ]
+    return "\n".join(lines)
 
 
 def boss_fight(v) -> str:  # noqa: ANN001 - BossView
@@ -606,12 +599,12 @@ def boss_fight(v) -> str:  # noqa: ANN001 - BossView
     tier = tier_by_id(v.tier)
     lines = [
         f"⚔️ {bold('نبرد با ' + v.type.name)}",
-        f"🔮 هاله‌ی باس: {tier.emoji} {bold(tier.name)}",
+        f"🔮 هاله‌ی باس: {tier.emoji} {tier.name}",
         "",
-        f"❤️ سلامتی باس: {fa(v.hp)} / {fa(v.max_hp)}",
+        f"❤️ {fa(v.hp)} / {fa(v.max_hp)}",
         f"{bar(v.hp, v.max_hp, 10)}  {fa(percent)}٪",
-        f"👥 جنگجویان زنده: {fa(v.alive_count)} / {fa(len(v.fighters))} · دور {fa(v.round)}",
-        f"⏳ زمان باقی‌مانده: {_clock(v.seconds_left)}",
+        f"👥 زنده: {fa(v.alive_count)} از {fa(len(v.fighters))}",
+        f"🔁 دور {fa(v.round)} · ⏳ {_clock(v.seconds_left)}",
     ]
     if v.report:
         lines += ["", f"📜 {bold('گزارش نبرد')}", *v.report]
@@ -619,51 +612,53 @@ def boss_fight(v) -> str:  # noqa: ANN001 - BossView
     if ranked and ranked[0].damage:
         lines += ["", f"🏅 {bold('بیشترین آسیب')}"]
         lines += [f"{MEDALS[i]} {f.mention} — {fa(f.damage)}" for i, f in enumerate(ranked)]
-    lines += ["", "🤖 نبرد خودکار است؛ فقط تماشا کنید و تشویق کنید!"]
     return "\n".join(lines)
 
 
 def boss_started(v) -> str:  # noqa: ANN001 - BossView
     return (
-        f"🚀 {bold('نبرد آغاز شد!')}\n\n"
-        f"{fa(len(v.fighters))} جنگجو در برابر {v.type.emoji} {bold(v.type.name)} صف کشیدند. "
-        f"زمین می‌لرزد و شمشیرها از نیام بیرون آمده‌اند.\n\n"
-        f"🧠 ویژگی باس: {behavior_of(v.type)[1]}\n\n"
-        f"👀 لحظه‌ای تماشا می‌کنیم...\n\n" + boss_fight(v)
+        f"🚀 {bold('نبرد آغاز شد!')}\n"
+        f"{fa(len(v.fighters))} جنگجو در برابر {v.type.emoji} {bold(v.type.name)} صف کشیدند.\n\n"
+        f"🧠 ویژگی باس: {behavior_of(v.type)[1]}\n\n" + boss_fight(v)
     )
 
 
 def boss_final(v) -> str:  # noqa: ANN001 - BossView
     if v.outcome == "cancelled":
         return (
-            f"🌫️ {bold('احضار ناکام ماند')}\n\n"
+            f"🌫️ {bold('احضار ناکام ماند')}\n"
             f"{v.type.name} بدون نبرد به خواب برگشت؛ جنگجوی کافی نیامد.\n\n"
             "💰 سکه‌ی احضار به احضارکننده برگشت."
         )
     heads = {
-        "won": f"🏆 {bold(v.type.name + ' شکست خورد!')}\n\nجنگجویان قلمرو پیروز شدند و غریو شادی بلند شد.",
-        "lost": f"💀 {bold('همه‌ی جنگجویان از پا افتادند')}\n\n{v.type.name} پیروز میدان شد؛ ولی تلاشتان بی‌پاداش نماند.",
-        "fled": f"⌛ {bold(v.type.name + ' گریخت')}\n\nزمان تمام شد و باس ناپدید شد؛ ولی تلاشتان بی‌پاداش نماند.",
+        "won": f"🏆 {bold(v.type.name + ' شکست خورد!')}\nجنگجویان قلمرو پیروز شدند.",
+        "lost": f"💀 {bold('همه‌ی جنگجویان از پا افتادند')}\n{v.type.name} پیروز میدان شد؛ ولی تلاشتان بی‌پاداش نماند.",
+        "fled": f"⌛ {bold(v.type.name + ' گریخت')}\nزمان تمام شد و باس ناپدید شد؛ ولی تلاشتان بی‌پاداش نماند.",
     }
-    blocks = [heads.get(v.outcome or "fled", heads["fled"]), f"📊 {bold('نتیجه‌ی نبرد')}\n{fa(v.round)} دور · {fa(len(v.fighters))} جنگجو"]
+    lines = [
+        heads.get(v.outcome or "fled", heads["fled"]),
+        "",
+        f"📊 {fa(v.round)} دور · {fa(len(v.fighters))} جنگجو",
+        "",
+    ]
     if not v.payouts:
-        blocks.append("هیچ‌کس در نبرد نبود.")
+        lines.append("هیچ‌کس در نبرد نبود.")
     else:
-        blocks.append(f"🏅 {bold('سهم هر جنگجو')}")
+        lines.append(f"🏅 {bold('سهم جنگجویان')}")
     for i, p in enumerate(v.payouts):
         medal = MEDALS[i] if i < len(MEDALS) else "🔹"
-        entry = [f"{medal} {p.mention} — {fa(p.damage)} آسیب ({fa(round(p.share * 100))}٪)"]
+        lines.append(f"{medal} {p.mention} — {fa(p.damage)} آسیب ({fa(round(p.share * 100))}٪)")
         if p.level_up:
-            entry.append(f"🎉 رسید به سطح {fa(p.level_up)}")
+            lines.append(f"      🎉 رسید به سطح {fa(p.level_up)}")
         if p.trophy:
-            entry.append(f"🏆 غنیمت ویژه: {get_item(p.trophy).label}")
+            lines.append(f"      🏆 غنیمت: {get_item(p.trophy).label}")
         if p.card:
-            entry.append(f"🃏 کارت تازه: {p.card}")
-        blocks.append("\n".join(entry))
+            lines.append(f"      🃏 کارت تازه: {p.card}")
+    lines.append("")
     if v.outcome in ("lost", "fled"):
-        blocks.append("🔥 تا ۲۴ ساعت می‌توانید همین باس را دوباره احضار کنید؛ خشمگین‌تر برمی‌گردد ولی اگر شکستش دهید پاداش ۱٫۵ برابر است.")
-    blocks.append("🪙 پاداش هر نفر در دکمه‌های زیر است 👇")
-    return "\n\n".join(blocks)
+        lines += ["🔥 تا ۲۴ ساعت می‌توانید همین باس را دوباره احضار کنید؛ خشمگین‌تر برمی‌گردد و پاداش ۱٫۵ برابر دارد.", ""]
+    lines.append("🪙 پاداش هر نفر در دکمه‌های زیر 👇")
+    return "\n".join(lines)
 
 
 # --- random group events --------------------------------------------------------------------------

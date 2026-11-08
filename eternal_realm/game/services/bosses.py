@@ -41,7 +41,7 @@ from .inventory import InventoryService
 from .players import PlayerService
 
 MAX_CATCH_UP_ROUNDS = 3
-REPORT_LINES = 7
+REPORT_LINES = 5
 #: a group that lost to a boss may summon the same one again within a day: it is angrier, but pays more
 REVENGE_WINDOW = 24 * 3600
 REVENGE_POWER = 1.15

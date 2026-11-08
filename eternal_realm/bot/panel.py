@@ -169,17 +169,19 @@ async def boss_panel(c: Ctx) -> Screen:
     if await c.services.bosses.active(c.chat_id) is not None:
         return Screen(None, toast="🐉 یک باس زنده است! پیامش را بالاتر ببینید یا «باس» را بنویسید.", alert=True)
     owed = await c.services.bosses.revenge_boss(c.chat_id)
-    revenge = (
-        f"🔥 {bold('فرصت انتقام!')} {owed.emoji} {owed.name} از شما پیروز شد؛ احضار بعدی همان باس است، "
-        "خشمگین‌تر ولی با پاداش ۱٫۵ برابر.\n\n"
-    ) if owed else ""
-    text = (
-        f"🐉 {bold('احضار باس')}\n\n{revenge}"
-        f"هزینه: {bold(fa(b.boss_summon_gold))} سکه\n"
-        f"از سطح {fa(b.boss_min_level)} · هر گروه هر {duration(b.boss_cooldown_seconds)} یک باس\n\n"
-        "همه‌ی اعضا می‌پیوندند، نبرد خودکار انجام می‌شود و پاداش به نسبت سهم هر نفر تقسیم می‌شود.\n\n"
-        "احضار کنیم؟"
-    )
+    lines = [f"🐉 {bold('احضار باس')}", ""]
+    if owed:
+        lines += [f"🔥 {bold('فرصت انتقام!')}", f"{owed.emoji} {owed.name} از شما پیروز شد؛ این بار همان باس می‌آید، خشمگین‌تر و با پاداش ۱٫۵ برابر.", ""]
+    lines += [
+        f"💰 هزینه: {bold(fa(b.boss_summon_gold))} سکه",
+        f"🎚️ از سطح {fa(b.boss_min_level)}",
+        f"⏳ هر گروه هر {duration(b.boss_cooldown_seconds)} یک باس",
+        "",
+        "همه می‌پیوندند، نبرد خودکار است و پاداش به نسبت سهم هر نفر تقسیم می‌شود.",
+        "",
+        "احضار کنیم؟",
+    ]
+    text = "\n".join(lines)
     return Screen(text, [[c.btn("🐉 احضار", "bsummon", style="danger"), c.btn("↩️ نه", "home")]])
 
 
