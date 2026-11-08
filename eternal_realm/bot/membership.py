@@ -14,12 +14,10 @@ from baleropy.types import CallbackQuery, Message
 from ..game.services.membership import Channel
 from ..shared.text import bold, headline
 from .callbacks import PanelCb
-from .commands.registry import REGISTRY
 from .services import Services
 
 router = Router(name="membership")
 CHECK = "mem:check"
-NOTICE_GAP = 60  # seconds between two notices to the same person in a group
 
 
 def notice_text(missing: list[Channel]) -> str:
@@ -38,11 +36,14 @@ def notice_buttons(missing: list[Channel]):  # noqa: ANN201
     return rows
 
 
+def _is_private(chat: Any) -> bool:
+    return str(getattr(chat.type, "value", chat.type)) == "private"
+
+
 class MembershipMiddleware(BaseMiddleware):
-    """Blocks private chat, panel buttons and game words in groups for people who have not joined."""
+    """Blocks the private chat with the bot (messages and buttons) for people who have not joined the channels."""
 
     def __init__(self) -> None:
-        self._noticed: dict[int, float] = {}
         self._warned_at: float | None = None
 
     async def _warn_admins(self, bot: Any, services: Services) -> None:
@@ -68,14 +69,14 @@ class MembershipMiddleware(BaseMiddleware):
         user = getattr(event, "from_user", None)
         if services is None or bot is None or user is None or user.is_bot:
             return await handler(event, data)
+        # the gate only guards the private chat with the bot; groups are never checked or nagged
         if isinstance(event, CallbackQuery):
             if event.data == CHECK:
                 return await handler(event, data)
-            gated = True
+            chat = event.message.chat if event.message is not None else None
+            gated = chat is not None and _is_private(chat)
         elif isinstance(event, Message):
-            private = str(getattr(event.chat.type, "value", event.chat.type)) == "private"
-            text = event.text or ""
-            gated = private or (bool(text) and REGISTRY.resolve(text) is not None)
+            gated = _is_private(event.chat)
         else:
             gated = False
         if not gated:
@@ -87,13 +88,6 @@ class MembershipMiddleware(BaseMiddleware):
         if isinstance(event, CallbackQuery):
             await event.answer("🔒 اول باید در کانال عضو شوید. /start را بزنید.", show_alert=True)
             return None
-        now = time.monotonic()
-        last = self._noticed.get(user.id)
-        if event.chat.id != user.id and last is not None and now - last < NOTICE_GAP:
-            return None  # do not flood a group with notices
-        self._noticed[user.id] = now
-        if len(self._noticed) > 5000:
-            self._noticed = {u: t for u, t in self._noticed.items() if now - t < NOTICE_GAP}
         await event.reply(notice_text(missing), buttons=notice_buttons(missing))
         return None
 

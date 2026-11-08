@@ -65,19 +65,20 @@ async def test_start_is_blocked_until_the_user_joins_then_works(h, services):
     assert "عضویت در کانال لازم است" not in h.session.last_text()
 
 
-async def test_panel_buttons_and_group_words_are_gated_too(h, services):
+async def test_only_the_private_chat_is_gated_groups_are_left_alone(h, services):
     await hero(services, 7, "آرش")
     await services.membership.save(True, [{"chat": "@mychannel"}])
     h.session.non_members.add(7)
-    await h.click(7, "p:home:::7")
+    await h.click(7, "p:home:::7")  # a button in the private chat
     assert any("اول باید در کانال عضو شوید" in a.get("text", "") for a in h.session.callback_answers())
-    await h.say(7, "ماهیگیری", group=True)
-    assert "عضویت در کانال لازم است" in h.session.last_text()
     n = len(h.session.sent("sendMessage"))
-    await h.say(7, "شکار", group=True)  # a second notice inside a minute is not sent
-    assert len(h.session.sent("sendMessage")) == n
-    await h.say(7, "سلام به همه", group=True)  # ordinary chat is never touched
-    assert len(h.session.sent("sendMessage")) == n
+    await h.say(7, "ماهیگیری", group=True)  # game words in a group: never checked, never nagged
+    assert "عضویت در کانال لازم است" not in h.session.last_text()
+    assert len(h.session.sent("sendMessage")) >= n
+    await h.click(7, "p:home:::7", group=True)  # nor the buttons in a group
+    assert not any("اول باید در کانال عضو شوید" in a.get("text", "") for a in h.session.callback_answers()[1:])
+    await h.say(7, "/start")  # but the private chat is
+    assert "عضویت در کانال لازم است" in h.session.last_text()
 
 
 async def test_owner_and_members_pass_and_errors_fail_open(h, services):
@@ -95,20 +96,6 @@ async def test_owner_and_members_pass_and_errors_fail_open(h, services):
             raise RuntimeError("bale is down")
 
     assert await services.membership.missing(Broken(), 99) == []  # fail open: never lock players out
-
-
-async def test_the_first_notice_is_sent_even_right_after_a_machine_boot(h, services, monkeypatch):
-    import time
-
-    from eternal_realm.bot import membership as gate
-
-    monkeypatch.setattr(gate.time, "monotonic", lambda: 5.0)  # a fresh CI runner or server: uptime of 5 seconds
-    await hero(services, 9, "تازه")
-    await services.membership.save(True, [{"chat": "@mychannel"}])
-    h.session.non_members.add(9)
-    await h.say(9, "ماهیگیری", group=True)
-    assert "عضویت در کانال لازم است" in h.session.last_text()
-    assert time.monotonic() > 0
 
 
 async def test_when_bale_refuses_the_check_nobody_passes_and_the_owner_is_told(h, services):
