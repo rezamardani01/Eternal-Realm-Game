@@ -149,13 +149,10 @@ async def home(c: Ctx) -> Screen:
         [c.btn("🕳️ سیاه‌چال", "dungeon"), c.btn("🔥 کوره آهنگری", "craft")],
         [c.btn("💎 خزانه قلمرو", "premium"), c.btn("🎁 جایزه روزانه", "daily")],
         [c.btn("😴 استراحت", "rest"), c.btn("❓ راهنمایی", "help")],
+        [c.btn("🤝 دعوت از دوستان", "invite", style="success")],
     ]
-    settings = c.services.ctx.settings
-    links = []
-    if settings.group_url:
-        links.append(Button.url("👥 گروه ما", settings.group_url))
-    if settings.channel_url:
-        links.append(Button.url("📣 کانال ما", settings.channel_url))
+    shown = await c.services.admin.links()
+    links = [Button.url(shown[key]["text"], shown[key]["url"]) for key in ("group", "channel") if shown[key]["url"]]
     if links:
         rows.append(links)
     return Screen(text, rows)

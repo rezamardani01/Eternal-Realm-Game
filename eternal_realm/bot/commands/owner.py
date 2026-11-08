@@ -6,12 +6,15 @@ owner's own hero without a reply. Anyone else who writes them is ignored. «دس
 
 from __future__ import annotations
 
-from ...game.data.items import ITEMS
+from ...game.data.items import ITEMS, get_item
+from ...game.data.packs import PACKS
+from ...game.services.invites import GIFT_PACKS
 from ...game.data.pets import PETS
 from ...game.services.events import EventAction
 from ...shared.errors import GameError
 from ...shared.text import bold, fa, to_int
 from .. import events as events_ui
+from ..invite_panel import box_button, notify_box
 from .context import CommandContext
 from .gifts import _OPTIONS, _announce, _owner, _target
 from .registry import command
@@ -32,6 +35,8 @@ OWNER_COMMANDS = """\
 • اهدا سکه 3000 · اهدا کریستال 200
 • اهدا ققنوس · اهدا حیوان عقاب — حیوان خانگی با نام
 • اهدا سنگ آهن 399 — هر آیتم با نام و تعداد
+• اهدا بسته کوچک | متوسط | بزرگ | ماجراجو — صندوق با دکمه‌ی باز کردن
+• اهدا برگه تغییر نام | نژاد | کلاس
 • اهدا سطح 40 — تعیین سطح
 • اهدا انرژی — پر کردن انرژی
 • اهدا ریست — پاک شدن همه‌ی زمان‌های انتظار
@@ -96,6 +101,48 @@ async def gift_item(ctx: CommandContext) -> None:
     target = await _target(ctx)
     await ctx.services.admin.give_item_id(ctx.user.id, target.id, item, qty)
     await _announce(ctx, target, f"{item.label} ×{fa(qty)}")
+
+
+@command("gift_pack", ["اهدا بسته", "اهدا بست"], "(مالک) اهدای صندوق: اهدا بسته کوچک | متوسط | بزرگ | ماجراجو", **_OPTIONS)
+async def gift_pack(ctx: CommandContext) -> None:
+    if not _owner(ctx):
+        return
+    name = " ".join(ctx.args).strip()
+    pack_id = GIFT_PACKS.get(name)
+    if pack_id is None:
+        raise GameError("کدام بسته؟ بنویسید: اهدا بسته کوچک، اهدا بسته متوسط، اهدا بسته بزرگ یا اهدا بسته ماجراجو")
+    target = await _target(ctx)
+    pack = PACKS[pack_id]
+    box_id = await ctx.services.invites.give_box(ctx.user.id, target.id, pack_id)
+    await ctx.reply(
+        f"📦 {bold('صندوق هدیه رسید!')}\n\n"
+        f"فرمانده {ctx.who(target)} ، مالک قلمرو یک صندوق به شما اهدا کرد:\n\n"
+        f"🎁 {pack.label}\n\n"
+        "👇 برای دیدن محتوایش بازش کنید",
+        buttons=[box_button(target.platform_user_id, box_id)],
+    )
+    await notify_box(ctx.bot, target, box_id, pack.label)
+
+
+def _ticket_command(name: str, alias: str, item_id: str, icon: str, title: str, use: str) -> None:
+    @command(name, [alias], f"(مالک) اهدای {title}", **_OPTIONS)
+    async def handler(ctx: CommandContext) -> None:
+        if not _owner(ctx):
+            return
+        qty = to_int(ctx.args[0]) if ctx.args else 1
+        if qty is None or not 1 <= qty <= 100:
+            raise GameError("تعداد را درست بنویسید؛ مثلاً «%s 2»" % alias)
+        target = await _target(ctx)
+        await ctx.services.admin.give_item_id(ctx.user.id, target.id, get_item(item_id), qty)
+        await _announce(ctx, target, f"{icon} {title}" + (f" ×{fa(qty)}" if qty > 1 else ""), use)
+
+
+_ticket_command("gift_rename_ticket", "اهدا برگه تغییر نام", "rename_ticket", "🏷️", "برگه‌ی تغییر نام",
+                "از «قهرمان من ← ارتقای قهرمان ← خدمات» مصرفش کنید.")
+_ticket_command("gift_race_ticket", "اهدا برگه تغییر نژاد", "race_ticket", "🧬", "برگه‌ی تغییر نژاد",
+                "از «قهرمان من ← ارتقای قهرمان ← خدمات» مصرفش کنید.")
+_ticket_command("gift_class_ticket", "اهدا برگه تغییر کلاس", "class_ticket", "⚔️", "برگه‌ی تغییر کلاس",
+                "از «قهرمان من ← ارتقای قهرمان ← خدمات» مصرفش کنید.")
 
 
 @command("gift_level", ["اهدا سطح"], "(مالک) تعیین سطح: اهدا سطح 40", **_OPTIONS)

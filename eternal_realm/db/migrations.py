@@ -443,6 +443,22 @@ MIGRATIONS: list[str] = [
     ON CONFLICT (player_id, card_id) DO UPDATE SET qty = qty + 1;
     UPDATE card_listings SET status = 'cancelled' WHERE status = 'active';
     """,
+    # 33: invited friends and the owner's gift boxes
+    """
+    CREATE TABLE referrals (
+        invited_id  INTEGER PRIMARY KEY REFERENCES players (id),
+        referrer_id INTEGER NOT NULL REFERENCES players (id),
+        created_at  INTEGER NOT NULL
+    );
+    CREATE INDEX idx_referrals_referrer ON referrals (referrer_id, created_at);
+    CREATE TABLE gift_boxes (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id  INTEGER NOT NULL REFERENCES players (id),
+        pack_id    TEXT    NOT NULL,
+        created_at INTEGER NOT NULL,
+        opened_at  INTEGER
+    );
+    """,
 ]
 
 

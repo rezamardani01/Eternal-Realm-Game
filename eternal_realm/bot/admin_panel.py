@@ -120,8 +120,9 @@ async def home(c: Ctx) -> Screen:
         [c.btn("🏯 خاندان‌ها", "admcl"), c.btn("💰 فروش", "admo")],
         [c.btn("📣 همگانی", "admbc"), c.btn("🎁 هدیه‌ی همگانی", "admgf")],
         [c.btn("🔒 عضویت اجباری", "admm"), c.btn("🚧 حالت تعمیر", "admmn")],
-        [c.btn("💾 پشتیبان‌گیری", "admbk"), c.btn("📜 گزارش مدیریت", "adma")],
-        [c.btn("🛠️ دستورات مالک", "admc"), c.btn("🔄 بروزرسانی", "adm", style="primary")],
+        [c.btn("💾 پشتیبان‌گیری", "admbk"), c.btn("🔗 دکمه‌های منو", "admlk")],
+        [c.btn("📜 گزارش مدیریت", "adma"), c.btn("🛠️ دستورات مالک", "admc")],
+        [c.btn("🔄 بروزرسانی", "adm", style="primary")],
     ]
     return Screen(text, rows)
 
@@ -306,12 +307,17 @@ PROMPTS = {
     "mntext": ("🚧 متن حالت تعمیر", "متنی را بنویسید که در زمان تعمیر به بازیکنان نشان داده می‌شود (تا ۳۰۰ حرف)."),
     "pmsg": ("✉️ پیام به بازیکن", "متن پیام را بنویسید؛ در پیوی همین بازیکن فرستاده می‌شود."),
     "rename": ("✏️ تغییر نام قهرمان", "نام تازه را بنویسید (۲ تا ۱۶ حرف، بدون تکراری بودن)."),
+    "lk_gt": ("👥 متن دکمه‌ی گروه", "متن تازه‌ی دکمه را بنویسید (تا ۲۸ حرف).\nمثال: 👥 گروه رسمی ما"),
+    "lk_gu": ("👥 لینک دکمه‌ی گروه", "لینک گروه را بنویسید (https://... یا @username). برای پنهان کردن دکمه بنویسید: -"),
+    "lk_ct": ("📣 متن دکمه‌ی کانال", "متن تازه‌ی دکمه را بنویسید (تا ۲۸ حرف).\nمثال: 📣 کانال رسمی ما"),
+    "lk_cu": ("📣 لینک دکمه‌ی کانال", "لینک کانال را بنویسید (https://... یا @username). برای پنهان کردن دکمه بنویسید: -"),
     "chan": ("➕ افزودن کانال", "شناسه‌ی کانال را بنویسید و در صورت دلخواه عنوان.\nمثال: @mychannel کانال رسمی"),
 }
 _BACK_OF = {
     "find": ("admp", ""), "gmsg": ("admg", ""), "bcast": ("admbc", ""), "chan": ("admm", ""),
     "fwd": ("admbc", ""), "dm": ("admbc", ""), "gift_gold": ("admgf", ""), "gift_crystal": ("admgf", ""),
     "gift_vip": ("admgf", ""), "mntext": ("admmn", ""),
+    "lk_gt": ("admlk", ""), "lk_gu": ("admlk", ""), "lk_ct": ("admlk", ""), "lk_cu": ("admlk", ""),
 }
 
 
@@ -456,6 +462,13 @@ async def got_input(message: Message, state: FSMContext, services: Services) -> 
             f"🎁 {bold('تأیید هدیه‌ی همگانی')}\n\nبه هر یک از {fa(count)} بازیکن {what} داده می‌شود.\nاین کار برگشت ندارد. مطمئنید؟",
             [[keyboards.panel_button("✅ بله، بده", "admgfok", uid), keyboards.panel_button("❌ انصراف", "admgf", uid)]],
         )
+    elif op in ("lk_gt", "lk_gu", "lk_ct", "lk_cu"):
+        which = "group" if op.startswith("lk_g") else "channel"
+        if op.endswith("t"):
+            await admin.set_link(uid, which, text=text)
+        else:
+            await admin.set_link(uid, which, url=text)
+        await done("✅ دکمه ذخیره شد؛ در منوی اصلی پیوی دیده می‌شود.", [[keyboards.panel_button("🔗 دکمه‌های منو", "admlk", uid)]])
     elif op == "mntext":
         enabled, _ = await admin.maintenance()
         await admin.set_maintenance(uid, enabled, text)
@@ -810,6 +823,22 @@ async def gifts_apply(c: Ctx) -> Screen:
 
 
 # --- maintenance mode and backup --------------------------------------------------------------------------------
+@screen("admlk")
+async def link_buttons(c: Ctx) -> Screen:
+    _guard(c)
+    shown = await c.services.admin.links()
+    lines = [f"🔗 {bold('دکمه‌های لینک منوی اصلی')}", "", "این دو دکمه در منوی اصلی پیوی ربات، زیر دکمه‌ی «دعوت از دوستان» نشان داده می‌شوند.", ""]
+    for key, label in (("group", "👥 گروه"), ("channel", "📣 کانال")):
+        item = shown[key]
+        lines += [f"{label}: «{item['text']}»", f"   لینک: {item['url'] or 'ندارد (دکمه پنهان است)'}", ""]
+    rows = [
+        [c.btn("✏️ متن دکمه‌ی گروه", "admask", "lk_gt"), c.btn("🔗 لینک گروه", "admask", "lk_gu")],
+        [c.btn("✏️ متن دکمه‌ی کانال", "admask", "lk_ct"), c.btn("🔗 لینک کانال", "admask", "lk_cu")],
+        _back(c),
+    ]
+    return Screen("\n".join(lines).strip(), rows)
+
+
 @screen("admmn")
 async def maintenance(c: Ctx) -> Screen:
     _guard(c)

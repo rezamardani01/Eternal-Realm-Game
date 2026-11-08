@@ -65,6 +65,8 @@ PACKS: dict[str, Pack] = {
         Pack(
             "chests_x5", "🎁", "۵ صندوقچه جادویی", 400_000, items={"magic_chest": 5}, section="bundles",
         ),
+        Pack("ore_5", "⛓️", "۵ سنگ آهن", 12_000, items={"iron_ore": 5}, section="materials"),
+        Pack("ore_10", "⛓️", "۱۰ سنگ آهن", 22_000, items={"iron_ore": 10}, section="materials"),
         Pack("ore_s", "⛓️", "۲۰ سنگ آهن", 40_000, items={"iron_ore": 20}, section="materials"),
         Pack("ore_m", "⛓️", "۱۰۰ سنگ آهن", 160_000, items={"iron_ore": 100}, section="materials"),
         Pack("ore_l", "⛓️", "۴۰۰ سنگ آهن", 500_000, items={"iron_ore": 400}, section="materials"),

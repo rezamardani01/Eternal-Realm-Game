@@ -79,7 +79,7 @@ async def test_transfer_panel_flow_for_gold(h, services, db):
     assert "مطمئنید" in h.session.last_text()
     assert (await services.players.require(10)).gold == before[0]  # nothing moved yet
     await h.tap(10, "تأیید و انتقال", group=True)
-    assert "هدیه رسید" in h.session.last_text()
+    assert "با موفقیت رسید" in h.session.last_text()
     assert (await services.players.require(10)).gold == before[0] - 1_016
     assert (await services.players.require(11)).gold == before[1] + 1_016
     dm = [c for c in h.session.sent("sendMessage") if str(c["chat_id"]) == "11"]

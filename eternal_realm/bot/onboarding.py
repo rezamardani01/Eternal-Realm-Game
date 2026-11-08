@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
+
 from baleropy import F, Router
+from baleropy.exceptions import BaleAPIError
 from baleropy.filters import ChatTypeFilter, CommandStart
 from baleropy.fsm import FSMContext, State, StatesGroup
 from baleropy.types import CallbackQuery, Message
@@ -10,6 +13,7 @@ from baleropy.types import CallbackQuery, Message
 from ..game.data.classes import CLASSES
 from ..game.data.races import RACES
 from ..shared.errors import GameError
+from ..shared.text import bold, fa, headline
 from . import keyboards, panel, views
 from .callbacks import ClassCb, RaceCb
 from .services import Services
@@ -35,6 +39,9 @@ async def start(message: Message, state: FSMContext, services: Services) -> None
         await panel.send(message, services, player, "home")
         return
     await state.set_state(Onboarding.name)
+    inviter = services.invites.parse((message.text or "").partition(" ")[2].strip())
+    if inviter is not None:
+        await state.update_data(ref=inviter)  # paid when this newcomer finishes creating the hero
     await message.answer(views.welcome())
 
 
@@ -44,6 +51,26 @@ async def got_name(message: Message, state: FSMContext, services: Services) -> N
     await state.update_data(name=name)
     await state.set_state(Onboarding.race)
     await message.answer(views.pick_race(), buttons=keyboards.race_buttons())
+
+
+async def _pay_inviter(bot, services: Services, newcomer, inviter_id: int) -> None:  # noqa: ANN001
+    """The friend who invited the newcomer gets small random prizes right away, with a message."""
+    result = await services.invites.register(newcomer, inviter_id)
+    if result is None:
+        return
+    total = await services.invites.count(result.inviter.id)
+    if result.capped:
+        body = "🎁 سقف جایزه‌ی دعوت امروز پر شده؛ فردا دوباره جایزه می‌گیرید."
+    else:
+        body = f"🎁 {bold('هدیه‌ی دعوت (همین حالا رسید)')}\n" + "\n".join(f"• {p}" for p in result.prizes)
+    text = (
+        f"🎉 {bold('دوستتان به قلمرو پیوست!')}\n\n"
+        f"👤 {newcomer.name} با لینک دعوت شما قهرمانش را ساخت.\n\n{body}\n\n"
+        f"👥 دعوت‌های موفق شما: {fa(total)}\n"
+        "هر دوست تازه، هدیه‌ی تازه 🤝"
+    )
+    with contextlib.suppress(BaleAPIError):
+        await bot.send_message(result.inviter.platform_user_id, headline(text))
 
 
 @router.message(Onboarding.name)
@@ -80,4 +107,6 @@ async def got_class(
     await state.clear()
     await query.message.edit_text(views.created(player))
     await panel.send(query.message, services, player, "home")
+    if data.get("ref"):
+        await _pay_inviter(query.message.bot, services, player, int(data["ref"]))
     await query.answer("قهرمان شما به دنیا آمد 🎉")

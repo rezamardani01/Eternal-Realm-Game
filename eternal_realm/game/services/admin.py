@@ -140,6 +140,51 @@ class AdminService:
             rows = await tx.fetchall("SELECT platform_user_id FROM players WHERE banned = 0")
         return [int(r["platform_user_id"]) for r in rows]
 
+    # --- the two link buttons of the main menu («گروه ما» / «کانال ما») -----------------------------------------------
+    LINK_DEFAULTS = {"group": "👥 گروه ما", "channel": "📣 کانال ما"}
+
+    async def links(self) -> dict[str, dict[str, str]]:
+        """``{"group": {"text", "url"}, "channel": {...}}``: what the owner set, else the config.toml links."""
+        async with self.ctx.db.read() as tx:
+            row = await tx.fetchone("SELECT value FROM app_settings WHERE key = 'links'")
+        saved = json.loads(row["value"]) if row else {}
+        settings = self.ctx.settings
+        fallback = {"group": settings.group_url, "channel": settings.channel_url}
+        out = {}
+        for key, default in self.LINK_DEFAULTS.items():
+            mine = saved.get(key, {})
+            out[key] = {"text": mine.get("text") or default, "url": mine.get("url", fallback[key]) if "url" in mine else fallback[key]}
+        return out
+
+    async def set_link(self, admin_id: int, which: str, *, text: str | None = None, url: str | None = None) -> None:
+        if which not in self.LINK_DEFAULTS:
+            raise GameError("این دکمه وجود ندارد.")
+        async with self.ctx.db.read() as tx:
+            row = await tx.fetchone("SELECT value FROM app_settings WHERE key = 'links'")
+        saved = json.loads(row["value"]) if row else {}
+        mine = saved.setdefault(which, {})
+        if text is not None:
+            text = text.strip()
+            if not 1 <= len(text) <= 28:
+                raise GameError("متن دکمه باید بین ۱ تا ۲۸ حرف باشد.")
+            mine["text"] = text
+        if url is not None:
+            url = url.strip()
+            if url == "-":
+                url = ""
+            elif url.startswith("@") and len(url) > 3 and " " not in url:
+                url = f"https://ble.ir/{url[1:]}"
+            elif url and not (url.startswith("https://") and " " not in url):
+                raise GameError("لینک باید با https:// شروع شود یا یک یوزرنیم مثل @mychannel باشد (برای پنهان کردن دکمه بنویسید: -).")
+            mine["url"] = url
+        payload = json.dumps(saved, ensure_ascii=False)
+        async with self.ctx.db.transaction() as tx:
+            await tx.execute(
+                "INSERT INTO app_settings (key, value) VALUES ('links', ?)"
+                " ON CONFLICT (key) DO UPDATE SET value = excluded.value", (payload,),
+            )
+            await self._log(tx, admin_id, "links", f"{which} text={text} url={url}")
+
     # --- maintenance mode: only managers can play while it is on -------------------------------------------------
     async def maintenance(self) -> tuple[bool, str]:
         async with self.ctx.db.read() as tx:

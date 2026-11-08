@@ -9,6 +9,7 @@ from baleropy.exceptions import BaleAPIError
 from ..game.data.items import Kind, get_item
 from ..game.services.economy import CRYSTAL_DAILY_LIMIT
 from ..shared.errors import GameError
+from ..shared.jalali import describe
 from ..shared.text import bold, fa
 from .panel import Ctx, Screen, _int, _page, screen
 
@@ -175,22 +176,27 @@ async def xdo(c: Ctx) -> Screen:
     target, what = _split(c)
     other = await _receiver(c, target)
     receipt = await c.services.economy.send(c.player, other, what, _int(c.b or "1"))
+    date, _, clock = describe(c.services.ctx.now())
     lines = [
-        f"🎁 {bold('هدیه رسید!')}",
+        f"🎁 {bold('هدیه با موفقیت رسید!')}",
         "",
-        f"از: {_who(c, c.player)}",
-        f"به: {_who(c, other)}",
-        f"هدیه: {receipt.what}",
+        f"👤 فرستنده: {_who(c, c.player)}",
+        f"🎯 گیرنده: {_who(c, other)}",
+        "",
+        f"📦 هدیه: {bold(receipt.what)}",
+        f"🕒 زمان: {date} · {clock}",
     ]
     if receipt.left is not None:
-        lines += ["", f"🏦 امروز می‌توانید {fa(receipt.left)} {receipt.unit}‌ی دیگر ببخشید."]
+        lines.append(f"🏦 امروز می‌توانید {fa(receipt.left)} {receipt.unit} دیگر ببخشید.")
+    lines += ["", "💌 یک پیام هم در پیوی گیرنده فرستاده شد.", "برای بخشیدن چیز دیگری، دکمه‌ی زیر را بزنید 👇"]
     if c.message is not None:
         dm = (
             f"🎁 {bold('هدیه‌ای برای شما رسید!')}\n\n"
-            f"از: {c.player.name}\n"
-            f"هدیه: {receipt.what}\n\n"
-            "از کیف و کوله‌پشتی‌تان ببینیدش."
+            f"👤 از طرف: {c.player.name}\n"
+            f"📦 هدیه: {receipt.what}\n"
+            f"🕒 {date} · {clock}\n\n"
+            "از «کیف» و «کوله‌پشتی» ببینیدش."
         )
         with contextlib.suppress(BaleAPIError):
             await c.message.bot.send_message(other.platform_user_id, dm)
-    return Screen("\n".join(lines), [])
+    return Screen("\n".join(lines), [[c.btn("🎁 ارسال آیتم دیگر", "xfer", other.id, style="primary")]])
