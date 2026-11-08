@@ -855,7 +855,7 @@ async def top(c: Ctx) -> Screen:
             board = await ranking.boss_hunters(c.player)
         else:
             board = await ranking.global_board(board_id, c.player)
-        text = views.ranking(board)
+        text = views.ranking(board, mentions=c.is_group)
     rows = [
         [c.btn("🏆 سطح", "top", "level"), c.btn("💰 ثروت", "top", "rich")],
         [c.btn("⚔️ دوئل", "top", "wins"), c.btn("🐉 شکارچیان باس", "top", "bosses")],

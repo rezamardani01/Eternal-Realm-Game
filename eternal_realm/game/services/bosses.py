@@ -234,7 +234,7 @@ class BossService:
             player = await self.players_get(tx, r["player_id"])
             stats = await self.characters.stats_in(tx, player)
             heroes.append(
-                Hero(player.id, player.name, player.class_id, stats.hp, stats.hp, stats.atk, stats.defense,
+                Hero(player.id, player.mention, player.class_id, stats.hp, stats.hp, stats.atk, stats.defense,
                      stats.magic, stats.speed, stats.luck)
             )
         avg_level = max(1, round(sum(r["level"] for r in roster) / len(roster)))

@@ -24,6 +24,11 @@ class Entry:
     badge: str
     value: int
     level: int
+    uid: int = 0
+
+    @property
+    def mention(self) -> str:
+        return f"[{self.name}](uid:{self.uid})" if self.uid else self.name
 
 
 @dataclass
@@ -53,7 +58,7 @@ class RankingService:
         title, order, column, unit = BOARDS[board]
         async with self.ctx.db.read() as tx:
             rows = await tx.fetchall(
-                f"SELECT display_name, race, class, level, {column} AS value FROM players"  # noqa: S608
+                f"SELECT display_name, platform_user_id AS uid, race, class, level, {column} AS value FROM players"  # noqa: S608
                 f" WHERE banned = 0 ORDER BY {order} LIMIT ?",
                 (limit,),
             )
@@ -67,7 +72,7 @@ class RankingService:
                     )
                 )
         entries = [
-            Entry(r["display_name"], _badge(r["race"], r["class"]), r["value"], r["level"]) for r in rows
+            Entry(r["display_name"], _badge(r["race"], r["class"]), r["value"], r["level"], r["uid"]) for r in rows
         ]
         return Board(title, unit, entries, position)
 
@@ -75,7 +80,7 @@ class RankingService:
         """Everybody's total damage against group bosses."""
         async with self.ctx.db.read() as tx:
             rows = await tx.fetchall(
-                "SELECT p.display_name, p.race, p.class, p.level, SUM(h.damage) AS value FROM boss_hits h"
+                "SELECT p.display_name, p.platform_user_id AS uid, p.race, p.class, p.level, SUM(h.damage) AS value FROM boss_hits h"
                 " JOIN players p ON p.id = h.player_id WHERE p.banned = 0 GROUP BY p.id"
                 " HAVING value > 0 ORDER BY value DESC LIMIT ?",
                 (limit,),
@@ -90,7 +95,7 @@ class RankingService:
                             " HAVING t > ?)", (mine,), 0,
                         )
                     )
-        entries = [Entry(r["display_name"], _badge(r["race"], r["class"]), r["value"], r["level"]) for r in rows]
+        entries = [Entry(r["display_name"], _badge(r["race"], r["class"]), r["value"], r["level"], r["uid"]) for r in rows]
         return Board("🐉 شکارچیان باس (کل آسیب)", "آسیب", entries, position)
 
     async def hero_of_the_week(self, chat_id: int, limit: int = 5) -> Board:
@@ -98,13 +103,13 @@ class RankingService:
         since = self.ctx.now() - 7 * 86400
         async with self.ctx.db.read() as tx:
             rows = await tx.fetchall(
-                "SELECT p.display_name, p.race, p.class, p.level, SUM(h.damage) AS value FROM boss_hits h"
+                "SELECT p.display_name, p.platform_user_id AS uid, p.race, p.class, p.level, SUM(h.damage) AS value FROM boss_hits h"
                 " JOIN bosses b ON b.id = h.boss_id JOIN players p ON p.id = h.player_id"
                 " WHERE b.chat_id = ? AND b.created_at >= ? GROUP BY p.id HAVING value > 0"
                 " ORDER BY value DESC LIMIT ?",
                 (chat_id, since, limit),
             )
-        entries = [Entry(r["display_name"], _badge(r["race"], r["class"]), r["value"], r["level"]) for r in rows]
+        entries = [Entry(r["display_name"], _badge(r["race"], r["class"]), r["value"], r["level"], r["uid"]) for r in rows]
         return Board("🌟 قهرمانان این هفته", "آسیب", entries)
 
     async def battle_history(self, chat_id: int, limit: int = 5) -> list[BattleRecord]:
@@ -119,7 +124,7 @@ class RankingService:
             records = []
             for row in rows:
                 fighters = await tx.fetchall(
-                    "SELECT p.display_name AS name, h.damage FROM boss_hits h JOIN players p ON p.id = h.player_id"
+                    "SELECT p.display_name AS name, p.platform_user_id AS uid, h.damage FROM boss_hits h JOIN players p ON p.id = h.player_id"
                     " WHERE h.boss_id = ? ORDER BY h.damage DESC", (row["id"],),
                 )
                 kind = boss_by_id(row["boss_type"])
@@ -127,7 +132,7 @@ class RankingService:
                 records.append(
                     BattleRecord(
                         kind.name, kind.emoji, row["status"] == "defeated", row["ended_at"] or 0, len(fighters),
-                        top["name"] if top else "-", top["damage"] if top else 0,
+                        f"[{top['name']}](uid:{top['uid']})" if top else "-", top["damage"] if top else 0,
                     )
                 )
         return records
@@ -135,7 +140,7 @@ class RankingService:
     async def group_board(self, chat_id: int, limit: int = 10) -> Board:
         rows = await _top(self.ctx, chat_id, limit)
         entries = [
-            Entry(r["display_name"], _badge(r["race"], r["class"]), r["points"], r["level"]) for r in rows
+            Entry(r["display_name"], _badge(r["race"], r["class"]), r["points"], r["level"], r["uid"]) for r in rows
         ]
         return Board("🏰 دلاورترین‌های همین گروه", "امتیاز", entries)
 

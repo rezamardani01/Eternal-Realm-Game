@@ -314,14 +314,14 @@ def upgrade_result(result) -> str:  # noqa: ANN001 - UpgradeResult
 
 
 # --- rankings ----------------------------------------------------------------------------------
-def ranking(board) -> str:  # noqa: ANN001 - Board
+def ranking(board, mentions: bool = False) -> str:  # noqa: ANN001 - Board
     if not board.entries:
         return f"{board.title}\n{LINE}\nهنوز کسی در این تالار نیست. اولین شما باشید!"
     medals = ["🥇", "🥈", "🥉"]
     lines = [board.title, LINE]
     for index, entry in enumerate(board.entries):
         place = medals[index] if index < 3 else f"{fa(index + 1)}."
-        lines.append(f"{place} {entry.name} {entry.badge} · سطح {fa(entry.level)} · {fa(entry.value)} {board.unit}")
+        lines.append(f"{place} {entry.mention if mentions else entry.name} {entry.badge} · سطح {fa(entry.level)} · {fa(entry.value)} {board.unit}")
     if board.my_position:
         lines += [LINE, f"📍 جایگاه شما: {bold(fa(board.my_position))}"]
     return "\n".join(lines)
@@ -531,7 +531,7 @@ def _clock(seconds: int) -> str:
 
 
 def boss_recruiting(v, min_players: int, max_players: int) -> str:  # noqa: ANN001 - BossView
-    roster = "\n".join(f"{f.emoji} {f.name}" for f in v.fighters)
+    roster = "\n".join(f"{f.emoji} {f.mention}" for f in v.fighters)
     return "\n".join(
         [
             f"{v.type.emoji} {bold(v.type.name + ' بیدار شده است!')}",
@@ -572,7 +572,7 @@ def boss_fight(v) -> str:  # noqa: ANN001 - BossView
     ranked = sorted(v.fighters, key=lambda f: -f.damage)[:3]
     if ranked and ranked[0].damage:
         lines += ["", f"🏅 {bold('بیشترین آسیب')}"]
-        lines += [f"{MEDALS[i]} {f.name} — {fa(f.damage)}" for i, f in enumerate(ranked)]
+        lines += [f"{MEDALS[i]} {f.mention} — {fa(f.damage)}" for i, f in enumerate(ranked)]
     lines += ["", "🤖 نبرد خودکار است؛ فقط تماشا کنید و تشویق کنید!"]
     return "\n".join(lines)
 
@@ -709,7 +709,7 @@ def duel_invite(challenger, target, seconds: int) -> str:  # noqa: ANN001 - Play
 def _hp_block(f) -> str:  # noqa: ANN001 - Fighter
     percent = round(100 * max(f.hp, 0) / f.max_hp) if f.max_hp else 0
     return (
-        f"{f.emoji} {bold(f.name)}\n"
+        f"{f.emoji} {f.mention or bold(f.name)}\n"
         f"❤️ {fa(max(f.hp, 0))} از {fa(f.max_hp)}\n"
         f"{bar(f.hp, f.max_hp, 10)}  {fa(percent)}٪"
     )
@@ -727,7 +727,7 @@ def duel_status(battle, lines: list[str], turn_seconds: int) -> str:  # noqa: AN
         blocks.append("\n".join(story))
     if not battle.finished:
         blocks.append(
-            f"🎯 نوبت {bold(battle.current.name)}\n"
+            f"🎯 نوبت {battle.current.mention or bold(battle.current.name)}\n"
             f"🔁 دور {fa(battle.round)} از {fa(battle.max_rounds)}\n"
             f"⏳ {duration(turn_seconds)} فرصت دارید."
         )
@@ -755,7 +755,7 @@ def duel_result(update) -> str:  # noqa: ANN001 - DuelUpdate
             gains.append(f"{fa(payout.gold)} سکه")
         if payout.xp:
             gains.append(f"{fa(payout.xp)} تجربه")
-        line = f"{fighter.name}: " + (" و ".join(gains) if gains else "سقف پاداش امروز پر است")
+        line = f"{fighter.mention or fighter.name}: " + (" و ".join(gains) if gains else "سقف پاداش امروز پر است")
         if payout.level_up:
             line += f"\n🎉 رسید به سطح {fa(payout.level_up.new_level)}"
         blocks.append(line)

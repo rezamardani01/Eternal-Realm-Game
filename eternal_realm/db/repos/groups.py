@@ -38,7 +38,7 @@ async def add_points(tx: Tx, chat_id: int, player_id: int, points: int, now: int
 
 async def top_members(tx: Tx, chat_id: int, limit: int) -> list[Row]:
     return await tx.fetchall(
-        "SELECT p.display_name, p.race, p.class, p.level, m.points FROM group_members m"
+        "SELECT p.display_name, p.platform_user_id AS uid, p.race, p.class, p.level, m.points FROM group_members m"
         " JOIN players p ON p.id = m.player_id WHERE m.chat_id = ? AND m.points > 0"
         " ORDER BY m.points DESC, p.level DESC LIMIT ?",
         (chat_id, limit),

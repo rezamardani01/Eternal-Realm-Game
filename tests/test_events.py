@@ -194,7 +194,7 @@ async def test_boss_boards_and_history(h, services, db, clock):
     assert [(e.name, e.value) for e in week.entries] == [("سارا", 900), ("آرش", 600)]
 
     history = await services.rankings.battle_history(CHAT)
-    assert [r.won for r in history] == [False, True] and history[1].top_name == "سارا"
+    assert [r.won for r in history] == [False, True] and "سارا" in history[1].top_name
 
     await h.say(1, "رتبه", group=True)
     for label in ("شکارچیان باس", "قهرمان هفته", "تاریخچه"):

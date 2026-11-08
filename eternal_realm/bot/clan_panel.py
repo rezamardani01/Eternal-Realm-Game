@@ -24,12 +24,12 @@ def _role_label(role: str) -> str:
     return f"{emoji} {title}"
 
 
-def clan_text(view: ClanView) -> str:
+def clan_text(view: ClanView, mention: bool = False) -> str:
     door = "باز (هر کسی می‌تواند بپیوندد)" if view.open else "بسته (فقط با دعوت)"
     lines = [
         f"🏯 {bold('خاندان ' + view.name)}",
         "",
-        f"👑 رهبر: {view.leader}",
+        f"👑 رهبر: {view.leader_mention if mention else view.leader}",
         f"⭐ سطح خاندان: {fa(view.level)}",
         f"👥 اعضا: {fa(view.size)} از {fa(view.capacity)}",
         f"💪 قدرت (جمع سطح اعضا): {fa(view.power)}",
@@ -66,7 +66,7 @@ async def clan(c: Ctx) -> Screen:
     rows.append([c.btn("🚪 خروج از خاندان", "clanleaveq")])
     rows.append(c.back("home"))
     role = _role_label(mine.my_role or "member")
-    return Screen(clan_text(mine) + f"\n\n{role}: مقام شما", rows)
+    return Screen(clan_text(mine, c.is_group) + f"\n\n{role}: مقام شما", rows)
 
 
 # --- members ---------------------------------------------------------------------------------------
@@ -108,7 +108,7 @@ async def clan_member(c: Ctx) -> Screen:
     pid = _int(c.a)
     mine, m = await _member_row(c, pid)
     text = (
-        f"{ROLES[m['role']][0]} {bold(m['name'])}\n\n"
+        f"{ROLES[m['role']][0]} {bold(m['name']) if not c.is_group else '[' + m['name'] + '](uid:' + str(m['platform_user_id']) + ')'}\n\n"
         f"🎖️ مقام: {ROLES[m['role']][1]}\n\n"
         f"⭐ سطح: {fa(m['level'])}\n\n"
         f"🪙 کمک به خزانه: {fa(m['donated'])} سکه"
@@ -281,7 +281,7 @@ async def clan_view(c: Ctx) -> Screen:
         label = "✅ پیوستن" if view.open else "🔒 درِ خاندان بسته است"
         rows.append([c.btn(label, "clanjoin", view.id, style="success" if view.open else None)])
     rows.append(c.back("clanlist", "🔙 بازگشت", "0"))
-    return Screen(clan_text(view), rows)
+    return Screen(clan_text(view, c.is_group), rows)
 
 
 @screen("clanjoin")

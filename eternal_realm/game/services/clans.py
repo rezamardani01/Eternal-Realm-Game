@@ -46,6 +46,7 @@ class ClanView:
     name: str
     leader_id: int
     leader: str
+    leader_mention: str
     open: bool
     treasury: int
     donated: int
@@ -85,7 +86,7 @@ class ClanService:
         )
         level = level_for(row["donated"])
         return ClanView(
-            row["id"], row["name"], row["leader_id"], lead.name if lead else "-", bool(row["open"]),
+            row["id"], row["name"], row["leader_id"], lead.name if lead else "-", lead.mention if lead else "-", bool(row["open"]),
             row["treasury"], row["donated"], size, power, level, capacity_for(level), my_role,
         )
 
