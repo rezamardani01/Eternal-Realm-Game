@@ -1,0 +1,40 @@
+"""Today's personal missions."""
+
+from __future__ import annotations
+
+from ..shared.text import bar, bold, fa
+from .panel import Ctx, Screen, _int, screen
+
+
+@screen("missions")
+async def missions(c: Ctx) -> Screen:
+    todays = await c.services.missions.today(c.player)
+    lines = [
+        f"📅 {bold('مأموریت‌های امروز')}",
+        "",
+        "این مأموریت‌ها مخصوص خود شما انتخاب شده‌اند و هر شب نیمه‌شب عوض می‌شوند. شمارش از لحظه‌ی اولین باز کردن این صفحه در هر روز شروع می‌شود.",
+        "",
+    ]
+    rows = []
+    for m in todays:
+        state = "✅ گرفته شد" if m.claimed else ("🎁 آماده‌ی دریافت" if m.done else "در جریان")
+        lines += [
+            f"{m.emoji} {m.title}",
+            f"{bar(m.progress, m.target, 8)}  {fa(m.progress)}/{fa(m.target)} · {state}",
+            f"پاداش: {fa(m.gold)} سکه + ۲۰ امتیاز مسیر قهرمانی",
+            "",
+        ]
+        if m.done and not m.claimed:
+            rows.append([c.btn(f"🎁 دریافت پاداش مأموریت {fa(m.slot + 1)}", "msclaim", m.slot, style="success")])
+    if not todays:
+        lines.append("برای امروز مأموریتی پیدا نشد.")
+    rows.append(c.back("profile"))
+    return Screen("\n".join(lines).strip(), rows)
+
+
+@screen("msclaim")
+async def mission_claim(c: Ctx) -> Screen:
+    done = await c.services.missions.claim(c.player, _int(c.a))
+    shown = await missions(c)
+    shown.toast, shown.alert = f"🎁 {fa(done.gold)} سکه گرفتید!", True
+    return shown

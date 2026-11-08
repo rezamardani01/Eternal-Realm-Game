@@ -348,6 +348,20 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_offers_log ON offers_log (player_id, sent_at);
     """,
+    # 22: personal daily missions
+    """
+    CREATE TABLE daily_missions (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        day       INTEGER NOT NULL,
+        slot      INTEGER NOT NULL,
+        kind_id   TEXT    NOT NULL,
+        deed      TEXT    NOT NULL,
+        target    INTEGER NOT NULL,
+        progress  INTEGER NOT NULL DEFAULT 0,
+        claimed   INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (player_id, day, slot)
+    );
+    """,
 ]
 
 

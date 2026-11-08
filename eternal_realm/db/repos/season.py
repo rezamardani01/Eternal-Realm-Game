@@ -8,6 +8,11 @@ from ..database import Tx
 
 async def add_points(tx: Tx, player_id: int, deed: str, now: int) -> int:
     """Credit the path points of a deed. Returns the points added (0 for an unknown deed)."""
+    await tx.execute(
+        "UPDATE daily_missions SET progress = MIN(target, progress + 1)"
+        " WHERE player_id = ? AND day = ? AND deed = ? AND claimed = 0",
+        (player_id, (now + 12600) // 86400, deed),
+    )
     points = POINTS.get(deed, 0)
     if not points:
         return 0

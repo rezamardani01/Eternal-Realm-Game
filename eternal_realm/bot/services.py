@@ -21,6 +21,7 @@ from ..game.services.groups import GroupService
 from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
 from ..game.services.market import MarketService
+from ..game.services.missions import MissionService
 from ..game.services.offers import OfferService
 from ..game.services.payments import PaymentService
 from ..game.services.pets import PetService
@@ -57,6 +58,7 @@ class Services:
     crafting: CraftingService
     season: SeasonService
     offers: OfferService
+    missions: MissionService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -70,6 +72,7 @@ class Services:
         players.after_register.append(inventory.on_registered)
         characters = CharacterService(ctx, inventory)
         cards = CardService(ctx)
+        offers = OfferService(ctx)
         bosses = BossService(ctx, players, inventory, characters, cards)
         return cls(
             ctx=ctx,
@@ -94,7 +97,8 @@ class Services:
             dungeon=DungeonService(ctx, players, inventory, characters),
             crafting=CraftingService(ctx, inventory),
             season=SeasonService(ctx, inventory),
-            offers=OfferService(ctx),
+            offers=offers,
+            missions=MissionService(ctx, offers),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(
