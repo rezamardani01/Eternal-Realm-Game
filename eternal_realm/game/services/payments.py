@@ -133,11 +133,11 @@ class PaymentService:
         if row["platform_user_id"] != platform_user_id:
             return "این سفارش برای قهرمان دیگری ثبت شده است."
         if row["status"] != "pending":
-            return "این سفارش دیگر معتبر نیست؛ از «فروشگاه ویژه» دوباره سفارش بدهید."
+            return "این سفارش دیگر معتبر نیست؛ از «خزانه قلمرو» دوباره سفارش بدهید."
         if self.ctx.now() - row["created_at"] > ORDER_TTL_SECONDS:
             return "مهلت پرداخت این سفارش تمام شده است؛ دوباره سفارش بدهید."
         if row["amount"] != amount or row["pack_id"] not in PACKS:
-            return "مبلغ پرداخت با قیمت بسته نمی‌خواند؛ از «فروشگاه ویژه» دوباره سفارش بدهید."
+            return "مبلغ پرداخت با قیمت بسته نمی‌خواند؛ از «خزانه قلمرو» دوباره سفارش بدهید."
         return None
 
     async def complete(self, platform_user_id: int, payload: str, amount: int, charge_id: str | None) -> Delivery:
