@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid slice" role="img" aria-label="">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a1b6b"/><stop offset=".55" stop-color="#1b2a6b"/><stop offset="1" stop-color="#0e5a78"/></linearGradient>
+    <radialGradient id="moon" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".45" stop-color="#cbd5ff" stop-opacity=".5"/><stop offset="1" stop-color="#8b6bff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="m1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4b3aa8"/><stop offset="1" stop-color="#1c1546"/></linearGradient>
+    <linearGradient id="m2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f2a86"/><stop offset="1" stop-color="#120f33"/></linearGradient>
+  </defs>
+  <rect width="1200" height="360" fill="url(#sky)"/>
+  <circle cx="930" cy="92" r="120" fill="url(#moon)"/>
+  <circle cx="930" cy="92" r="34" fill="#f4f6ff"/>
+  <g fill="#fff">
+    <circle cx="90" cy="50" r="1.6"/><circle cx="210" cy="110" r="1.2"/><circle cx="320" cy="40" r="1.8"/><circle cx="450" cy="90" r="1.2"/>
+    <circle cx="560" cy="30" r="1.6"/><circle cx="680" cy="120" r="1.2"/><circle cx="780" cy="60" r="1.8"/><circle cx="1090" cy="150" r="1.4"/>
+    <circle cx="1140" cy="40" r="1.6"/><circle cx="140" cy="170" r="1"/><circle cx="610" cy="170" r="1"/>
+  </g>
+  <path d="M0 250 120 190 210 235 330 150 440 230 560 170 690 245 820 160 940 235 1060 175 1200 240V360H0Z" fill="url(#m1)"/>
+  <path d="M0 300 140 245 250 290 380 220 500 290 640 235 760 300 900 240 1030 295 1200 250V360H0Z" fill="url(#m2)"/>
+  <g fill="#0b0a24">
+    <path d="M980 300V228l14-12 14 12v72Zm-26 0v-52l10-8 10 8v52Zm60 0v-44l9-7 9 7v44Z"/>
+    <path d="M990 214V196l4-4 4 4v18Z"/>
+  </g>
+  <g fill="#ffd166" opacity=".9"><rect x="990" y="240" width="5" height="9" rx="1"/><rect x="1002" y="256" width="4" height="8" rx="1"/><rect x="962" y="262" width="4" height="8" rx="1"/></g>
+</svg>

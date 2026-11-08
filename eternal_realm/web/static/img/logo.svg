@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="قلمرو جاودان">
+  <defs>
+    <linearGradient id="a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b6bff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+    <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#cfe9ff" stop-opacity=".75"/></linearGradient>
+    <filter id="g" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4"/></filter>
+  </defs>
+  <path d="M60 6 104 22v34c0 29-18 49-44 58C34 105 16 85 16 56V22Z" fill="url(#a)" filter="url(#g)" opacity=".55"/>
+  <path d="M60 8 102 23v33c0 28-17 47-42 56C35 103 18 84 18 56V23Z" fill="url(#a)"/>
+  <path d="M60 8 102 23v33c0 28-17 47-42 56" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="2"/>
+  <g fill="url(#b)">
+    <path d="M45 30 51 36 70 77l-6 5-21-40Z"/>
+    <path d="M75 30 69 36 50 77l6 5 21-40Z"/>
+    <path d="M41 78h14l-3 7H38Zm24 0h14l3 7H68Z"/>
+    <path d="M60 22 64 30H56Z"/>
+  </g>
+</svg>

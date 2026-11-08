@@ -1,0 +1,2 @@
+Lucide icons (ISC license) - https://lucide.dev
+Vazirmatn font (OFL) - https://github.com/rastikerdar/vazirmatn

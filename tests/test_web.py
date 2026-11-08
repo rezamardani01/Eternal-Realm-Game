@@ -193,7 +193,7 @@ async def test_the_static_page_has_no_inline_script_or_style():
     page = Path("eternal_realm/web/static/index.html").read_text(encoding="utf-8")
     assert "<script>" not in page and "style=" not in page  # the CSP forbids both
     js = Path("eternal_realm/web/static/app.js").read_text(encoding="utf-8")
-    assert "innerHTML" not in js.replace('defs.innerHTML = \'<linearGradient', "")  # names go in with textContent only
+    assert js.count("innerHTML") == 1 and "d.innerHTML = '<linearGradient" in js  # only the fixed chart gradients
 
 
 # --- the bot command ---------------------------------------------------------------------------------------------------

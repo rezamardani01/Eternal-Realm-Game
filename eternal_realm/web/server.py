@@ -17,7 +17,9 @@ from typing import Any
 from aiohttp import web
 
 from ..bot.services import Services
+from ..game.data.classes import CLASSES
 from ..game.data.items import ITEMS, find_item
+from ..game.data.races import RACES
 from ..shared.errors import GameError
 from ..shared.jalali import describe
 from .auth import SESSION_TTL, Session, WebAuth
@@ -27,6 +29,9 @@ STATIC = Path(__file__).parent / "static"
 COOKIE = "er_sid"
 SESSION_KEY = web.RequestKey("session", Session)
 PAGE = 25
+CLASS_FA = {k: f"{c.emoji} {c.name}" for k, c in CLASSES.items()}
+RACE_FA = {k: f"{r.emoji} {r.name}" for k, r in RACES.items()}
+SORTS = {"level": "level DESC, id", "gold": "gold DESC", "crystal": "crystal DESC", "wins": "wins DESC", "new": "id DESC", "name": "display_name"}
 
 CSP = (
     "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
@@ -162,6 +167,20 @@ class AdminWeb:
             return out
 
         data["series"] = {"new": series(new_rows), "revenue": series(rev_rows, 10), "active": series(act_rows)}
+        async with self.s.ctx.db.read() as tx:
+            classes = await tx.fetchall("SELECT class AS k, COUNT(*) AS n FROM players GROUP BY class ORDER BY n DESC")
+            races = await tx.fetchall("SELECT race AS k, COUNT(*) AS n FROM players GROUP BY race ORDER BY n DESC")
+            top = await tx.fetchall(
+                "SELECT id, display_name, level, class, wins FROM players WHERE banned = 0 ORDER BY level DESC, xp DESC LIMIT 6")
+            recent = await tx.fetchall(
+                "SELECT o.id, o.pack_id, o.amount, o.status, o.created_at, p.display_name AS name FROM orders o"
+                " JOIN players p ON p.id = o.player_id ORDER BY o.id DESC LIMIT 6")
+        data["classes"] = [{"key": r["k"], "label": CLASS_FA.get(r["k"], r["k"]), "n": r["n"]} for r in classes]
+        data["races"] = [{"key": r["k"], "label": RACE_FA.get(r["k"], r["k"]), "n": r["n"]} for r in races]
+        data["top"] = [{"id": r["id"], "name": r["display_name"], "level": r["level"],
+                        "class": CLASS_FA.get(r["class"], r["class"]), "wins": r["wins"]} for r in top]
+        data["recent_orders"] = [{"id": r["id"], "name": r["name"], "pack": r["pack_id"], "toman": r["amount"] // 10,
+                                  "status": r["status"], "at": fmt(r["created_at"])} for r in recent]
         return _json(data)
 
     # --- api: players -------------------------------------------------------------------------------------
@@ -177,13 +196,36 @@ class AdminWeb:
         async with self.s.ctx.db.read() as tx:
             total = await tx.scalar(f"SELECT COUNT(*) FROM players WHERE {where}", tuple(args), 0)  # noqa: S608
             rows = await tx.fetchall(
-                f"SELECT * FROM players WHERE {where} ORDER BY level DESC, id LIMIT ? OFFSET ?",  # noqa: S608
+                f"SELECT * FROM players WHERE {where} ORDER BY {SORTS.get(request.query.get('sort', ''), SORTS['level'])}"  # noqa: S608
+                " LIMIT ? OFFSET ?",
                 (*args, PAGE, page * PAGE),
             )
         return _json({
             "total": total, "page": page, "per": PAGE,
             "rows": [_player_row(r, now) for r in rows],
         })
+
+    async def export_players(self, request: web.Request) -> web.Response:
+        """All players as a spreadsheet-safe CSV (cells that could be read as formulas are neutralised)."""
+        now = self.s.ctx.now()
+        async with self.s.ctx.db.read() as tx:
+            rows = await tx.fetchall("SELECT * FROM players ORDER BY id")
+
+        def cell(value: Any) -> str:
+            text = str(value).replace('"', '""')
+            if text[:1] in ("=", "+", "-", "@", "\t", "\r"):
+                text = "'" + text
+            return f'"{text}"'
+
+        lines = [",".join(cell(h) for h in ("id", "uid", "name", "level", "gold", "crystal", "wins", "losses", "rating", "banned", "vip", "created"))]
+        for r in rows:
+            p = _player_row(r, now)
+            lines.append(",".join(cell(p[k]) for k in ("id", "uid", "name", "level", "gold", "crystal", "wins", "losses", "rating", "banned", "vip", "created")))
+        await self.s.admin.log_action(request[SESSION_KEY].admin_id, "export_players", f"rows={len(rows)}")
+        return web.Response(
+            text="\ufeff" + "\n".join(lines), content_type="text/csv", charset="utf-8",
+            headers={"Content-Disposition": 'attachment; filename="players.csv"'},
+        )
 
     async def player(self, request: web.Request) -> web.Response:
         pid = int(request.match_info["id"])
@@ -334,9 +376,10 @@ def _login_page(message: str, extra: str = "") -> str:
     return (
         '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1"><title>ورود به پنل</title>'
-        '<link rel="stylesheet" href="/static/style.css"></head><body class="login">'
-        f'<div class="login-card"><div class="logo">⚔️</div><h1>قلمرو جاودان</h1><p>{html.escape(message)}</p>{extra}</div>'
-        "</body></html>"
+        '<link rel="icon" href="/static/img/logo.svg" type="image/svg+xml">'
+        '<link rel="stylesheet" href="/static/style.css"></head><body><div class="login">'
+        '<div class="login-card"><img src="/static/img/logo.svg" alt="" width="92" height="92">'
+        f"<h1>قلمرو جاودان</h1><p>{html.escape(message)}</p>{extra}</div></div></body></html>"
     )
 
 
@@ -352,6 +395,7 @@ def build_app(services: Services, auth: WebAuth, bot: Any = None, secure_cookie:
         ("GET", "/api/players/{id:\\d+}", panel.player), ("POST", "/api/players/{id:\\d+}/give", panel.give),
         ("POST", "/api/players/{id:\\d+}/level", panel.set_level), ("POST", "/api/players/{id:\\d+}/ban", panel.ban),
         ("POST", "/api/players/{id:\\d+}/item", panel.give_item), ("GET", "/api/items", panel.items),
+        ("GET", "/api/export/players.csv", panel.export_players),
         ("GET", "/api/groups", panel.groups), ("GET", "/api/orders", panel.orders), ("GET", "/api/audit", panel.audit),
         ("POST", "/api/broadcast", panel.broadcast), ("POST", "/api/logout", panel.logout),
     ]
