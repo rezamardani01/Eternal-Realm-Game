@@ -383,8 +383,8 @@ async def test_boss_word_shows_the_live_boss_and_admins_can_disable_it(h, servic
 async def test_the_panel_button_summons_in_groups_only(h, services, db):
     await hero(services, db, 10, "آرش", gold=5_000)
     await h.say(10, "قلمرو", group=True)
-    assert any("باس گروه" in t for t in h.labels())
-    await h.tap(10, "باس گروه", group=True)
+    assert not any("باس گروه" in t for t in h.labels())  # the short group menu leaves it out; the word «باس» still works
+    await h.panel(10, "boss", group=True)
     assert "احضار" in h.session.last_text()
     await h.tap(10, "احضار", group=True)
     assert any("بیدار شده است" in t for t in h.session.texts())

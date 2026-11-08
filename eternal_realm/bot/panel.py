@@ -133,6 +133,13 @@ async def home(c: Ctx) -> Screen:
         f"⚡ انرژی {fa(p.energy)} / {fa(top)}\n🪙 {fa(p.gold)} سکه · 💎 {fa(p.crystal)} کریستال\n\n"
         "امروز به کجا حمله می‌کنید؟"
     )
+    if c.is_group:  # a short menu in groups; everything else lives in the private chat
+        rows = [
+            [c.btn("👤 قهرمان من", "profile"), c.btn("🛒 فروشگاه آیتم", "shop")],
+            [c.btn("🏪 بازارچه", "market"), c.btn("🏯 خاندان", "clan")],
+            [c.btn("😴 استراحت", "rest")],
+        ]
+        return Screen(text, rows)
     rows = [
         [c.btn("🗺️ ماجراجویی", "adv", style="primary"), c.btn("👤 قهرمان من", "profile")],
         [c.btn("🎒 کوله‌پشتی", "inv"), c.btn("🛒 فروشگاه آیتم", "shop")],
@@ -140,20 +147,17 @@ async def home(c: Ctx) -> Screen:
         [c.btn("🏯 خاندان", "clan"), c.btn("📜 داستان‌ها", "quests")],
         [c.btn("🃏 کلکسیون کارت", "album"), c.btn("🐱 حیوان خانگی", "pets")],
         [c.btn("🕳️ سیاه‌چال", "dungeon"), c.btn("🔥 کوره آهنگری", "craft")],
-        [c.btn("💎 خزانه قلمرو", "premium"), c.btn("🎁 جایزه روزانه", "daily")] if not c.is_group else [c.btn("🎁 جایزه روزانه", "daily")],
+        [c.btn("💎 خزانه قلمرو", "premium"), c.btn("🎁 جایزه روزانه", "daily")],
         [c.btn("😴 استراحت", "rest"), c.btn("❓ راهنمایی", "help")],
     ]
-    if c.is_group:
-        rows.insert(-1, [c.btn("🐉 باس گروه", "boss")])
-    else:
-        settings = c.services.ctx.settings
-        links = []
-        if settings.group_url:
-            links.append(Button.url("👥 گروه ما", settings.group_url))
-        if settings.channel_url:
-            links.append(Button.url("📣 کانال ما", settings.channel_url))
-        if links:
-            rows.append(links)
+    settings = c.services.ctx.settings
+    links = []
+    if settings.group_url:
+        links.append(Button.url("👥 گروه ما", settings.group_url))
+    if settings.channel_url:
+        links.append(Button.url("📣 کانال ما", settings.channel_url))
+    if links:
+        rows.append(links)
     return Screen(text, rows)
 
 

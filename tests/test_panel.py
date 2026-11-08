@@ -407,7 +407,8 @@ async def test_declining_the_purchase_changes_nothing(h, services, db):
 async def test_the_word_realm_opens_the_home_panel_in_a_group(h, services):
     await reg(services)
     await h.say(10, "قلمرو", group=True)
-    assert any("ماجراجویی" in t for t in h.labels()) and "فرمانده" in h.session.last_text()
+    assert "فرمانده" in h.session.last_text()
+    assert [t.split(" ", 1)[1] for t in h.labels()] == ["قهرمان من", "فروشگاه آیتم", "بازارچه", "خاندان", "استراحت"]
 
 
 async def test_back_buttons_are_called_back_not_menu(h, services):
