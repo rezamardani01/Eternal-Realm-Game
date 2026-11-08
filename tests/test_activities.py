@@ -167,3 +167,34 @@ def test_ladder_can_be_configured():
 
     s = parse_settings({"bot": {"token": "x", "owner_id": 1}, "balance": {"cooldown_ladder": "60, 120"}})
     assert cooldown_ladder(s.balance) == (60, 120)
+
+
+def test_nine_activities_with_valid_loot_and_many_words():
+    from eternal_realm.bot.commands.registry import REGISTRY
+    from eternal_realm.game.data.activities import ACTIVITIES
+    from eternal_realm.game.data.items import ITEMS
+
+    assert len(ACTIVITIES) == 9
+    for a in ACTIVITIES.values():
+        assert len(a.aliases) >= 5 and len(a.outcomes) >= 5
+        assert sum(o.weight for o in a.outcomes) > 0
+        for o in a.outcomes:
+            assert all(d.item_id in ITEMS for d in o.drops)
+        for alias in a.aliases:
+            if not alias.isascii():
+                found = REGISTRY.find_by_alias(alias)
+                assert found is not None and found.name == a.id
+
+
+async def test_every_activity_runs_and_pays_something(services, db):
+    from eternal_realm.game.data.activities import ACTIVITIES
+
+    p = await services.players.register(77, "u77", "ماجراجو", "elf", "warrior")
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET level = 12 WHERE id = ?", (p.id,))
+    for activity_id in ACTIVITIES:
+        async with db.transaction() as tx:
+            await tx.execute("DELETE FROM cooldowns WHERE player_id = ?", (p.id,))
+            await tx.execute("UPDATE players SET energy = 200, energy_at = ? WHERE id = ?", (services.ctx.now(), p.id))
+        result = await services.activities.perform(p.id, activity_id)
+        assert result.rolled.xp > 0 and result.next_in > 0

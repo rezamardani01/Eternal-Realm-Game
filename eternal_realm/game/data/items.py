@@ -138,6 +138,10 @@ _ITEMS: tuple[Item, ...] = (
     _mat("monster_fang", "دندان هیولا", "🦷", 35, 2),
     _mat("monster_hide", "پوست هیولا", "🧶", 25),
     _mat("dragon_scale", "فلس اژدها", "🐉", 300, 5),
+    _mat("wood", "چوب درخت", "🪵", 10),
+    _mat("wheat", "گندم", "🌾", 9),
+    _mat("honey", "عسل طلایی", "🍯", 55, 3),
+    _mat("ancient_coin", "سکه‌ی باستانی", "🏺", 120, 4),
     # --- service tickets (sold in the premium vault; they cannot be traded) -----------------------
     _mat("rename_ticket", "برگه‌ی تغییر نام", "🏷️", 0, 3, tradable=False),
     _mat("race_ticket", "برگه‌ی تغییر نژاد", "🧬", 0, 4, tradable=False),
