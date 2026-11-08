@@ -284,14 +284,14 @@ async def adventure(c: Ctx) -> Screen:
     from ..game.data.activities import ACTIVITIES
 
     buttons = [c.btn(f"{a.emoji} {a.title} · {fa(a.energy)}⚡", "act", a.id) for a in ACTIVITIES.values()]
-    rows = [[c.btn("🐺 شکار هیولا · ۱۰⚡", "act", "hunt", style="danger"), c.btn("🕳️ سیاه‌چال", "dungeon", style="primary")]]
+    rows = [[c.btn("🐺 شکار هیولا · ۱۰⚡", "act", "hunt", style="danger")]]
     rows += keyboards.grid(buttons, 2)
     rows.append(c.back("home", "🔙 بازگشت"))
     p = await c.refresh()
     text = (
         f"🗺️ {bold('ماجراجویی')}\n\n"
         f"⚡ انرژی شما: {fa(p.energy)}\n\n"
-        "کارهای آرام سکه، تجربه و منابع می‌دهند. شکار و سیاه‌چال سخت‌ترند ولی پاداش بیشتری دارند.\n\n"
+        "کارهای آرام سکه، تجربه و منابع می‌دهند. شکار سخت‌تر است ولی پاداش بیشتری دارد.\n\n"
         "کجا می‌روید؟ 👇"
     )
     return Screen(text, rows)

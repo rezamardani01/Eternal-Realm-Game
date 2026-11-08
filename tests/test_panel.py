@@ -561,3 +561,12 @@ async def test_selling_the_last_of_a_stack_or_a_piece_returns_to_the_list(h, ser
     await h.tap(10, "بله")
     assert "تجهیزات" in h.session.last_text() and not any("نامعتبر" in a.get("text", "") for a in h.session.callback_answers())
     assert any("فروخته شد" in a.get("text", "") for a in h.session.callback_answers())
+
+
+async def test_the_adventure_menu_has_no_dungeon_button_the_main_menu_does(h, services):
+    await reg(services)
+    await h.say(10, "/start")
+    assert any("سیاه‌چال" in t for t in h.labels())  # the main menu keeps it
+    await h.panel(10, "adv")
+    assert not any("سیاه‌چال" in t for t in h.labels()) and "سیاه‌چال" not in h.session.last_text()
+    assert any("شکار" in t for t in h.labels())
