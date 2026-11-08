@@ -248,7 +248,7 @@ async def profile(c: Ctx) -> Screen:
     else:
         rows.append([c.btn("🏰 قلمرو من", "home")])
     hint = "روی هر ویژگی بزنید تا بدانید چه می‌کند 👇"
-    text = views.profile_header(target, c.services.characters.xp_needed(target)) + f"\n\n{hint}"
+    text = views.profile_header(target, c.services.characters.xp_needed(target), c.services.ctx.now()) + f"\n\n{hint}"
     return Screen(text, rows)
 
 
@@ -997,6 +997,7 @@ PREMIUM_SECTIONS = {
     "bundles": ("🎁", "خرید بسته", "بسته‌های ویژه چند چیز را با هم و به‌صرفه‌تر می‌دهند."),
     "materials": ("⛓️", "خرید منابع", "سنگ آهن برای ارتقای تجهیزات؛ هر مرتبه‌ی آهنگری به آن نیاز دارد."),
     "services": ("🎫", "خدمات قهرمان", "برگه‌ی تغییر نژاد، کلاس یا نام؛ بعد از خرید از «قهرمان من ← ارتقای قهرمان ← خدمات» مصرفش کنید."),
+    "vip": ("💠", "اشتراک VIP", "راحتی بیشتر برای ۳۰ روز؛ هیچ قدرت رزمی نمی‌دهد. جزئیات کامل را در «اشتراک VIP» ببینید."),
     "path": ("🎟️", "بلیط مسیر قهرمانی", "بلیط این فصل، جایزه‌های ویژه‌ی ۱۰۰ مرحله را باز می‌کند (سکه، کریستال، صندوقچه و عنوان «اسطوره‌ی فصل»). جایزه‌های رایگان برای همه هست؛ بلیط کاملاً اختیاری است."),
     "pets": ("🐱", "حیوان خانگی", "یک یار وفادار که در نبردها کنارتان می‌ماند و کمی قوی‌ترتان می‌کند. محتوا ثابت است؛ شانسی در کار نیست."),
 }
@@ -1022,6 +1023,7 @@ async def premium(c: Ctx) -> Screen:
         [c.btn("🎁 خرید بسته", "prem", "bundles"), c.btn("📦 خرید صندوق", "prem", "chests")],
         [c.btn("⛓️ خرید منابع", "prem", "materials"), c.btn("🐱 حیوان خانگی", "prem", "pets")],
         [c.btn("🎫 خدمات قهرمان", "prem", "services"), c.btn("🎟️ مسیر قهرمانی", "prem", "path")],
+        [c.btn("💠 اشتراک VIP", "vip")],
         [c.btn("🏷️ تخفیف‌های امروز", "deals", style="success")],
         c.back("home"),
     ]

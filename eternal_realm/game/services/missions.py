@@ -9,7 +9,7 @@ from ...db.repos import players as player_repo
 from ...db.repos import season as season_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
-from ..data.missions import get_kind, pick, reward_for
+from ..data.missions import PER_DAY, get_kind, pick, reward_for
 from ..models import Player
 from .offers import OfferService
 
@@ -50,7 +50,8 @@ class MissionService:
                 fresh = await player_repo.get(tx, player.id)
                 assert fresh is not None
                 facts = await self.offers.facts(tx, fresh)
-                for slot, kind in enumerate(pick(facts, player.id, day)):
+                count = PER_DAY + (1 if fresh.vip_until > now else 0)
+                for slot, kind in enumerate(pick(facts, player.id, day, count)):
                     await tx.execute(
                         "INSERT INTO daily_missions (player_id, day, slot, kind_id, deed, target, progress, claimed)"
                         " VALUES (?, ?, ?, ?, ?, ?, 0, 0)",

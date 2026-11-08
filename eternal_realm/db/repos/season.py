@@ -16,6 +16,9 @@ async def add_points(tx: Tx, player_id: int, deed: str, now: int) -> int:
     points = POINTS.get(deed, 0)
     if not points:
         return 0
+    vip = int(await tx.scalar("SELECT vip_until FROM players WHERE id = ?", (player_id,), 0))
+    if vip > now:
+        points = round(points * 1.1)
     await tx.execute(
         "INSERT INTO season_progress (player_id, season, points, premium) VALUES (?, ?, ?, 0)"
         " ON CONFLICT (player_id, season) DO UPDATE SET points = points + excluded.points",

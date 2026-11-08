@@ -148,6 +148,11 @@ class PaymentService:
         )
         for item_id, qty in items.items():
             await self.inventory.grant(tx, order.player_id, item_id, qty)
+        if pack.vip_days:
+            await tx.execute(
+                "UPDATE players SET vip_until = MAX(vip_until, ?) + ? WHERE id = ?",
+                (now, pack.vip_days * 86400, order.player_id),
+            )
         if pack.season:
             from ...db.repos import season as season_repo
 

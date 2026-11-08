@@ -19,6 +19,7 @@ from ..data.races import RACES
 from ..engine import progression
 from ..models import Player
 
+VIP_COOLDOWN_FACTOR = 0.8
 DAY = 24 * 3600
 
 
@@ -174,6 +175,9 @@ class PlayerService:
         used = await inv_repo.uses_today(tx, player_id, key, day)
         steps = cooldown_ladder(self.ctx.balance)
         wait = steps[min(used, len(steps) - 1)]
+        vip = int(await tx.scalar("SELECT vip_until FROM players WHERE id = ?", (player_id,), 0))
+        if vip > now:
+            wait = round(wait * VIP_COOLDOWN_FACTOR)
         await inv_repo.record_use(tx, player_id, key, day)
         await inv_repo.set_cooldown(tx, player_id, key, now + wait)
         return wait

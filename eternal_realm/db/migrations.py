@@ -383,6 +383,10 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE season_progress ADD COLUMN notified INTEGER NOT NULL DEFAULT 0;
     """,
+    # 26: VIP subscription (comfort only: never combat strength)
+    """
+    ALTER TABLE players ADD COLUMN vip_until INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

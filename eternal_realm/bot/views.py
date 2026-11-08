@@ -53,10 +53,11 @@ def created(player: Player) -> str:
 
 
 # --- profile and help --------------------------------------------------------------------------
-def profile_header(player: Player, xp_needed: int) -> str:
+def profile_header(player: Player, xp_needed: int, now: int = 0) -> str:
     return (
         f"👤 {bold(player.name)} · سطح {fa(player.level)}\n"
         + (f"🏅 عنوان: {player.honor}\n" if player.honor else "")
+        + ("💠 اشتراک VIP فعال\n" if player.vip_until > now > 0 else "")
         + f"{player.race.emoji} {player.race.name} · {player.char_class.emoji} {player.char_class.name}\n"
         + (f"🎭 کلاس دوم: {player.class2.emoji} {player.class2.name}\n" if player.class2 else "")
         + ("✨ قدرت پنهان بیدار شده\n" if player.awakened else "")
