@@ -60,6 +60,14 @@ class ShopService:
             raise GameError(f"هر بار فقط می‌توانید بین ۱ تا {MAX_QTY} عدد بخرید.")
         total = item.buy * qty
         async with self.ctx.db.transaction() as tx:
+            if item.is_gear:
+                if qty != 1:
+                    raise GameError("از هر تجهیزات فقط یکی لازم دارید؛ تعداد را ۱ بگذارید.")
+                if await inv_repo.owns_gear(tx, player.id, item.id):
+                    raise GameError(
+                        f"شما از قبل {item.label} را دارید، فرمانده! خرید دوباره لازم نیست.\n\n"
+                        "اگر آن را فروخته‌اید یا در بازار گذاشته‌اید، بعد از برگشتن به کوله‌پشتی می‌توانید دوباره بخرید."
+                    )
             await wallet.apply(tx, player.id, gold=-total, reason="shop_buy", now=self.ctx.now())
             await self.inventory.grant(tx, player.id, item.id, qty)
         return total

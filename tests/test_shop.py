@@ -108,3 +108,33 @@ async def test_upgrade_rejects_stale_level_missing_materials_and_other_owner(ser
 
 def test_upgrade_chances_never_increase():
     assert list(UPGRADE_CHANCE) == sorted(UPGRADE_CHANCE, reverse=True)
+
+
+async def test_gear_cannot_be_bought_twice_but_potions_can(services, db, h):
+    p = await reg(services)
+    async with db.transaction() as tx:
+        await wallet.apply(tx, p.id, gold=5_000, reason="t", now=services.ctx.now())
+    p = await services.players.require(10)
+    sword = get_item("iron_sword")
+    await services.shop.buy(p, sword, 1)
+    gold = (await services.players.require(10)).gold
+    with pytest.raises(GameError, match="از قبل"):
+        await services.shop.buy(p, sword, 1)
+    assert (await services.players.require(10)).gold == gold  # nothing was charged
+    await services.shop.buy(p, get_item("energy_potion"), 3)
+    await services.shop.buy(p, get_item("energy_potion"), 3)
+
+    await h.panel(10, "shopitem", "iron_sword", "gear")
+    assert "از قبل دارید" in h.session.last_text() and not any("خرید" in t for t in h.labels())
+    await h.panel(10, "shopcat", "gear")
+    assert any("دارید ✔" in t for t in h.labels())
+
+
+async def test_selling_a_stack_needs_confirmation(services, db, h):
+    p = await reg(services)
+    await give(services, db, p.id, "stone", 4)
+    before = (await services.players.require(10)).gold
+    await h.panel(10, "isellq", "stone", "all")
+    assert "تأیید فروش" in h.session.last_text() and (await services.players.require(10)).gold == before
+    await h.tap(10, "بله، بفروش")
+    assert (await services.players.require(10)).gold == before + 4 * get_item("stone").sell

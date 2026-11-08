@@ -69,6 +69,11 @@ async def add_gear(tx: Tx, player_id: int, item_id: str, now: int, upgrade: int 
     )
 
 
+async def owns_gear(tx: Tx, player_id: int, item_id: str) -> bool:
+    row = await tx.fetchone("SELECT 1 FROM gear WHERE player_id = ? AND item_id = ? LIMIT 1", (player_id, item_id))
+    return row is not None
+
+
 async def get_gear(tx: Tx, gear_id: int) -> GearRow | None:
     row = await tx.fetchone("SELECT * FROM gear WHERE id = ?", (gear_id,))
     return GearRow.from_row(row) if row else None

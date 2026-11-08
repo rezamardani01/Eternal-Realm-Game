@@ -6,7 +6,7 @@ from baleropy import Button
 
 from ...shared.errors import GameError
 from ...shared.text import bold, fa
-from .. import panel
+from .. import keyboards, panel
 from ..callbacks import ClanCb
 from .context import CommandContext
 from .registry import command
@@ -26,12 +26,25 @@ async def clan(ctx: CommandContext) -> None:
 async def clan_create(ctx: CommandContext) -> None:
     if not ctx.raw_args:
         raise GameError("نام خاندان را هم بنویسید، فرمانده! مثال: «ساخت خاندان شیرهای شمال»")
-    view = await ctx.services.clans.create(ctx.me, ctx.raw_args)
+    from ...game.services.clans import clean_clan_name
+
+    name = clean_clan_name(ctx.raw_args)
     price = ctx.services.ctx.balance.clan_create_gold
+    me = await ctx.services.players.require(ctx.user.id)
+    if me.gold < price:
+        raise GameError(
+            f"ساختن خاندان {fa(price)} سکه می‌خواهد. شما {fa(me.gold)} سکه دارید؛ {fa(price - me.gold)} سکه کم دارید."
+        )
     await ctx.reply(
-        f"🏯 {bold('خاندان ' + view.name + ' ساخته شد!')}\n\n"
-        f"{ctx.who(ctx.me)} نخستین رهبر این خاندان شد و {bold(fa(price))} سکه از خزانه‌اش رفت.\n\n"
-        "حالا دوستانتان را دعوت کنید (روی پیامشان ریپلای کنید و «دعوت خاندان» بنویسید) و برای مدیریت، «خاندان» را بنویسید."
+        f"🏯 {bold('تأیید ساخت خاندان')}\n\n"
+        f"نام خاندان: {bold(name)}\n\n"
+        f"هزینه: {bold(fa(price))} سکه\n\n"
+        f"کیسه‌ی شما: {fa(me.gold)} ← {fa(me.gold - price)} سکه\n\n"
+        "ساخته شود؟",
+        [[
+            keyboards.panel_button("✅ بله، بساز", "clancreate", me.platform_user_id, name),
+            keyboards.panel_button("❌ نه", "clan", me.platform_user_id),
+        ]],
     )
 
 

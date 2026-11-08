@@ -244,11 +244,14 @@ async def test_listing_and_buying_through_the_panel(h, services, db):
     await h.tap(10, "عرضه در بازار")
     assert "قیمت فروش" in h.session.last_text()
     await h.say(10, "1200")  # the answer to the price prompt
+    await h.tap(10, "ثبت آگهی")
     assert "آگهی شما نصب شد" in h.session.last_text()
 
     await h.panel(11, "market")
     await h.tap(11, "کلاه چرمی")
     await h.tap(11, "خرید با")
+    assert "تأیید خرید" in h.session.last_text()
+    await h.tap(11, "بله، بخر")
     assert any(g.item.id == "leather_cap" for g in (await services.inventory.view(2)).gear)
     assert (await services.players.require(11)).gold == services.ctx.balance.start_gold + 5_000 - 1_200
 
@@ -259,6 +262,7 @@ async def test_cancelling_a_listing_returns_the_item(h, services, db):
     await h.panel(10, "piece", str(spare))
     await h.tap(10, "عرضه در بازار")
     await h.say(10, "500")
+    await h.tap(10, "ثبت آگهی")
     await h.panel(10, "mine")
     await h.tap(10, "کلاه چرمی")
     await h.tap(10, "لغو آگهی")

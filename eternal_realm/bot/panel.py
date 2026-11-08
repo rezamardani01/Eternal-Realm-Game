@@ -487,9 +487,9 @@ async def _item_screen(c: Ctx, item_id: str, toast: str | None = None) -> Screen
     if item.kind is Kind.CHEST:
         rows.append([c.btn("🗝️ باز کردن", "open", item.id, style="success")])
     if item.sell > 0:
-        sell_row = [c.btn("💰 فروش ۱", "isell", item.id, "1")]
+        sell_row = [c.btn("💰 فروش ۱", "isellq", item.id, "1")]
         if qty > 1:
-            sell_row.append(c.btn(f"💰 فروش همه ({fa(qty)})", "isell", item.id, "all"))
+            sell_row.append(c.btn(f"💰 فروش همه ({fa(qty)})", "isellq", item.id, "all"))
         rows.append(sell_row)
     if item.tradable:
         rows.append([c.btn("🏷️ عرضه در بازار", "lqty", item.id)])
@@ -506,6 +506,25 @@ async def item_detail(c: Ctx) -> Screen:
 async def use(c: Ctx) -> Screen:
     message = await c.services.inventory.use(c.player, get_item(c.a))
     return await _item_screen(c, c.a, message)
+
+
+@screen("isellq")
+async def item_sell_ask(c: Ctx) -> Screen:
+    item = get_item(c.a)
+    have = await _stack_qty(c, item.id)
+    qty = have if c.b == "all" else 1
+    if qty <= 0 or item.sell <= 0:
+        raise GameError("این آیتم را نمی‌شود به بازارچه فروخت.")
+    total = item.sell * qty
+    text = (
+        f"💰 {bold('تأیید فروش به بازارچه')}\n\n"
+        f"{item.label} ×{fa(qty)}\n\n"
+        f"بها: {fa(item.sell)} سکه برای هر عدد\n\n"
+        f"دریافتی شما: {bold(fa(total))} سکه\n\n"
+        f"کیسه‌ی شما: {fa(c.player.gold)} ← {fa(c.player.gold + total)} سکه\n\n"
+        "مطمئنید می‌فروشید؟"
+    )
+    return Screen(text, [[c.btn("✅ بله، بفروش", "isell", item.id, c.b, style="danger"), c.btn("↩️ نه", "item", item.id)]])
 
 
 @screen("isell")
@@ -604,7 +623,11 @@ async def shop_category(c: Ctx) -> Screen:
     goods = [i for i in shop_items() if i.is_gear == want_gear]
     page = _int(c.b or "0", "صفحه")
     chunk, prev, nxt = _page(goods, page)
-    rows = [[c.btn(f"{i.label} — {fa(i.buy)}🪙", "shopitem", i.id, c.a)] for i in chunk]
+    owned = {p_.item.id for p_ in (await c.services.inventory.view(c.player.id)).gear} if want_gear else set()
+    rows = [
+        [c.btn(f"{i.label} — " + ("دارید ✔" if i.id in owned else f"{fa(i.buy)}🪙"), "shopitem", i.id, c.a)]
+        for i in chunk
+    ]
     # paging keeps the category in `a` and the page in `b`
     nav = ([c.btn("‹ قبلی", "shopcat", c.a, page - 1)] if prev else []) + (
         [c.btn("بعدی ›", "shopcat", c.a, page + 1)] if nxt else []
@@ -623,7 +646,11 @@ async def _shop_item_screen(c: Ctx, item_id: str, cat: str, toast: str | None = 
     if item.is_gear and item.level_req > 1:
         lines.append(f"🎚️ سطح لازم: {fa(item.level_req)}")
     lines += ["", f"🪙 بها: {bold(fa(item.buy))} سکه", f"کیسه‌ی شما: {fa(p.gold)} سکه"]
-    if item.is_gear:
+    owned = item.is_gear and any(p_.item.id == item.id for p_ in (await c.services.inventory.view(p.id)).gear)
+    if owned:
+        lines += ["", "✅ این تجهیزات را از قبل دارید؛ خرید دوباره لازم نیست."]
+        rows = []
+    elif item.is_gear:
         rows = [[c.btn("🛍️ خرید", "buyq", item.id, "1", style="success")]]
     else:
         rows = [[c.btn(f"🛍️ ×{fa(n)}", "buyq", item.id, str(n), style="success") for n in (1, 5, 10)]]
@@ -667,6 +694,8 @@ async def buy_confirm(c: Ctx) -> Screen:
     if item.buy <= 0:
         raise GameError("این کالا در بازارچه فروخته نمی‌شود.")
     cat = "gear" if item.is_gear else "pot"
+    if item.is_gear and any(p_.item.id == item.id for p_ in (await c.services.inventory.view(c.player.id)).gear):
+        raise GameError(f"شما از قبل {item.label} را دارید؛ خرید دوباره لازم نیست.")
     return await _confirm(c, f"{item.label} ×{fa(qty)}", "gold", item.buy * qty, "buy", item.id, str(qty),
                           ("shopitem", item.id, cat))
 
@@ -798,10 +827,21 @@ async def listing(c: Ctx) -> Screen:
     rows = (
         [[c.btn("↩️ لغو آگهی", "mcancel", lst.id, style="danger")]]
         if own
-        else [[c.btn(f"🛍️ خرید با {fa(lst.price)}🪙", "mbuy", lst.id, style="success")]]
+        else [[c.btn(f"🛍️ خرید با {fa(lst.price)}🪙", "mbuyq", lst.id, style="success")]]
     )
     rows.append(c.back("market"))
     return Screen("\n".join(lines), rows)
+
+
+@screen("mbuyq")
+async def market_buy_ask(c: Ctx) -> Screen:
+    lst = await c.services.market.get(_int(c.a))
+    if lst is None:
+        shown = await market(c)
+        shown.toast = "این آگهی دیگر روی تخته نیست"
+        return shown
+    what = f"{lst.label}" + (f" ×{fa(lst.qty)}" if lst.qty > 1 else "") + f"\nفروشنده: {lst.seller_name}"
+    return await _confirm(c, what, "gold", lst.price, "mbuy", str(lst.id), "", ("listing", str(lst.id), ""))
 
 
 @screen("mbuy")
@@ -810,6 +850,25 @@ async def market_buy(c: Ctx) -> Screen:
     shown = await market(c)
     shown.toast, shown.alert = f"🛍️ معامله مبارک! {bought.item.name} از آن شماست", True
     return shown
+
+
+@screen("lconfirm")
+async def listing_confirm(c: Ctx) -> Screen:
+    """Create the listing the player just priced."""
+    ref, _, price_text = c.b.rpartition("~")
+    price = _int(price_text)
+    if c.a == "g":
+        made = await c.services.market.list_gear(c.player, _int(ref), price)
+    else:
+        item_id, _, qty = ref.partition(".")
+        made = await c.services.market.list_stack(c.player, get_item(item_id), _int(qty), price)
+    fee = c.services.market.fee_for(made.price)
+    text = (
+        f"🏷️ {bold('آگهی شما نصب شد')}\n\n{made.label}\nبها: {fa(made.price)} سکه\n\n"
+        "💡 همه‌ی بازیکنان در هر گروهی آن را در بازار می‌بینند.\n\n"
+        f"کارمزد بازار ({fa(fee)} سکه) هنگام فروش کسر می‌شود."
+    )
+    return Screen(text, [[c.btn("🏪 بازار", "market"), c.btn("📋 آگهی‌های من", "mine")], c.back("home")])
 
 
 @screen("mcancel")
@@ -1064,20 +1123,28 @@ async def got_listing_price(message: Message, state: FSMContext, services: Servi
         raise GameError("فقط یک عدد بنویسید؛ مثلاً: 5000")
     player = await services.players.require(message.from_user.id)  # type: ignore[union-attr]
     data = await state.get_data()
-    if data.get("kind") == "g":
-        made = await services.market.list_gear(player, int(data["ref"]), price)
-    else:
-        item_id, _, qty = str(data["ref"]).partition(".")
-        made = await services.market.list_stack(player, get_item(item_id), int(qty), price)
     await state.clear()
-    fee = services.market.fee_for(made.price)
+    kind, ref = str(data.get("kind")), str(data["ref"])
+    if kind == "g":
+        piece_ = await services.inventory.view(player.id)
+        owned = next((p_ for p_ in piece_.gear if p_.id == int(ref)), None)
+        what = owned.label if owned else "تجهیزات"
+    else:
+        item_id, _, qty = ref.partition(".")
+        what = f"{get_item(item_id).label} ×{fa(int(qty))}"
+    fee = services.market.fee_for(price)
     owner = player.platform_user_id
     await message.reply(
-        f"🏷️ {bold('آگهی شما نصب شد')}\n\n{made.label}\nبها: {fa(made.price)} سکه\n\n"
-        f"💡 همه‌ی بازیکنان در هر گروهی آن را در بازار می‌بینند.\nکارمزد بازار ({fa(fee)} سکه) هنگام فروش کسر می‌شود.",
+        f"🏷️ {bold('تأیید آگهی')}\n\n{what}\n\n"
+        f"قیمت: {bold(fa(price))} سکه\n\n"
+        f"کارمزد بازار: {fa(fee)} سکه (هنگام فروش کسر می‌شود)\n\n"
+        f"دریافتی شما پس از فروش: {bold(fa(max(0, price - fee)))} سکه\n\n"
+        "ثبت شود؟",
         buttons=[
-            [keyboards.panel_button("🏪 بازار", "market", owner), keyboards.panel_button("📋 آگهی‌های من", "mine", owner)],
-            [keyboards.panel_button("🔙 بازگشت", "home", owner)],
+            [
+                keyboards.panel_button("✅ ثبت آگهی", "lconfirm", owner, kind, f"{ref}~{price}"),
+                keyboards.panel_button("❌ انصراف", "market", owner),
+            ]
         ],
     )
 

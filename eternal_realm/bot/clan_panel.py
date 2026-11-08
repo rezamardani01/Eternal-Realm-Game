@@ -238,9 +238,44 @@ async def clan_donate(c: Ctx) -> Screen:
         f"👛 کیف شما: {fa(c.player.gold)} سکه\n\n"
         "هر سطح، جای بیشتری برای عضو تازه باز می‌کند. چقدر کمک می‌کنید؟"
     )
-    rows = keyboards.grid([c.btn(f"🪙 {fa(n)}", "clangive", n) for n in DONATION_STEPS], 2)
+    rows = keyboards.grid([c.btn(f"🪙 {fa(n)}", "clangiveq", n) for n in DONATION_STEPS], 2)
     rows.append(c.back("clan"))
     return Screen(text, rows)
+
+
+@screen("clangiveq")
+async def clan_give_ask(c: Ctx) -> Screen:
+    amount = _int(c.a)
+    p = await c.refresh()
+    mine = await c.services.clans.of(p.id)
+    if mine is None:
+        raise GameError("شما عضو هیچ خاندانی نیستید.")
+    if p.gold < amount:
+        text = (
+            f"💸 {bold('موجودی کافی نیست')}\n\nکمک: {fa(amount)} 🪙\nموجودی شما: {fa(p.gold)} 🪙\n"
+            f"کمبود: {bold(fa(amount - p.gold))} 🪙"
+        )
+        return Screen(text, [c.back("clandonate")])
+    text = (
+        f"💰 {bold('تأیید کمک به خزانه')}\n\n"
+        f"مبلغ: {bold(fa(amount))} سکه\n\n"
+        f"کیسه‌ی شما: {fa(p.gold)} ← {fa(p.gold - amount)} سکه\n\n"
+        f"خزانه‌ی خاندان: {fa(mine.treasury)} ← {fa(mine.treasury + amount)} سکه\n\n"
+        "این پول به خزانه می‌رود و پس گرفته نمی‌شود. مطمئنید؟"
+    )
+    return Screen(text, [[c.btn("✅ بله، کمک کن", "clangive", amount, style="success"), c.btn("↩️ نه", "clandonate")]])
+
+
+@screen("clancreate")
+async def clan_create_do(c: Ctx) -> Screen:
+    view = await c.services.clans.create(c.player, c.a)
+    price = c.services.ctx.balance.clan_create_gold
+    text = (
+        f"🏯 {bold('خاندان ' + view.name + ' ساخته شد!')}\n\n"
+        f"{c.who(c.player)} نخستین رهبر این خاندان شد و {bold(fa(price))} سکه از کیفش رفت.\n\n"
+        "حالا دوستانتان را دعوت کنید (روی پیامشان ریپلای کنید و «دعوت خاندان» بنویسید)."
+    )
+    return Screen(text, [[c.btn("🏯 پنل خاندان", "clan")]])
 
 
 @screen("clangive")

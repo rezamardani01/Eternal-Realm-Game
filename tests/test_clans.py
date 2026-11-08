@@ -94,7 +94,9 @@ async def test_glass_flow_in_group(h, services, db):
     await h.say(1, "خاندان", group=True)
     assert "ساخت خاندان" in h.session.sent()[-1]["text"]
     await h.say(1, "ساخت خاندان شیرها", group=True)
-    assert "ساخته شد" in h.session.sent()[-1]["text"]
+    assert "تأیید ساخت خاندان" in h.session.sent()[-1]["text"] and await services.clans.of(1) is None
+    await h.tap(1, "بله، بساز", group=True)
+    assert "ساخته شد" in h.session.sent("editMessageText")[-1]["text"]
     await services.clans.join(a, (await services.clans.of(1)).id)
 
     await h.say(1, "خاندان", group=True)
