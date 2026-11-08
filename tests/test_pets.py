@@ -81,3 +81,59 @@ async def test_glass_flow(h, services, db):
     await h.tap(4, "بله، بخر", group=True)
     assert await services.pets.owned((await services.players.require(4)).id) == {"cat": True}
     assert "همین حالا همراه شماست" in h.session.sent("editMessageText")[-1]["text"]
+
+
+async def test_upgrading_a_pet_costs_crystals_and_strengthens_it(services, db):
+    from eternal_realm.game.data.pets import MAX_PET_LEVEL, bonus_at, upgrade_cost
+
+    p = await hero(services, db, 6, "کیان", gold=5_000)
+    async with db.transaction() as tx:
+        await wallet.apply(tx, p.id, crystal=100, reason="t", now=services.ctx.now())
+    p = await services.players.require(6)
+    await services.pets.buy_with_gold(p, "cat")
+    base = await services.characters.stats(p)
+    crystals = p.crystal
+    pet, level = await services.pets.upgrade(p, "cat")
+    assert level == 2 and (await services.players.require(6)).crystal == crystals - upgrade_cost(1)
+    after = await services.characters.stats(p)
+    assert after.speed >= base.speed and after.speed == base.speed - 3 + bonus_at(pet, 2).speed
+    with pytest.raises(GameError, match="مال شما نیست"):
+        await services.pets.upgrade(p, "wolf")
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE player_pets SET level = ?", (MAX_PET_LEVEL,))
+    with pytest.raises(GameError, match="بالاترین"):
+        await services.pets.upgrade(p, "cat")
+
+
+async def test_not_enough_crystals_changes_nothing(services, db):
+    p = await hero(services, db, 7, "مینا", gold=5_000)
+    await services.pets.buy_with_gold(p, "cat")
+    p = await services.players.require(7)
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET crystal = 1 WHERE id = ?", (p.id,))
+    with pytest.raises(GameError):
+        await services.pets.upgrade(await services.players.require(7), "cat")
+    assert (await services.pets.levels(p.id))["cat"] == 1
+
+
+def test_a_pet_announces_its_strike_in_the_duel_log():
+    import random
+
+    from eternal_realm.game.data.classes import CLASSES
+    from eternal_realm.game.data.stats import Stats
+    from eternal_realm.game.engine import combat
+
+    stats = Stats(hp=500, atk=30, defense=5, magic=0, speed=10, luck=0)
+    a = combat.Fighter.for_player(1, "آرش", CLASSES["warrior"], stats)
+    a.pet_emoji, a.pet_name, a.pet_power = "🐱", "گربه‌ی چابک", 20
+    b = combat.Fighter.for_player(2, "سارا", CLASSES["warrior"], stats)
+    battle = combat.Battle.start(a, b, 15, random.Random(1))
+    seen = []
+    for _ in range(60):
+        if battle.finished:
+            break
+        seen += combat.act(battle, combat.Action.ATTACK, random.Random(len(seen)))
+    joined = [x for x in seen if "گربه‌ی چابک همراه آرش هم به سارا حمله کرد" in x]
+    assert joined and "آسیب" in joined[0]
+    assert not any("همراه سارا" in x for x in seen)  # the other fighter has no pet
+    assert combat.Battle.from_dict(battle.to_dict()).fighters[0].pet_name == "گربه‌ی چابک"

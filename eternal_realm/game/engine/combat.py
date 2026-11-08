@@ -44,6 +44,10 @@ class Fighter:
     shield: bool = False
     player_id: int | None = None
     mention: str = ""
+    #: a companion that sometimes joins an attack: emoji, name, strike power (0 = none)
+    pet_emoji: str = ""
+    pet_name: str = ""
+    pet_power: int = 0
 
     @property
     def hp_ratio(self) -> float:
@@ -125,6 +129,18 @@ def _strike(
     return damage, crit
 
 
+PET_CHANCE = 0.30
+
+
+def _pet_strike(me: Fighter, foe: Fighter, rng: random.Random, lines: list[str]) -> None:
+    """The attacker's pet may jump in with a small extra hit, announced at that very moment."""
+    if not me.pet_power or foe.hp <= 0 or rng.random() >= PET_CHANCE:
+        return
+    damage = max(1, round(me.pet_power * rng.uniform(0.9, 1.1) - foe.defense * 0.25))
+    foe.hp = max(0, foe.hp - damage)
+    lines.append(f"{me.pet_emoji} {me.pet_name} همراه {me.name} هم به {foe.name} حمله کرد! 💥 {fa(damage)} آسیب")
+
+
 def act(battle: Battle, action: Action, rng: random.Random) -> list[str]:
     """Apply the current fighter's action; returns the log lines of this turn."""
     if battle.finished:
@@ -166,6 +182,7 @@ def act(battle: Battle, action: Action, rng: random.Random) -> list[str]:
                 f"{me.skill_emoji} {me.name} «{me.skill_name}» را آزاد کرد! "
                 f"{'🎯 ضربه‌ی کاری! ' if crit else ''}💥 {fa(damage)} آسیب"
             )
+            _pet_strike(me, foe, rng, lines)
         else:
             offense = max(me.atk, me.magic * 0.8)
             damage, crit = _strike(me, foe, offense, foe.defense * 0.5, rng)
@@ -173,6 +190,7 @@ def act(battle: Battle, action: Action, rng: random.Random) -> list[str]:
             lines.append(
                 f"⚔️ {me.name} به {foe.name} حمله کرد! {'🎯 ضربه‌ی کاری! ' if crit else ''}💥 {fa(damage)} آسیب"
             )
+            _pet_strike(me, foe, rng, lines)
 
     if foe.hp <= 0:
         battle.finished = True

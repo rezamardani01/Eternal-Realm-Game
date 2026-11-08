@@ -452,6 +452,21 @@ def pack_description(pack, now: int | None = None) -> str:  # noqa: ANN001 - Pac
     if pack.crystal:
         parts.append(f"{fa(pack.crystal)} کریستال")
     parts += [f"{get_item(i).name} ×{fa(q)}" for i, q in pack.items.items()]
+    if pack.season:
+        return (
+            "شامل: بلیط طلایی این فصل.\nجایزه‌های ویژه‌ی همه‌ی مرحله‌ها برایتان باز شد؛ "
+            "از «قهرمان من ← مسیر قهرمانی» دریافتشان کنید."
+        )
+    if pack.vip_days:
+        return (
+            f"شامل: {fa(pack.vip_days)} روز اشتراک VIP.\n"
+            "انتظار فعالیت‌ها کوتاه‌تر شد، مأموریت چهارم و امتیاز بیشتر در مسیر قهرمانی هم دارید."
+        )
+    if pack.pet:
+        from ..game.data.pets import get_pet
+
+        pet = get_pet(pack.pet)
+        return f"شامل: حیوان خانگی {pet.emoji} {pet.name}.\nاز «حیوان خانگی» می‌توانید همراه خود کنیدش."
     return "شامل: " + " + ".join(parts)
 
 

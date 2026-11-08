@@ -16,6 +16,7 @@ from ..engine import combat
 from ..engine.combat import Action, Battle, Fighter
 from ..models import Player
 from .characters import CharacterService
+from .pets import PetService
 from .players import LevelUp, PlayerService
 
 DAY = 24 * 3600
@@ -129,7 +130,11 @@ class DuelService:
             fighters = []
             for p in (challenger, target):
                 stats = await self.characters.stats_in(tx, p)
-                fighters.append(Fighter.for_player(p.id, p.name, p.char_class, stats, p.mention))
+                fighter = Fighter.for_player(p.id, p.name, p.char_class, stats, p.mention)
+                striker = await PetService(self.ctx).striker_in(tx, p.id, stats.atk)
+                if striker:
+                    fighter.pet_emoji, fighter.pet_name, fighter.pet_power = striker
+                fighters.append(fighter)
             battle = Battle.start(fighters[0], fighters[1], b.duel_max_rounds, self.ctx.rng)
             if not await repo.start(tx, duel_id, json.dumps(battle.to_dict()), now, now + b.duel_turn_seconds):
                 raise GameError("این دعوت‌نامه دیگر معتبر نیست؛ پذیرفته، رد یا منقضی شده است.")

@@ -425,6 +425,10 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (player_id, effect_id)
     );
     """,
+    # 30: pets can be upgraded with crystals
+    """
+    ALTER TABLE player_pets ADD COLUMN level INTEGER NOT NULL DEFAULT 1;
+    """,
 ]
 
 

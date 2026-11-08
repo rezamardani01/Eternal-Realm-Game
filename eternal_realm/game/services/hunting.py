@@ -19,6 +19,7 @@ from ..engine.combat import Battle, Fighter, auto_fight
 from ..models import Player
 from .characters import CharacterService
 from .inventory import InventoryService
+from .pets import PetService
 from .players import LevelUp, PlayerService
 
 HUNT_ENERGY = 10
@@ -82,6 +83,9 @@ class HuntService:
 
             stats = await self.characters.stats_in(tx, player)
             hero = Fighter.for_player(player.id, player.name, player.char_class, stats)
+            striker = await PetService(self.ctx).striker_in(tx, player.id, stats.atk)
+            if striker:
+                hero.pet_emoji, hero.pet_name, hero.pet_power = striker
             monster = self.pick_monster(player.level, hero)
             foe = monster.fighter(player.level)
             battle = Battle.start(hero, foe, self.ctx.balance.duel_max_rounds, rng)
