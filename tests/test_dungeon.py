@@ -30,11 +30,11 @@ async def hero(services, db, uid, name, level=10):
 
 
 async def test_a_full_run_ends_in_win_or_defeat_and_pays_once(services, db):
-    p = await hero(services, db, 1, "آرش", level=30)
+    p = await hero(services, db, 2, "آرش", level=30)
     run = await services.dungeon.enter(p)
     assert run.stage == 0 and (await services.dungeon.current(p.id)) is not None
-    assert (await services.players.require(1)).energy <= 100 - ENERGY_COST + 1
-    gold = (await services.players.require(1)).gold
+    assert (await services.players.require(2)).energy <= 100 - ENERGY_COST + 1
+    gold = (await services.players.require(2)).gold
     view = None
     for _ in range(ROOMS):
         view = await services.dungeon.advance(p)
@@ -42,7 +42,7 @@ async def test_a_full_run_ends_in_win_or_defeat_and_pays_once(services, db):
             break
     assert view.status in ("won", "dead") and view.stage <= ROOMS
     assert await services.dungeon.current(p.id) is None
-    assert (await services.players.require(1)).gold == gold + view.paid_gold
+    assert (await services.players.require(2)).gold == gold + view.paid_gold
     with pytest.raises(GameError, match="نیستید"):
         await services.dungeon.advance(p)
 

@@ -91,18 +91,21 @@ class EventService:
             await repo.set_message(tx, event_id, message_id)
 
     # --- creating events ------------------------------------------------------------------------
-    async def spawn(self, chat_id: int, kind: str | None = None) -> EventView | None:
-        """Start an event in a group. ``None`` when the group is busy or the event cannot happen."""
+    async def spawn(self, chat_id: int, kind: str | None = None, force: bool = False) -> EventView | None:
+        """Start an event in a group. ``None`` when the group is busy or the event cannot happen.
+
+        ``force`` (the owner) ignores other events that are running in the group.
+        """
         rng, now = self.ctx.rng, self.ctx.now()
         kind = kind or rng.choices(KINDS, weights=WEIGHTS, k=1)[0]
         if kind == "hidden_boss":
             try:
-                boss = await self.bosses.summon_event(chat_id)
+                boss = await self.bosses.summon_event(chat_id, force)
             except GameError:
                 return None
             return EventView(0, chat_id, None, kind, "active", boss.recruit_until, now, {}, boss)
         async with self.ctx.db.transaction() as tx:
-            if await repo.active_in_chat(tx, chat_id, now):
+            if not force and await repo.active_in_chat(tx, chat_id, now):
                 return None
             state: dict[str, Any] = {}
             if kind == "mystery_chest":

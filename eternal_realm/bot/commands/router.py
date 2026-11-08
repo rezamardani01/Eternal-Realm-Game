@@ -33,11 +33,11 @@ async def on_text(message: Message, bot: Bot, services: Services) -> None:
         raise GameError("این فرمان مال میدان‌های گروهی است! ربات را به یک گروه ببرید و آنجا امتحانش کنید.")
     if not private and not cmd.group:
         return
-    if not services.throttle.allow_user(user.id):
+    if user.id != services.ctx.settings.owner_id and not services.throttle.allow_user(user.id):
         return
 
     if not private:
-        if not services.throttle.allow_group(message.chat.id):
+        if user.id != services.ctx.settings.owner_id and not services.throttle.allow_group(message.chat.id):
             return
         group = await services.groups.touch(message.chat.id, message.chat.title)
         if not cmd.always_on:

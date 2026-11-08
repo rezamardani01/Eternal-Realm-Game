@@ -88,6 +88,25 @@ class AdminService:
             await self._log(tx, admin_id, "set_level", f"{player.name} -> {level}")
             return player
 
+    async def give_item_id(self, admin_id: int, player_id: int, item: Item, qty: int) -> Player:
+        if not 1 <= qty <= 100_000:
+            raise GameError("تعداد باید بین ۱ تا ۱۰۰٬۰۰۰ باشد.")
+        async with self.ctx.db.transaction() as tx:
+            player = await self._by_id(tx, player_id)
+            await self.inventory.grant(tx, player.id, item.id, qty)
+            await self._log(tx, admin_id, "give_item", f"{player.name} {item.id} x{qty}")
+            return player
+
+    async def set_level_id(self, admin_id: int, player_id: int, level: int) -> Player:
+        if not 1 <= level <= self.ctx.balance.max_level:
+            raise GameError(f"سطح باید بین ۱ تا {self.ctx.balance.max_level} باشد.")
+        async with self.ctx.db.transaction() as tx:
+            player = await self._by_id(tx, player_id)
+            await player_repo.set_progress(tx, player.id, level, 0)
+            await player_repo.set_energy(tx, player.id, progression.max_energy(level, self.ctx.balance), self.ctx.now())
+            await self._log(tx, admin_id, "set_level", f"{player.name} -> {level}")
+            return player
+
     async def group_ids(self) -> list[int]:
         async with self.ctx.db.read() as tx:
             rows = await tx.fetchall("SELECT chat_id FROM groups WHERE enabled = 1")

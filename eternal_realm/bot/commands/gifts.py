@@ -26,7 +26,10 @@ def _owner(ctx: CommandContext) -> bool:
 
 
 async def _target(ctx: CommandContext):  # noqa: ANN202
+    """The player whose message is replied to, or the owner's own hero when there is no reply."""
     target = await ctx.replied_player()
+    if target is None:
+        target = await ctx.services.players.find(ctx.user.id)
     if target is None:
         raise GameError("روی پیام همان بازیکن ریپلای کنید و دستور اهدا را بنویسید.")
     return target
@@ -53,7 +56,7 @@ def _amount(ctx: CommandContext, low: int = 1, high: int = 10_000_000) -> int:
     return value
 
 
-@command("gift_ticket", ["اهدا بلیط طلایی", "اهدا بلیط"], "(مالک) اهدای بلیط طلایی این فصل", **_OPTIONS)
+@command("gift_ticket", ["اهدا مسیر قهرمانی", "اهدا بلیط طلایی", "اهدا بلیط"], "(مالک) اهدای بلیط طلایی این فصل", **_OPTIONS)
 async def gift_ticket(ctx: CommandContext) -> None:
     if not _owner(ctx):
         return

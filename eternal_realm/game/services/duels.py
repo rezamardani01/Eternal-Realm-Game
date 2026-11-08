@@ -84,12 +84,19 @@ class DuelService:
             await repo.expire_pending_for(tx, pair, now)
             if await repo.open_for(tx, pair) is not None:
                 raise GameError("یکی از شما هم‌اکنون در میدان نبرد است. بگذارید آن نبرد تمام شود، بعد دوباره دعوت کنید.")
-            if await repo.pair_count_since(tx, challenger.id, target.id, now - DAY) >= b.duel_pair_daily_limit:
+            if (
+                not self.players.is_owner(challenger)
+                and await repo.pair_count_since(tx, challenger.id, target.id, now - DAY) >= b.duel_pair_daily_limit
+            ):
                 raise GameError("شما دو نفر امروز آن‌قدر با هم جنگیده‌اید که شمشیرها خسته شده‌اند! فردا دوباره بجنگید.")
             duel_id = await repo.create(tx, chat_id, challenger.id, target.id, now, now + b.duel_invite_seconds)
             row = await repo.get(tx, duel_id)
         assert row is not None
         return Duel.from_row(row)
+
+    async def _is_owner_id(self, tx, player_id: int) -> bool:  # noqa: ANN001
+        uid = await tx.scalar("SELECT platform_user_id FROM players WHERE id = ?", (player_id,), 0)
+        return int(uid) == self.ctx.settings.owner_id
 
     async def attach_message(self, duel_id: int, message_id: int) -> None:
         async with self.ctx.db.transaction() as tx:
@@ -217,7 +224,7 @@ class DuelService:
             if pid in ratings:
                 payout.rating, payout.rating_delta = ratings[pid]
             # the finished duel itself is already counted, hence the strict limit
-            if await repo.finished_count_since(tx, pid, day_start) <= b.duel_daily_reward_cap:
+            if await self._is_owner_id(tx, pid) or await repo.finished_count_since(tx, pid, day_start) <= b.duel_daily_reward_cap:
                 opponent = battle.fighters[1 - index].player_id
                 other = await player_repo.get(tx, opponent) if opponent else None
                 if won:

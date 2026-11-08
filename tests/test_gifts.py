@@ -47,7 +47,7 @@ async def test_owner_gifts_by_reply_with_details_and_a_private_message(h, servic
     assert await services.pets.owned(target.id) == {"fox": True}
 
 
-async def test_only_the_owner_can_gift_and_a_reply_is_required(h, services):
+async def test_only_the_owner_can_gift_and_no_reply_means_himself(h, services):
     await hero(services, 1, "ارباب")
     await hero(services, 2, "آرش")
     await hero(services, 3, "سارا")
@@ -56,8 +56,9 @@ async def test_only_the_owner_can_gift_and_a_reply_is_required(h, services):
     await h.say(2, "اهدا سکه 5000", group=True, reply_to=h.message_of(3))
     assert (await services.players.require(3)).gold == gold  # silently ignored
     assert not [c for c in h.session.calls[n:] if c[0] == "sendMessage"]
-    await h.say(1, "اهدا سکه 100", group=True)
-    assert "ریپلای" in h.session.last_text()
+    mine = (await services.players.require(1)).gold
+    await h.say(1, "اهدا سکه 100", group=True)  # without a reply the owner gifts himself
+    assert (await services.players.require(1)).gold == mine + 100
     await h.say(1, "اهدا سکه abc", group=True, reply_to=h.message_of(3))
     assert "مقدار را درست بنویسید" in h.session.last_text()
     await h.say(1, "اهدا حیوان اژدها", group=True, reply_to=h.message_of(3))

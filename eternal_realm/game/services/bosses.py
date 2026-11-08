@@ -172,17 +172,19 @@ class BossService:
         async with self.ctx.db.transaction() as tx:
             await repo.set_message(tx, boss_id, message_id)
 
-    async def summon_event(self, chat_id: int) -> BossView:
+    async def summon_event(self, chat_id: int, force: bool = False) -> BossView:
         """A hidden boss that the bot itself brings into a group: free, and anyone may start it."""
         from ...db.repos import events as event_repo
         from ...db.repos import players as player_repo
 
         b, now = self.ctx.balance, self.ctx.now()
         async with self.ctx.db.transaction() as tx:
-            if await repo.active_in_chat(tx, chat_id) is not None or await event_repo.active_in_chat(tx, chat_id, now):
+            if await repo.active_in_chat(tx, chat_id) is not None or (
+                not force and await event_repo.active_in_chat(tx, chat_id, now)
+            ):
                 raise GameError("busy")
             last = await repo.last_created(tx, chat_id)
-            if last and last + b.boss_cooldown_seconds > now:
+            if last and last + b.boss_cooldown_seconds > now and not force:
                 raise GameError("cooldown")
             pid = await event_repo.most_recent_member(tx, chat_id)
             lead = await player_repo.get(tx, pid) if pid else None
@@ -200,7 +202,8 @@ class BossService:
     # --- summon and sign-up ---------------------------------------------------------------------
     async def summon(self, player: Player, chat_id: int) -> BossView:
         b, now = self.ctx.balance, self.ctx.now()
-        if player.level < b.boss_min_level:
+        owner = self.players.is_owner(player)  # the owner summons any time, for free, at any level
+        if player.level < b.boss_min_level and not owner:
             raise GameError(
                 f"🐉 احضار باس از سطح {fa(b.boss_min_level)} ممکن است. شما سطح {fa(player.level)} هستید؛ "
                 "کمی ماجراجویی کنید و برگردید!"
@@ -211,9 +214,10 @@ class BossService:
                 raise GameError("🐉 در این گروه یک باس زنده است! پیامش را بالاتر ببینید یا «باس» را دوباره بنویسید.")
             last = await repo.last_created(tx, chat_id)
             wait = last + b.boss_cooldown_seconds - now if last else 0
-            if wait > 0:
+            if wait > 0 and not owner:
                 raise GameError(f"⏳ باس بعدی این گروه تا {duration(wait)} دیگر آماده می‌شود. تا آن موقع قدرت جمع کنید!")
-            await wallet.apply(tx, player.id, gold=-b.boss_summon_gold, reason="boss_summon", now=now)
+            if not owner:
+                await wallet.apply(tx, player.id, gold=-b.boss_summon_gold, reason="boss_summon", now=now)
             owed = self._owed(await repo.last_ended(tx, chat_id), now)
             kind = owed or pick_boss(player.level, self.ctx.rng)
             boss_id = await repo.create(

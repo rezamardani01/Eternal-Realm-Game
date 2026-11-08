@@ -135,11 +135,17 @@ class PlayerService:
         return self.with_energy(player) if player else None
 
     # --- energy and experience (called inside the caller's transaction) -----------------------
+    def is_owner(self, player: Player) -> bool:
+        """The realm owner has no waiting times, energy cost or daily limits."""
+        return player.platform_user_id == self.ctx.settings.owner_id
+
     async def spend_energy(self, tx: Tx, player_id: int, cost: int) -> Player:
         """Charge ``cost`` energy or raise. Returns the player as stored after the charge."""
         player = await repo.get(tx, player_id)
         if player is None:
             raise NotRegistered
+        if self.is_owner(player):
+            return player
         now = self.ctx.now()
         energy, at = progression.regen_energy(
             player.energy, player.energy_at, now, player.level, self.ctx.balance
@@ -185,6 +191,8 @@ class PlayerService:
         The wait grows during the day: 5 minutes after the first use, 15 after the second, and so on
         (``Balance.cooldown_ladder``). It starts over every Tehran midnight.
         """
+        if int(await tx.scalar("SELECT platform_user_id FROM players WHERE id = ?", (player_id,), 0)) == self.ctx.settings.owner_id:
+            return 0
         now = self.ctx.now()
         day = (now + 12600) // 86400
         used = await inv_repo.uses_today(tx, player_id, key, day)
