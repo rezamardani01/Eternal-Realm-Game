@@ -18,6 +18,7 @@ from ...db.repos import wallet
 from ...shared.errors import GameError
 from ..data import lucky
 from ..data.items import get_item
+from ..data.deals import find_deal
 from ..data.packs import ORDER_TTL_SECONDS, PACKS, Pack
 from ..models import Player
 from .inventory import InventoryService
@@ -63,16 +64,22 @@ class PaymentService:
         self.ctx = ctx
         self.inventory = inventory
 
-    async def create_order(self, player: Player, pack_id: str) -> Order:
+    async def create_order(self, player: Player, pack_id: str, *, deal: bool = False) -> Order:
         if not self.ctx.settings.payments_enabled:
             raise GameError("دروازه‌ی پرداخت فعلاً بسته است. کمی بعد دوباره سر بزنید.")
         pack = PACKS.get(pack_id)
         if pack is None:
             raise GameError("چنین بسته‌ای در خزانه نیست.")
+        amount = pack.price_rial
+        if deal:
+            todays = find_deal(self.ctx.now(), pack_id)
+            if todays is None:
+                raise GameError("این تخفیف مال امروز نیست یا تمام شده است. «تخفیف‌های امروز» را دوباره باز کنید.")
+            amount = todays.price_rial
         async with self.ctx.db.transaction() as tx:
             payload = f"ER-{secrets.token_hex(8)}"
-            order_id = await repo.create(tx, player.id, pack.id, pack.price_rial, payload, self.ctx.now())
-        return Order(order_id, player.id, pack, pack.price_rial, "pending", payload)
+            order_id = await repo.create(tx, player.id, pack.id, amount, payload, self.ctx.now())
+        return Order(order_id, player.id, pack, amount, "pending", payload)
 
     async def check_precheckout(self, platform_user_id: int, payload: str, amount: int) -> str | None:
         """``None`` when the payment may go ahead, else the reason shown to the buyer."""

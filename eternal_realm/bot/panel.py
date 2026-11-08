@@ -897,6 +897,7 @@ async def premium(c: Ctx) -> Screen:
         [c.btn("🪙 خرید سکه", "prem", "coins"), c.btn("💎 خرید کریستال", "prem", "crystals")],
         [c.btn("🎁 خرید بسته", "prem", "bundles"), c.btn("📦 خرید صندوق", "prem", "chests")],
         [c.btn("⛓️ خرید مواد", "prem", "materials")],
+        [c.btn("🏷️ تخفیف‌های امروز", "deals", style="success")],
         c.back("home"),
     ]
     return Screen(text, rows)
@@ -922,6 +923,24 @@ def _lucky_block(c: Ctx, lines: list[str]) -> list:
         rows.append([Button.inline(f"{pack.label} — {fa(pack.price_toman)} تومان", BuyCb(kind="cash", id=pack.id), style="success")])
     rows.append([c.btn("🎲 شانس‌های امروز", "luckyodds")])
     return rows
+
+
+@screen("deals")
+async def deals(c: Ctx) -> Screen:
+    from ..game.data.deals import daily_deals, seconds_left
+
+    if c.is_group:
+        return await premium(c)
+    now = c.services.ctx.now()
+    if not c.services.ctx.settings.payments_enabled:
+        return Screen("🏷️ خرید با پول واقعی فعلاً بسته است.", [c.back("premium")])
+    todays = daily_deals(now)
+    rows = [
+        [Button.inline(f"{d.pack.label} · {fa(d.price_toman)} تومان · {fa(d.percent)}٪-", BuyCb(kind="deal", id=d.pack.id), style="success")]
+        for d in todays
+    ]
+    rows.append(c.back("premium"))
+    return Screen(views.deals_text(todays, seconds_left(now)), rows)
 
 
 @screen("luckyodds")

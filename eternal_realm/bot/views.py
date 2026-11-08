@@ -436,8 +436,32 @@ def delivery(order, granted: str = "") -> str:  # noqa: ANN001 - Order
 
 SECTION_NAMES = {
     "coins": "بسته‌ی سکه", "crystals": "بسته‌ی کریستال", "bundles": "بسته‌ی ویژه",
-    "materials": "مواد", "lucky": "بسته‌ی شانسی روزانه",
+    "materials": "مواد", "lucky": "بسته‌ی شانسی روزانه", "deal": "تخفیف روز",
 }
+
+
+def discount_note(pack, amount: int) -> str:  # noqa: ANN001 - Pack
+    percent = round(100 * (1 - amount / pack.price_rial))
+    return f"{fa(percent)}٪ تخفیف"
+
+
+def deals_text(deals, seconds_left: int) -> str:  # noqa: ANN001
+    lines = [
+        f"🏷️ {bold('تخفیف‌های امروز')}",
+        "",
+        f"فقط تا پایان امروز (به وقت تهران)؛ {duration(seconds_left)} دیگر. فردا فهرست تازه می‌آید.",
+        "",
+    ]
+    for deal in deals:
+        pack = deal.pack
+        lines += [
+            f"• {pack.label} — {bold(fa(deal.percent) + '٪ تخفیف')}",
+            f"   قبلاً {fa(pack.price_toman)} تومان ← اکنون {bold(fa(deal.price_toman))} تومان",
+            f"   {pack_description(pack)}",
+            "",
+        ]
+    lines.append("پس از زدن، فاکتور پرداخت بله برایتان می‌آید.")
+    return "\n".join(lines)
 
 
 def sale_report(order, player, user, charge_id, when: int, totals, granted: str = "") -> str:  # noqa: ANN001
@@ -460,6 +484,8 @@ def sale_report(order, player, user, charge_id, when: int, totals, granted: str 
             f"🎁 {pack_description(pack, when)}",
             *(["🎲 محتوای تصادفی:", granted] if granted else []),
             f"💵 مبلغ: {bold(fa(order.amount // 10))} تومان ({fa(order.amount)} ریال)",
+            *([f"🏷️ با تخفیف: {discount_note(pack, order.amount)} (قیمت عادی {fa(pack.price_toman)} تومان)"]
+              if order.amount < pack.price_rial else []),
             "",
             f"👤 خریدار: {bold(player.name)}",
             f"🎮 سطح {fa(player.level)} · {player.race.name} · {player.char_class.name}",

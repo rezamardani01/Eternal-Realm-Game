@@ -29,12 +29,15 @@ async def on_buy(query: CallbackQuery, callback_data: BuyCb, services: Services,
         raise GameError("خزانه‌ی ویژه فقط در پیام خصوصی ربات باز می‌شود؛ آنجا بیایید و خرید کنید.")
     player = await services.players.require(query.from_user.id)
 
-    order = await services.payments.create_order(player, callback_data.id)
+    order = await services.payments.create_order(player, callback_data.id, deal=callback_data.kind == "deal")
     pack = order.pack
     await bot.send_invoice(
         chat_id=query.from_user.id,
         title=pack.title[:32],
-        description=views.pack_description(pack, services.ctx.now())[:255],
+        description=(
+            views.pack_description(pack, services.ctx.now())
+            + (f" · {views.discount_note(pack, order.amount)}" if order.amount < pack.price_rial else "")
+        )[:255],
         payload=order.payload,
         provider_token=services.ctx.settings.provider_token,
         prices=[LabeledPrice(label=pack.title[:32], amount=order.amount)],
