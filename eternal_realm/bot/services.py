@@ -20,6 +20,7 @@ from ..game.services.inventory import InventoryService
 from ..game.services.market import MarketService
 from ..game.services.payments import PaymentService
 from ..game.services.players import PlayerService
+from ..game.services.quests import QuestService
 from ..game.services.rankings import RankingService
 from ..game.services.shop import ShopService
 from .throttle import Throttle
@@ -43,6 +44,7 @@ class Services:
     bosses: BossService
     events: EventService
     clans: ClanService
+    quests: QuestService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -73,6 +75,7 @@ class Services:
             bosses=bosses,
             events=EventService(ctx, inventory, bosses),
             clans=ClanService(ctx),
+            quests=QuestService(ctx, players, inventory),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(

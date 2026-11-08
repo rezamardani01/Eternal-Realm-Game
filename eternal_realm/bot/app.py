@@ -12,7 +12,7 @@ from baleropy.exceptions import BaleUnauthorized
 from ..config import ConfigError, Settings
 from ..context import AppContext
 from ..db.database import Database
-from . import boss, clan_panel, duels, events, maintenance, onboarding, panel, payments
+from . import boss, clan_panel, duels, events, maintenance, onboarding, panel, payments, quest_panel  # noqa: F401
 from .commands import REGISTRY
 from .commands import router as commands_router
 from .middlewares import ErrorMiddleware

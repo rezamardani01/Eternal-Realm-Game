@@ -259,6 +259,18 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE gear ADD COLUMN origin TEXT NOT NULL DEFAULT '';
     """,
+    # 15: story quests
+    """
+    CREATE TABLE player_quests (
+        player_id  INTEGER NOT NULL REFERENCES players (id),
+        quest_id   TEXT    NOT NULL,
+        step       TEXT    NOT NULL,
+        flags      TEXT    NOT NULL DEFAULT '',
+        done       INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (player_id, quest_id)
+    );
+    """,
 ]
 
 
