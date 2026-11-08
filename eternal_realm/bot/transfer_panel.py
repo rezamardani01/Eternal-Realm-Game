@@ -46,6 +46,7 @@ async def xfer(c: Ctx) -> Screen:
     rows = [
         [c.btn("🪙 سکه", "xamt", f"{t}.coin", "1"), c.btn("💎 کریستال", "xamt", f"{t}.crystal", "1")],
         [c.btn("🎒 آیتم", "xlist", t, "items"), c.btn("⛓️ منابع", "xlist", t, "mats")],
+        [c.btn("🃏 کارت کلکسیونی", "xlist", t, "cards")],
         [c.btn("❌ انصراف", "xcancel")],
     ]
     return Screen(text, rows)
@@ -63,7 +64,15 @@ async def xlist(c: Ctx) -> Screen:
     page = _int(page_text or "0")
     view = await c.services.inventory.view(c.player.id)
     entries = []
-    if kind == "items":
+    if kind == "cards":
+        from ..game.data.cards import get_card
+
+        owned = await c.services.cards.owned(c.player.id)
+        entries = [
+            (f"{get_card(k).emoji} {get_card(k).name} ×{fa(q - 1)} تکراری", "xamt", f"{other.id}.k_{k}", "1")
+            for k, q in sorted(owned.items()) if q >= 2
+        ]
+    elif kind == "items":
         entries += [(f"{p.label}", "xconf", f"{other.id}.g{p.id}", "1") for p in view.gear
                     if p.slot is None and p.item.tradable]
         entries += [(f"{i.label} ×{fa(q)}", "xamt", f"{other.id}.{i.id}", "1") for i, q in view.stacks
@@ -71,7 +80,7 @@ async def xlist(c: Ctx) -> Screen:
     else:
         entries += [(f"{i.label} ×{fa(q)}", "xamt", f"{other.id}.{i.id}", "1") for i, q in view.stacks
                     if i.tradable and i.kind is Kind.MATERIAL]
-    title = "🎒 آیتم‌ها" if kind == "items" else "⛓️ منابع"
+    title = {"items": "🎒 آیتم‌ها", "cards": "🃏 کارت‌های تکراری"}.get(kind, "⛓️ منابع")
     if not entries:
         return Screen(f"{title.split(' ')[0]} {bold(title.split(' ', 1)[1])}\n\nچیزی برای بخشیدن ندارید.", [c.back("xfer", "🔙 بازگشت", other.id)])
     chunk, prev, nxt = _page(entries, page)
@@ -93,6 +102,12 @@ async def _limits(c: Ctx, what: str) -> tuple[int, str, str]:
         return me.gold, "🪙 سکه", "سکه"
     if what == "crystal":
         return min(me.crystal, CRYSTAL_DAILY_LIMIT), "💎 کریستال", "کریستال"
+    if what.startswith("k_"):
+        from ..game.data.cards import get_card
+
+        card = get_card(what[2:])
+        owned = (await c.services.cards.owned(me.id)).get(card.id, 0)
+        return max(0, owned - 1), f"{card.emoji} {card.name}", "کارت"
     item = get_item(what)
     view = await c.services.inventory.view(me.id)
     have = next((q for i, q in view.stacks if i.id == item.id), 0)

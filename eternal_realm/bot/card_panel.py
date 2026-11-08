@@ -13,7 +13,15 @@ from .panel import Ctx, Screen, _int, screen
 async def album(c: Ctx) -> Screen:
     progress = await c.services.cards.progress(c.player.id)
     total = sum(p.owned for p in progress)
-    lines = [f"🃏 {bold('آلبوم کارت‌ها')}", "", f"تا الان {bold(fa(total))} کارت جمع کرده‌اید.", ""]
+    owned = await c.services.cards.owned(c.player.id)
+    worth = sum(dust_value(get_card(k)) * q for k, q in owned.items())
+    lines = [
+        f"🃏 {bold('آلبوم کارت‌ها')}",
+        "",
+        f"تا الان {bold(fa(total))} کارت جمع کرده‌اید.",
+        f"💰 ارزش کل آلبوم: {fa(worth)} سکه",
+        "",
+    ]
     rows = []
     for p in progress:
         done = " ✔" if p.claimed else (" 🎁" if p.complete else "")
@@ -26,7 +34,6 @@ async def album(c: Ctx) -> Screen:
         "کارت‌ها قدرت رزمی ندارند؛ فقط برای شکوه و جمع‌آوری‌اند.",
     ]
     rows.append([c.btn(f"🛍️ بسته‌ی کارت ({fa(PACK_PRICE)}🪙)", "cpackq", style="success")])
-    rows.append([c.btn("🏪 بازار کارت", "cmarket", "0", "0"), c.btn("📋 آگهی‌های کارت من", "cmine")])
     rows.append(c.back("home"))
     return Screen("\n".join(lines), rows)
 
@@ -38,7 +45,7 @@ async def card_set(c: Ctx) -> Screen:
     cards = cards_in(s.id)
     have = sum(1 for k in cards if k.id in owned)
     rows = [
-        [c.btn((f"{k.emoji} {k.name}" if k.id in owned else "❔ ناشناخته") + (f" ×{fa(owned[k.id])}" if owned.get(k.id, 0) > 1 else ""),
+        [c.btn((f"{k.emoji} {k.name} · {fa(dust_value(k))}🪙" if k.id in owned else "❔ ناشناخته") + (f" ×{fa(owned[k.id])}" if owned.get(k.id, 0) > 1 else ""),
                "card", k.id)]
         for k in cards
     ]
@@ -62,7 +69,15 @@ async def card(c: Ctx) -> Screen:
     qty = owned.get(k.id, 0)
     if not qty:
         return Screen(None, toast="❔ این کارت را هنوز پیدا نکرده‌اید.", alert=True)
-    lines = [f"{k.emoji} {bold(k.name)}", RARITY_NAMES[k.rarity], "", k.story, "", f"در آلبوم شما: {fa(qty)} عدد"]
+    lines = [
+        f"{k.emoji} {bold(k.name)}",
+        RARITY_NAMES[k.rarity],
+        "",
+        k.story,
+        "",
+        f"💰 ارزش این کارت: {fa(dust_value(k))} سکه",
+        f"در آلبوم شما: {fa(qty)} عدد",
+    ]
     rows = []
     if qty > 1:
         lines.append(f"♻️ کارت تکراری را می‌توانید به بازارچه بفروشید: {fa(dust_value(k))} سکه")
@@ -157,7 +172,7 @@ async def card_market(c: Ctx) -> Screen:
     if nav:
         rows.append(nav)
     rows.append([c.btn("📋 آگهی‌های من", "cmine")])
-    rows.append(c.back("album"))
+    rows.append(c.back("market"))
     text = (
         f"🏪 {bold('بازار کارت')}\n\n"
         "کارت‌های تکراری بازیکنان، از ارزان به گران. خرید و فروش فقط با سکه است.\n\n"

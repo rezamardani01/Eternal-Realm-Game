@@ -145,9 +145,43 @@ async def test_card_market_glass_flow(h, services, db):
             await services.cards.grant(tx, seller.id, "hero_archer")
     await services.cards.list_card(seller, "hero_archer", 400)
     await h.say(24, "آلبوم", group=True)
+    assert not any("بازار کارت" in t for t in h.labels())  # the card market lives in the bazaar
+    await h.say(24, "بازار", group=True)
     await h.tap(24, "بازار کارت", group=True)
     await h.click(24, h.button_data("۴۰۰"), group=True)
     await h.tap(24, "خرید با", group=True)
     assert "تأیید خرید کارت" in h.session.sent("editMessageText")[-1]["text"]
     await h.tap(24, "بله، بخر", group=True)
     assert (await services.cards.owned(buyer.id)).get("hero_archer") == 1
+
+
+async def test_cards_have_a_value_and_duplicates_can_be_gifted(h, services, db):
+    from eternal_realm.game.data.cards import dust_value, get_card
+
+    a, b = await hero(services, db, 40, "آرش"), await hero(services, db, 41, "سارا")
+    async with db.transaction() as tx:
+        for _ in range(3):
+            await services.cards.grant(tx, a.id, "hero_mage")
+        await services.cards.grant(tx, a.id, "hero_rogue")
+    assert dust_value(get_card("hero_mage")) > 0
+    me = await services.players.require(40)
+    receipt = await services.economy.send(me, b, "k_hero_mage", 2)
+    assert "جادوگر" in receipt.what or "هیولا" not in receipt.what
+    assert (await services.cards.owned(a.id))["hero_mage"] == 1
+    assert (await services.cards.owned(b.id))["hero_mage"] == 2
+    with pytest.raises(GameError, match="تکراری"):
+        await services.economy.send(me, b, "k_hero_mage", 1)  # the last copy stays
+    with pytest.raises(GameError, match="تکراری"):
+        await services.economy.send(me, b, "k_hero_rogue", 1)
+
+    async with db.transaction() as tx:
+        await services.cards.grant(tx, a.id, "hero_mage")
+    await h.say(40, "انتقال", group=True, reply_to=h.message_of(41))
+    await h.tap(40, "کارت کلکسیونی", group=True)
+    assert "تکراری" in h.session.last_text() or any("تکراری" in t for t in h.labels())
+    await h.click(40, h.button_data("جادوگر"), group=True)
+    await h.tap(40, "تأیید مقدار", group=True)
+    await h.tap(40, "تأیید و انتقال", group=True)
+    assert (await services.cards.owned(b.id))["hero_mage"] == 3
+    await h.say(40, "آلبوم", group=True)
+    assert "ارزش کل آلبوم" in h.session.sent()[-1]["text"]

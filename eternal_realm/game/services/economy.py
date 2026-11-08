@@ -73,6 +73,25 @@ class EconomyService:
                 await wallet.apply(tx, receiver.id, crystal=qty, reason="crystal_in", now=now)
             return Receipt(f"💎 {fa(qty)} کریستال", CRYSTAL_DAILY_LIMIT - used - qty, "کریستال")
         assert self.inventory is not None
+        if kind.startswith("k_"):
+            from ..data.cards import get_card
+
+            card = get_card(kind[2:])
+            async with self.ctx.db.transaction() as tx:
+                row = await tx.fetchone(
+                    "SELECT qty FROM player_cards WHERE player_id = ? AND card_id = ?", (sender.id, card.id)
+                )
+                if row is None or row["qty"] - qty < 1:
+                    raise GameError("فقط کارت‌های تکراری را می‌شود بخشید؛ یک نسخه همیشه در آلبوم شما می‌ماند.")
+                await tx.execute(
+                    "UPDATE player_cards SET qty = qty - ? WHERE player_id = ? AND card_id = ?", (qty, sender.id, card.id)
+                )
+                await tx.execute(
+                    "INSERT INTO player_cards (player_id, card_id, qty, first_at) VALUES (?, ?, ?, ?)"
+                    " ON CONFLICT (player_id, card_id) DO UPDATE SET qty = qty + excluded.qty",
+                    (receiver.id, card.id, qty, now),
+                )
+            return Receipt(f"🃏 {card.name} ×{fa(qty)}")
         if kind.startswith("g") and kind[1:].isdigit():
             async with self.ctx.db.transaction() as tx:
                 piece = await self.inventory.piece(tx, sender.id, int(kind[1:]))
