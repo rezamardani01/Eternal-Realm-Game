@@ -21,11 +21,11 @@ def lobby_text(v: LobbyView) -> str:
     roster = "\n".join(f"⚔️ {m.mention} · سطح {fa(m.level)}" for m in v.members)
     return headline(
         f"🕳️ {bold('سیاه‌چال گروهی باز شد!')}\n\n"
-        "این سیاه‌چال چهار اتاق دارد: در سه اتاق اول دسته‌ای هیولا می‌آید و در اتاق آخر نگهبان سیاه‌چال است.\n"
-        "همه با هم می‌جنگید. هر چه دوستان بیشتر و قوی‌تر باشند، برد راحت‌تر است!\n\n"
-        f"👥 جنگجویان ({fa(len(v.members))} از {fa(MAX_PLAYERS)}، دست‌کم {fa(MIN_PLAYERS)} لازم است):\n{roster}\n\n"
-        f"⏳ مهلت ثبت‌نام: {duration(v.seconds_left)}\n\n"
-        "برای شرکت، «پیوستن» را بزنید. وقتی همه آماده بودند، کسی که سیاه‌چال را باز کرد «شروع» را می‌زند 👇"
+        "🚪 چهار اتاق دارد: سه اتاق هیولا و در آخر نگهبان سیاه‌چال.\n"
+        "🤝 همه با هم می‌جنگید؛ دوستان بیشتر و قوی‌تر یعنی برد راحت‌تر.\n\n"
+        f"👥 جنگجویان: {fa(len(v.members))} از {fa(MAX_PLAYERS)} (دست‌کم {fa(MIN_PLAYERS)})\n{roster}\n\n"
+        f"⏳ ثبت‌نام: {duration(v.seconds_left)}\n\n"
+        "👇 «پیوستن» را بزنید؛ بازکننده‌ی سیاه‌چال «شروع» را می‌زند."
     )
 
 
@@ -56,8 +56,8 @@ def result_text(r: RunResult) -> str:
         if p.chest:
             entry += "\n🎁 صندوقچه‌ی جادویی"
         ranking.append(entry)
-    blocks.append(f"🏅 {bold('سهم هر جنگجو')}\n" + "\n\n".join(ranking))
-    blocks.append("🪙 پاداش هر نفر در دکمه‌های زیر است 👇")
+    blocks.append(f"🏅 {bold('سهم هر جنگجو')}\n" + "\n".join(ranking))
+    blocks.append("🪙 پاداش هر نفر در دکمه‌های زیر 👇")
     return headline("\n\n".join(blocks))
 
 
