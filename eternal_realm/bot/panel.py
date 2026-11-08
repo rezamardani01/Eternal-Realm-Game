@@ -25,7 +25,7 @@ from ..game.services.inventory import InventoryView, Piece
 from ..game.services.shop import shop_items
 from ..shared.errors import GameError
 from ..shared.text import bold, duration, fa, headline, to_int
-from . import keyboards, views
+from . import art, keyboards, views
 from ..game.data.packs import PACKS
 from .callbacks import BuyCb, PanelCb
 from .services import Services
@@ -46,6 +46,8 @@ class Screen:
     rows: Rows = field(default_factory=list)
     toast: str | None = None
     alert: bool = False
+    #: picture shown with the panel, e.g. ``"items/wooden_sword"`` (see ``bot/art.py``)
+    art: str | None = None
 
 
 @dataclass
@@ -419,7 +421,7 @@ async def _piece_screen(c: Ctx, gear_id: int, toast: str | None = None) -> Scree
     if not p.slot and p.item.tradable:
         rows.append([c.btn("🏷️ عرضه در بازار", "listask", "g", p.id)])
     rows.append(c.back("gear", "🔙 بازگشت"))
-    return Screen("\n".join(lines), rows, toast=toast)
+    return Screen("\n".join(lines), rows, toast=toast, art=f"items/{p.item.id}")
 
 
 @screen("piece")
@@ -444,7 +446,8 @@ async def unequip(c: Ctx) -> Screen:
 async def sell_confirm(c: Ctx) -> Screen:
     p = await _piece(c, _int(c.a))
     text = f"💰 {bold('فروش به بازارچه')}\n\n{p.label} را می‌فروشید و {bold(fa(_sell_price(p)))} سکه می‌گیرید.\nمطمئنید؟"
-    return Screen(text, [[c.btn("✅ بله، بفروش", "sell", p.id, style="danger"), c.btn("↩️ نه", "piece", p.id)]])
+    return Screen(text, [[c.btn("✅ بله، بفروش", "sell", p.id, style="danger"), c.btn("↩️ نه", "piece", p.id)]],
+                  art=f"items/{p.item.id}")
 
 
 @screen("sell")
@@ -460,7 +463,7 @@ async def upgrade_ask(c: Ctx) -> Screen:
     p, quote = await c.services.shop.quote(c.player, _int(c.a))
     rows = [[c.btn(f"🔨 ارتقا به +{fa(quote.next_level)}", "up", p.id, quote.next_level, style="success")],
             c.back("piece", "🔙 بازگشت", p.id)]
-    return Screen(views.upgrade_quote(p, quote), rows)
+    return Screen(views.upgrade_quote(p, quote), rows, art=f"items/{p.item.id}")
 
 
 @screen("up")
@@ -529,7 +532,7 @@ async def _item_screen(c: Ctx, item_id: str, toast: str | None = None) -> Screen
     if item.tradable:
         rows.append([c.btn("🏷️ عرضه در بازار", "lqty", item.id)])
     rows.append(c.back("chests" if item.kind is Kind.CHEST else "items", "🔙 بازگشت"))
-    return Screen("\n".join(lines), rows, toast=toast)
+    return Screen("\n".join(lines), rows, toast=toast, art=f"items/{item.id}")
 
 
 @screen("item")
@@ -559,7 +562,8 @@ async def item_sell_ask(c: Ctx) -> Screen:
         f"کیسه‌ی شما: {fa(c.player.gold)} ← {fa(c.player.gold + total)} سکه\n\n"
         "مطمئنید می‌فروشید؟"
     )
-    return Screen(text, [[c.btn("✅ بله، بفروش", "isell", item.id, c.b, style="danger"), c.btn("↩️ نه", "item", item.id)]])
+    return Screen(text, [[c.btn("✅ بله، بفروش", "isell", item.id, c.b, style="danger"), c.btn("↩️ نه", "item", item.id)]],
+                  art=f"items/{item.id}")
 
 
 @screen("isell")
@@ -690,7 +694,7 @@ async def _shop_item_screen(c: Ctx, item_id: str, cat: str, toast: str | None = 
     else:
         rows = [[c.btn(f"🛍️ ×{fa(n)}", "buyq", item.id, str(n), style="success") for n in (1, 5, 10)]]
     rows.append(c.back("shopcat", "🔙 بازگشت", cat))
-    return Screen("\n".join(lines), rows, toast=toast)
+    return Screen("\n".join(lines), rows, toast=toast, art=f"items/{item.id}")
 
 
 @screen("shopitem")
@@ -731,8 +735,10 @@ async def buy_confirm(c: Ctx) -> Screen:
     cat = "gear" if item.is_gear else "pot"
     if item.is_gear and any(p_.item.id == item.id for p_ in (await c.services.inventory.view(c.player.id)).gear):
         raise GameError(f"شما از قبل {item.label} را دارید؛ خرید دوباره لازم نیست.")
-    return await _confirm(c, f"{item.label} ×{fa(qty)}", "gold", item.buy * qty, "buy", item.id, str(qty),
-                          ("shopitem", item.id, cat))
+    shown = await _confirm(c, f"{item.label} ×{fa(qty)}", "gold", item.buy * qty, "buy", item.id, str(qty),
+                           ("shopitem", item.id, cat))
+    shown.art = f"items/{item.id}"
+    return shown
 
 
 @screen("cbuyq")
@@ -744,7 +750,9 @@ async def chest_confirm(c: Ctx) -> Screen:
     currency, unit = chest.price
     contents = views.chest_contents(item, c.services.chests.odds(chest))
     back = ("prem", "chests", "") if c.b == "p" else ("chestshop", "", "")
-    return await _confirm(c, item.label, currency, unit, "cbuy", item.id, "", back, contents)
+    shown = await _confirm(c, item.label, currency, unit, "cbuy", item.id, "", back, contents)
+    shown.art = f"items/{item.id}"
+    return shown
 
 
 @screen("buy")
@@ -1182,7 +1190,7 @@ async def on_panel(
     shown = await handler(ctx)
     if shown.text is not None:
         with contextlib.suppress(BaleAPIError):  # "message is not modified" and similar
-            await message.edit_text(headline(shown.text), buttons=shown.rows or None)
+            await art.show(message, headline(shown.text), shown.rows, shown.art)
     await query.answer((shown.toast or "")[:190] or None, show_alert=shown.alert)
 
 

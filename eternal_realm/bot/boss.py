@@ -11,7 +11,8 @@ from baleropy.exceptions import BaleAPIError
 from baleropy.types import CallbackQuery, Message
 
 from ..game.services.bosses import BossUpdate, BossView
-from . import keyboards, views
+from ..shared.text import bold, fa
+from . import art, keyboards, views
 from .callbacks import BossCb
 from .services import Services
 
@@ -26,6 +27,11 @@ def text_for(services: Services, view: BossView) -> str:
     if view.phase == "fighting":
         return views.boss_fight(view)
     return views.boss_final(view)
+
+
+def portrait_caption(view: BossView) -> str:
+    t = view.type
+    return f"{t.emoji} {bold(t.name)}\nسطح {fa(view.level)} · {t.element.emoji} {t.element.noun}"
 
 
 def buttons_for(view: BossView) -> keyboards.Rows | None:
@@ -55,6 +61,8 @@ async def _replace(bot: Bot, services: Services, view: BossView, text: str, old_
 
 async def post(message: Message, services: Services, view: BossView) -> Message:
     """Send the boss message and remember it, so the processor can keep editing it."""
+    t = view.type
+    await art.send(message, f"bosses/{t.id}", portrait_caption(view))
     text, buttons = text_for(services, view), buttons_for(view)
     sent = await message.answer(text, buttons=buttons) if buttons else await message.answer(text)
     await services.bosses.attach_message(view.id, sent.message_id)

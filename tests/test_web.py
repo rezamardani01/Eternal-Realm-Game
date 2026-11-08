@@ -23,6 +23,19 @@ class FakeBot:
 
         return Sent()
 
+    async def send_photo(self, chat_id, photo, caption=None, reply_to=None, markup=None):
+        self.sent.append((chat_id, caption))
+
+        class Chat:
+            id = chat_id
+
+        class Sent:
+            message_id = 78
+            chat = Chat()
+            photo = []
+
+        return Sent()
+
 
 @pytest.fixture
 def services(db, clock, rng):
