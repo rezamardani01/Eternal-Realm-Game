@@ -913,70 +913,82 @@ def welcome_back(player) -> str:  # noqa: ANN001 - Player
 
 # --- duels -------------------------------------------------------------------------------------
 def duel_invite(challenger, target, seconds: int) -> str:  # noqa: ANN001 - Player
-    return (
-        f"⚔️ {bold('فراخوان دوئل')}\n\n"
-        f"{challenger.char_class.emoji} {challenger.mention} · سطح {fa(challenger.level)}\n"
-        f"🏆 {fa(challenger.wins)} پیروزی · 💀 {fa(challenger.losses)} شکست\n\n"
-        f"فرمانده {target.mention} ، دعوت را می‌پذیرید؟\n"
-        f"⏳ {duration(seconds)} فرصت دارید."
-    )
+    return "\n".join([
+        f"⚔️ {bold('فراخوان دوئل')}",
+        "",
+        f"{challenger.char_class.emoji} {challenger.mention} · سطح {fa(challenger.level)}",
+        f"🏆 {fa(challenger.wins)} پیروزی · 💀 {fa(challenger.losses)} شکست",
+        "",
+        f"فرمانده {target.mention} ، دعوت را می‌پذیرید؟",
+        f"⏳ {duration(seconds)} فرصت دارید.",
+    ])
 
 
 def _hp_block(f) -> str:  # noqa: ANN001 - Fighter
-    percent = round(100 * max(f.hp, 0) / f.max_hp) if f.max_hp else 0
-    return (
-        f"{f.emoji} {f.mention or bold(f.name)}\n"
-        f"❤️ {fa(max(f.hp, 0))} از {fa(f.max_hp)}\n"
-        f"{bar(f.hp, f.max_hp, 10)}  {fa(percent)}٪"
-    )
+    hp = max(f.hp, 0)
+    percent = round(100 * hp / f.max_hp) if f.max_hp else 0
+    return "\n".join([
+        f"{f.emoji} {f.mention or bold(f.name)}",
+        f"❤️ {bar(hp, f.max_hp, 10)} {fa(percent)}٪",
+        f"     {fa(hp)} از {fa(f.max_hp)} جان",
+    ])
 
 
 def _hp_line(f) -> str:  # noqa: ANN001 - Fighter
     return _hp_block(f)
 
 
+def _story(lines: list[str], limit: int = 5) -> list[str]:
+    """The last few moves, one per line."""
+    kept = [line.strip() for line in lines if line.strip()][-limit:]
+    return [f"• {line}" for line in kept]
+
+
 def duel_status(battle, lines: list[str], turn_seconds: int) -> str:  # noqa: ANN001 - Battle
     a, b = battle.fighters
-    blocks = [f"⚔️ {bold('میدان نبرد')}", _hp_block(a), _hp_block(b)]
-    story = [line for line in lines if line.strip()]
+    out = [f"⚔️ {bold('میدان نبرد')}", "", _hp_block(a), "     ⚡ در برابر ⚡", _hp_block(b)]
+    story = _story(lines)
     if story:
-        blocks.append("\n".join(story))
+        out += ["", f"📜 {bold('آخرین حرکت‌ها')}", *story]
     if not battle.finished:
-        blocks.append(
-            f"🎯 نوبت {battle.current.mention or bold(battle.current.name)}\n"
-            f"🔁 دور {fa(battle.round)} از {fa(battle.max_rounds)}\n"
-            f"⏳ {duration(turn_seconds)} فرصت دارید."
-        )
-    return "\n\n".join(blocks)
+        out += [
+            "",
+            f"🎯 نوبت {battle.current.mention or bold(battle.current.name)}",
+            f"🔁 دور {fa(battle.round)} از {fa(battle.max_rounds)} · ⏳ {duration(turn_seconds)}",
+        ]
+    return "\n".join(out)
 
 
 def duel_result(update) -> str:  # noqa: ANN001 - DuelUpdate
     battle = update.battle
     a, b = battle.fighters
-    blocks = [f"🏁 {bold('پایان نبرد')}", _hp_block(a), _hp_block(b)]
-    story = [line for line in update.lines if line.strip()]
-    if story:
-        blocks.append("\n".join(story))
+    out = [f"🏁 {bold('پایان نبرد')}", ""]
     if battle.winner is None:
-        blocks.append("🤝 مساوی شد؛ هر دو دلاور بودند!")
+        out.append("🤝 مساوی شد؛ هر دو دلاور بودند!")
     else:
         winner = battle.fighters[battle.winner]
-        blocks.append(f"🏆 برنده: {winner.mention or bold(winner.name)}")
+        out.append(f"🏆 برنده: {winner.mention or bold(winner.name)}")
+    out += ["", _hp_block(a), "     ⚡ در برابر ⚡", _hp_block(b)]
+    story = _story(update.lines, 4)
+    if story:
+        out += ["", f"📜 {bold('ضربه‌های پایانی')}", *story]
+    rewards = []
     for fighter in battle.fighters:
         payout = update.payouts.get(fighter.player_id)
         if payout is None:
             continue
         gains = []
         if payout.gold:
-            gains.append(f"{fa(payout.gold)} سکه")
+            gains.append(f"🪙 {fa(payout.gold)}")
         if payout.xp:
-            gains.append(f"{fa(payout.xp)} تجربه")
-        line = f"{fighter.mention or fighter.name}: " + (" و ".join(gains) if gains else "سقف پاداش امروز پر است")
+            gains.append(f"⭐ {fa(payout.xp)}")
+        rewards.append(f"👤 {fighter.mention or fighter.name}: " + (" · ".join(gains) if gains else "سقف پاداش امروز پر است"))
         if payout.rating:
             league = league_of(payout.rating)
             sign = "+" if payout.rating_delta >= 0 else "-"
-            line += f"\n{league.emoji} لیگ {league.name} · {fa(payout.rating)} امتیاز ({sign}{fa(abs(payout.rating_delta))})"
+            rewards.append(f"     {league.emoji} لیگ {league.name} · {fa(payout.rating)} امتیاز ({sign}{fa(abs(payout.rating_delta))})")
         if payout.level_up:
-            line += f"\n🎉 رسید به سطح {fa(payout.level_up.new_level)}"
-        blocks.append(line)
-    return "\n\n".join(blocks)
+            rewards.append(f"     🎉 رسید به سطح {fa(payout.level_up.new_level)}")
+    if rewards:
+        out += ["", f"🎁 {bold('پاداش')}", *rewards]
+    return "\n".join(out)
