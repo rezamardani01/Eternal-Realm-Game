@@ -29,8 +29,7 @@ jobs:
           HOST=$(printf '%s' "$HOST" | tr -d '[:space:]')
           USER_NAME=$(printf '%s' "$USER_NAME" | tr -d '[:space:]')
           install -m 700 -d ~/.ssh
-          printf '%s
-' "$KEY" | tr -d '' > ~/.ssh/deploy_key
+          printf '%s\n' "$KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           echo "Connecting to ${USER_NAME}@${HOST} ..."
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o BatchMode=yes             "$USER_NAME@$HOST" "bash /opt/eternal-realm/deploy/deploy.sh"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o BatchMode=yes "$USER_NAME@$HOST" "bash /opt/eternal-realm/deploy/deploy.sh"
