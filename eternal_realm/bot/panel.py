@@ -262,7 +262,7 @@ async def profile(c: Ctx) -> Screen:
         rows.append([c.btn("🧰 تجهیزات", "gear"), c.btn("🎒 کوله‌پشتی", "inv")])
         rows.append([c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")])
         rows.append([c.btn("📅 مأموریت‌ها", "missions"), c.btn("🕯️ محراب", "altar")])
-        rows.append([c.btn("🐱 حیوان همراه من", "pets")])
+        rows.append([c.btn("🐱 حیوان همراه من", "pets"), c.btn("🏅 دستاوردها", "ach")])
         rows.append(c.back("home"))
     elif c.b == "cm":
         rows.append(c.back("clanmember", "🔙 بازگشت به عضو خاندان", target.id))

@@ -13,6 +13,11 @@ async def add_points(tx: Tx, player_id: int, deed: str, now: int) -> int:
         " WHERE player_id = ? AND day = ? AND deed = ? AND claimed = 0",
         (player_id, (now + 12600) // 86400, deed),
     )
+    await tx.execute(
+        "INSERT INTO deed_counts (player_id, deed, n) VALUES (?, ?, 1)"
+        " ON CONFLICT (player_id, deed) DO UPDATE SET n = n + 1",
+        (player_id, deed),
+    )
     from ...game.services.contests import count_deed
 
     await count_deed(tx, player_id, deed, now)

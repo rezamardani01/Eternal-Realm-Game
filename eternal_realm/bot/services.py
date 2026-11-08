@@ -26,6 +26,7 @@ from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
 from ..game.services.invites import InviteService
 from ..game.services.market import MarketService
+from ..game.services.achievements import AchievementService
 from ..game.services.missions import MissionService
 from ..game.services.membership import MembershipService
 from ..game.services.offers import OfferService
@@ -65,6 +66,7 @@ class Services:
     season: SeasonService
     offers: OfferService
     missions: MissionService
+    achievements: AchievementService
     gdungeon: GroupDungeonService
     contests: ContestService
     effects: EffectService
@@ -112,6 +114,7 @@ class Services:
             season=SeasonService(ctx, inventory, cards),
             offers=offers,
             missions=MissionService(ctx, offers),
+            achievements=AchievementService(ctx, inventory),
             gdungeon=GroupDungeonService(ctx, players, characters, inventory),
             contests=ContestService(ctx),
             effects=EffectService(ctx),

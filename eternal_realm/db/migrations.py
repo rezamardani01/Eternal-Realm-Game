@@ -510,6 +510,22 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE players ADD COLUMN boost_until INTEGER NOT NULL DEFAULT 0;
     """,
+    # 37: achievements (how often each deed was done, and which steps were paid)
+    """
+    CREATE TABLE deed_counts (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        deed      TEXT    NOT NULL,
+        n         INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (player_id, deed)
+    );
+    CREATE TABLE achievement_claims (
+        player_id  INTEGER NOT NULL REFERENCES players (id),
+        family     TEXT    NOT NULL,
+        step       INTEGER NOT NULL,
+        claimed_at INTEGER NOT NULL,
+        PRIMARY KEY (player_id, family, step)
+    );
+    """,
 ]
 
 
