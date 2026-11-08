@@ -134,7 +134,7 @@ async def test_accepting_starts_the_duel_and_the_winner_takes_the_pot(h, service
     assert sum(gold) <= 2_000 + 400  # coins never appear out of thin air (only the small duel rewards)
     assert fee == 2 * stake * FEE_PERCENT // 100
     result = h.session.last_text()
-    assert "شرط دوئل" in result and "جایزه را برد" in result and "کارمزد" in result
+    assert "شرط دوئل" in result and "برنده" in result and "کارمزد" in result
     assert (await services.bets.get(1)).status == "done"
     assert await services.bets.open_for(a.id) is None  # free to bet again
 
@@ -356,7 +356,7 @@ async def test_the_glass_buttons_start_the_gear_duel_with_the_chosen_payment(h, 
     duel = await play_to_the_end(h, services, a, b)
     assert duel.status == "finished"
     result = h.session.last_text()
-    assert "شرط دوئل" in result and "جایزه را برد" in result
+    assert "شرط دوئل" in result and "برنده" in result
     assert (await services.bets.get(1)).status == "done"
 
 
