@@ -305,6 +305,19 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (player_id, pet_id)
     );
     """,
+    # 19: a hero's current dungeon run
+    """
+    CREATE TABLE player_dungeon (
+        player_id  INTEGER PRIMARY KEY REFERENCES players (id),
+        stage      INTEGER NOT NULL,
+        hp         INTEGER NOT NULL,
+        max_hp     INTEGER NOT NULL,
+        gold       INTEGER NOT NULL DEFAULT 0,
+        xp         INTEGER NOT NULL DEFAULT 0,
+        loot       TEXT    NOT NULL DEFAULT '{}',
+        started_at INTEGER NOT NULL
+    );
+    """,
 ]
 
 

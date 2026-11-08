@@ -13,6 +13,7 @@ from ..game.services.characters import CharacterService
 from ..game.services.chests import ChestService
 from ..game.services.clans import ClanService
 from ..game.services.duels import DuelService
+from ..game.services.dungeon import DungeonService
 from ..game.services.economy import EconomyService
 from ..game.services.events import EventService
 from ..game.services.groups import GroupService
@@ -49,6 +50,7 @@ class Services:
     quests: QuestService
     cards: CardService
     pets: PetService
+    dungeon: DungeonService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -83,6 +85,7 @@ class Services:
             quests=QuestService(ctx, players, inventory),
             cards=cards,
             pets=PetService(ctx),
+            dungeon=DungeonService(ctx, players, inventory, characters),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(
