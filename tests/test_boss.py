@@ -411,8 +411,8 @@ async def test_a_lost_boss_comes_back_angrier_and_pays_more(services, db, clock)
     await services.bosses.join(again.id, await services.players.require(players[1].platform_user_id))
     await services.bosses.join(again.id, await services.players.require(players[2].platform_user_id))
     started = await services.bosses.start(again.id, await services.players.require(players[0].platform_user_id))
-    normal_hp = boss_max_hp(again.type, 3, started.level)
-    assert started.max_hp == round(normal_hp * 1.15)
+    plain_hp = boss_max_hp(again.type, 3, started.level)
+    assert started.revenge and started.max_hp >= round(plain_hp * 0.95 * 1.15 * 0.3)
     # one rematch per defeat: when this one is lost too, the next summon is an ordinary boss again
     await edit_state(db, again.id, lambda s: s["boss"].update(hp=10**9, max_hp=10**9, atk=1))
     await edit_state(db, again.id, lambda s: [x.update(hp=10**6, max_hp=10**6) for x in s["heroes"]])
@@ -431,3 +431,26 @@ async def test_the_revenge_window_closes_after_a_day(services, db, clock):
     assert await services.bosses.revenge_boss(CHAT) is not None
     clock.advance(25 * 3600)
     assert await services.bosses.revenge_boss(CHAT) is None
+
+
+async def test_every_summoning_has_a_hidden_strength_tier_that_changes_the_odds(services, db, clock):
+    from eternal_realm.game.data.bosses import TIERS, roll_tier, squad_scaling, tier_by_id
+
+    seen = set()
+    rng = random.Random(5)
+    for _ in range(400):
+        seen.add(roll_tier(rng).id)
+    assert seen == {t.id for t in TIERS}  # all five tiers happen
+    assert tier_by_id("nonsense").id == "normal"
+    plain_hp, plain_atk = squad_scaling(1.3, 3)
+    geared_hp, geared_atk = squad_scaling(2.0, 3)
+    assert geared_hp > plain_hp and geared_atk > plain_atk  # a stronger squad meets a stronger boss
+    assert squad_scaling(1.3, 8)[1] > squad_scaling(1.3, 3)[1]  # and more fighters make it hit harder
+
+    players, view = await squad(services, db, 4)
+    assert view.tier in {t.id for t in TIERS}
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE bosses SET state = ? WHERE id = ?", (json.dumps({"tier": "legend"}), view.id))
+    started = await services.bosses.start(view.id, players[0])
+    assert started.tier == "legend"
+    assert "افسانه‌ای" in boss_ui.text_for(services, started)  # revealed once the fight begins

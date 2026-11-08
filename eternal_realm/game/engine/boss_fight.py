@@ -33,6 +33,8 @@ class Hero:
     shield: bool = False
     #: how many fallen friends this hero can still bring back (mages and guardians)
     revive: int = 1
+    #: the boss froze this hero's hands: the next turn is lost
+    stunned: bool = False
 
 
 @dataclass
@@ -53,6 +55,8 @@ class Boss:
     heals_left: int = 3
     #: rounds during which a warrior is holding the boss down (mages hit harder)
     pinned: int = 0
+    #: how many times chaos may still let the boss regrow some health
+    surges: int = 3
 
 
 def _offense(hero: Hero) -> float:
@@ -136,14 +140,15 @@ def _hit_hero(boss: Boss, hero: Hero, power: float, rng: random.Random, label: s
     if rng.random() < min(0.20, hero.speed * 0.004):
         return [(NORMAL, f"💨 {hero.name} از ضربه‌ی باس جاخالی داد")]
     rage = 1.0 + (1 - boss.hp / max(boss.max_hp, 1)) * 0.5 if boss.behavior == "berserk" else 1.0
-    raw = boss.atk * power * rage * (1.5 if boss.enraged else 1.0) * rng.uniform(0.9, 1.1)
+    deadly = rng.random() < 0.08  # luck: sometimes the boss lands a monstrous blow
+    raw = boss.atk * power * rage * (1.5 if boss.enraged else 1.0) * rng.uniform(0.9, 1.1) * (1.6 if deadly else 1.0)
     amount = max(1, round(raw - hero.defense * 0.5))
     if hero.shield:
         hero.shield = False
         amount = max(1, amount // 2)
     amount = min(amount, hero.hp)
     hero.hp -= amount
-    events: list[Event] = [(NORMAL, f"🩸 {label} {hero.name} ({fa(amount)} آسیب)")]
+    events: list[Event] = [(NOTABLE if deadly else NORMAL, f"{'☠️ ضربه‌ی مرگبار! ' if deadly else '🩸 '}{label} {hero.name} ({fa(amount)} آسیب)")]
     if hero.hp <= 0:
         hero.alive = False
         events.append((MAJOR, f"💀 {hero.name} از پا افتاد"))
@@ -198,6 +203,22 @@ def _boss_single(boss: Boss, alive: list[Hero], rng: random.Random) -> list[Even
     return _hit_hero(boss, target, 1.0, rng, f"{boss.name} به")
 
 
+def _chaos(boss: Boss, heroes: list[Hero], rng: random.Random) -> list[Event]:
+    """Luck of the fight: the boss may stun a fighter or draw fresh strength from the earth."""
+    events: list[Event] = []
+    alive = [h for h in heroes if h.alive and not h.stunned]
+    if len(alive) > 1 and rng.random() < 0.07:
+        victim = rng.choice(alive)
+        victim.stunned = True
+        events.append((NOTABLE, f"💫 {boss.name} نعره‌ای زد و {victim.name} را گیج کرد"))
+    if boss.surges > 0 and boss.hp < boss.max_hp * 0.8 and rng.random() < 0.06:
+        boss.surges -= 1
+        mended = min(boss.max_hp - boss.hp, round(boss.max_hp * 0.04))
+        boss.hp += mended
+        events.append((NOTABLE, f"🌋 {boss.name} از زمین نیرو گرفت و {fa(mended)} جان بازیافت"))
+    return events
+
+
 def run_round(boss: Boss, heroes: list[Hero], rng: random.Random) -> list[Event]:
     """Play one round: every living fighter acts (fastest first), then the boss answers."""
     boss.round += 1
@@ -205,8 +226,13 @@ def run_round(boss: Boss, heroes: list[Hero], rng: random.Random) -> list[Event]
     for hero in sorted((h for h in heroes if h.alive), key=lambda h: -h.speed):
         if boss.hp <= 0:
             break
+        if hero.stunned:
+            hero.stunned = False
+            events.append((NORMAL, f"💫 {hero.name} هنوز گیج است و نوبتش را از دست داد"))
+            continue
         events += _hero_turn(hero, boss, heroes, rng)
     if boss.hp > 0:
+        events += _chaos(boss, heroes, rng)
         events += _boss_turn(boss, heroes, rng)
     if boss.weak > 0:
         boss.weak -= 1

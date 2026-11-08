@@ -108,6 +108,49 @@ def boss_by_id(boss_id: str) -> BossType:
     return _BY_ID[boss_id]
 
 
+@dataclass(frozen=True)
+class Tier:
+    """How strong this particular summoning turned out to be. Rolled once per boss, revealed when the fight starts."""
+
+    id: str
+    emoji: str
+    name: str
+    weight: int
+    hp: float
+    atk: float
+    #: multiplier of the victory rewards (a harder boss pays more)
+    reward: float
+
+
+TIERS: tuple[Tier, ...] = (
+    Tier("weak", "🟢", "ضعیف", 8, 0.95, 0.95, 0.8),
+    Tier("normal", "🔵", "معمولی", 26, 1.15, 1.08, 1.0),
+    Tier("strong", "🟣", "قدرتمند", 30, 1.4, 1.2, 1.3),
+    Tier("enraged", "🟠", "خشمگین", 22, 1.75, 1.35, 1.7),
+    Tier("legend", "🔴", "افسانه‌ای", 14, 2.1, 1.5, 2.4),
+)
+_TIER_BY_ID = {t.id: t for t in TIERS}
+#: the squad strength (stats compared with a plain character of the same level) that the tiers were balanced for
+REFERENCE_POWER = 1.3
+
+
+def tier_by_id(tier_id: str | None) -> Tier:
+    return _TIER_BY_ID.get(tier_id or "", _TIER_BY_ID["normal"])
+
+
+def roll_tier(rng: random.Random) -> Tier:
+    return rng.choices(TIERS, weights=[t.weight for t in TIERS], k=1)[0]
+
+
+def squad_scaling(power: float, fighters: int) -> tuple[float, float]:
+    """(hp, attack) multipliers that keep the odds about the same for a well-geared squad as for a plain one.
+
+    ``power`` is the squad's strength relative to a plain character; more fighters make the boss hit a bit harder.
+    """
+    rel = max(0.5, min(2.5, power / REFERENCE_POWER))
+    return rel**1.1, rel**0.9 * (1 + 0.06 * max(0, fighters - 3))
+
+
 def pick_boss(level: int, rng: random.Random) -> BossType:
     """A random boss fitting the summoner's level: at most 10 levels below it, never above it."""
     fitting = [b for b in BOSSES if level - 10 <= b.min_level <= level] or [BOSSES[0]]

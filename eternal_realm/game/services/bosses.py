@@ -27,9 +27,13 @@ from ..data.bosses import (
     boss_defense,
     pick_boss,
     boss_max_hp,
+    roll_tier,
+    squad_scaling,
+    tier_by_id,
 )
 from ..data.classes import CLASSES
 from ..data.sets import BOSS_DROPS
+from ..engine import progression
 from ..engine.boss_fight import Boss, Hero, is_over, run_round
 from ..models import Player
 from .characters import CharacterService
@@ -94,6 +98,8 @@ class BossView:
     free: bool = False
     #: the boss came back angrier after a lost fight (stronger, pays more when beaten)
     revenge: bool = False
+    #: how strong this summoning is (``data.bosses.TIERS``); only shown to players once the fight has started
+    tier: str = "normal"
 
     @property
     def seconds_left(self) -> int:
@@ -146,7 +152,7 @@ class BossService:
                 for r in roster
             ],
             report=state.get("recent", []), payouts=payouts or [], outcome=outcome, free=bool(state.get("free")),
-            revenge=bool(state.get("revenge")),
+            revenge=bool(state.get("revenge")), tier=state.get("tier", "normal"),
         )
 
     async def active(self, chat_id: int) -> BossView | None:
@@ -192,7 +198,8 @@ class BossService:
                 raise GameError("nobody strong enough")
             kind = pick_boss(lead.level, self.ctx.rng)
             boss_id = await repo.create(
-                tx, chat_id, kind.id, lead.level, lead.id, now, now + b.boss_recruit_seconds, json.dumps({"free": True})
+                tx, chat_id, kind.id, lead.level, lead.id, now, now + b.boss_recruit_seconds,
+                json.dumps({"free": True, "tier": roll_tier(self.ctx.rng).id}),
             )
             await self._enlist(tx, boss_id, lead)
             row = await repo.get(tx, boss_id)
@@ -222,7 +229,7 @@ class BossService:
             kind = owed or pick_boss(player.level, self.ctx.rng)
             boss_id = await repo.create(
                 tx, chat_id, kind.id, player.level, player.id, now, now + b.boss_recruit_seconds,
-                json.dumps({"revenge": True}) if owed else "{}",
+                json.dumps({"revenge": True, "tier": roll_tier(self.ctx.rng).id} if owed else {"tier": roll_tier(self.ctx.rng).id}),
             )
             await self._enlist(tx, boss_id, player)
             row = await repo.get(tx, boss_id)
@@ -277,15 +284,19 @@ class BossService:
             )
         avg_level = max(1, round(sum(r["level"] for r in roster) / len(roster)))
         kind = boss_by_id(row["boss_type"])
-        revenge = bool(json.loads(row["state"] or "{}").get("revenge"))
-        hp = round(boss_max_hp(kind, len(roster), avg_level) * (REVENGE_POWER if revenge else 1))
+        old_state = json.loads(row["state"] or "{}")
+        revenge = bool(old_state.get("revenge"))
+        tier = tier_by_id(old_state.get("tier"))
+        hp_scale, atk_scale = squad_scaling(await self._squad_power(tx, roster), len(roster))
+        boost = REVENGE_POWER if revenge else 1
+        hp = round(boss_max_hp(kind, len(roster), avg_level) * boost * tier.hp * hp_scale)
         boss = Boss(
-            kind.name, hp, hp, round(boss_attack(kind, avg_level) * (REVENGE_POWER if revenge else 1)), boss_defense(avg_level),
+            kind.name, hp, hp, round(boss_attack(kind, avg_level) * boost * tier.atk * atk_scale), boss_defense(avg_level),
             special=kind.special, weak_class=kind.weak_class, behavior=behavior_of(kind)[0],
         )
         state = {"boss": asdict(boss), "heroes": [asdict(h) for h in heroes], "pending": [], "recent": [
             f"⚔️ نبرد با {kind.name} آغاز شد!"
-        ], **({"revenge": True} if revenge else {})}
+        ], "tier": tier.id, **({"revenge": True} if revenge else {})}
         begun = await repo.begin_fight(
             tx, row["id"], avg_level, hp, json.dumps(state, ensure_ascii=False), now,
             now + b.boss_round_seconds, now + b.boss_fight_seconds,
@@ -295,6 +306,18 @@ class BossService:
         fresh = await repo.get(tx, row["id"])
         assert fresh is not None
         return await self._view(tx, fresh)
+
+    async def _squad_power(self, tx: Tx, roster) -> float:  # noqa: ANN001
+        """How much stronger the squad is than plain characters of their levels (gear, pets, effects)."""
+        ratios = []
+        for r in roster:
+            player = await self.players_get(tx, r["player_id"])
+            real = await self.characters.stats_in(tx, player)
+            plain = progression.base_stats(player.race_id, player.class_id, player.level, player.class2_id, player.awakened)
+            hp = real.hp / max(1, plain.hp)
+            offense = max(real.atk, 0.8 * real.magic) / max(1, max(plain.atk, 0.8 * plain.magic))
+            ratios.append((hp + offense) / 2)
+        return sum(ratios) / len(ratios) if ratios else 1.0
 
     async def _is_fighter(self, tx: Tx, boss_id: int, player_id: int) -> bool:
         return any(r["player_id"] == player_id for r in await repo.fighters(tx, boss_id))
@@ -390,8 +413,9 @@ class BossService:
         """Close the boss (once) and pay every fighter by contribution. A lost fight pays a consolation."""
         if not await repo.close(tx, row["id"], status, now):
             return []
-        revenge = bool(json.loads(row["state"] or "{}").get("revenge"))
-        factor = (REVENGE_REWARD if revenge else 1.0) if status == "defeated" else 0.25
+        state = json.loads(row["state"] or "{}")
+        revenge = bool(state.get("revenge"))
+        factor = (REVENGE_REWARD if revenge else 1.0) * tier_by_id(state.get("tier")).reward if status == "defeated" else 0.25
         roster = await repo.fighters(tx, row["id"])
         weights = {r["player_id"]: r["damage"] + r["absorbed"] for r in roster}
         total = sum(weights.values()) or 1

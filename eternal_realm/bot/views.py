@@ -7,7 +7,7 @@ line, and the voice is a friendly epic storyteller in simple formal Persian.
 
 from __future__ import annotations
 
-from ..game.data.bosses import behavior_of
+from ..game.data.bosses import behavior_of, tier_by_id
 from ..game.data.classes import CLASSES
 from ..game.data.items import get_item
 from ..game.data.leagues import league_of
@@ -583,6 +583,7 @@ def boss_recruiting(v, min_players: int, max_players: int) -> str:  # noqa: ANN0
             "فرمانده، متحدان خود را فرا بخوانید!",
             "",
             f"🔮 عنصر: {v.type.element.emoji} {v.type.element.noun} · نقطه‌ضعف: کلاس {CLASSES[v.type.weak_class].name}",
+            "🎲 قدرت واقعی باس تا شروع نبرد پنهان است؛ ممکن است ضعیف باشد و ممکن است افسانه‌ای!",
             *(
                 ["🌑 باس مخفی خودش وارد گروه شد! هر جنگجو می‌تواند نبرد را شروع کند."]
                 if v.free
@@ -602,8 +603,10 @@ def boss_recruiting(v, min_players: int, max_players: int) -> str:  # noqa: ANN0
 
 def boss_fight(v) -> str:  # noqa: ANN001 - BossView
     percent = round(100 * v.hp / v.max_hp) if v.max_hp else 0
+    tier = tier_by_id(v.tier)
     lines = [
         f"⚔️ {bold('نبرد با ' + v.type.name)}",
+        f"🔮 هاله‌ی باس: {tier.emoji} {bold(tier.name)}",
         "",
         f"❤️ سلامتی باس: {fa(v.hp)} / {fa(v.max_hp)}",
         f"{bar(v.hp, v.max_hp, 10)}  {fa(percent)}٪",
