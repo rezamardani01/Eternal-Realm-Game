@@ -126,12 +126,11 @@ async def test_owner_gifts_a_pet_just_by_its_name(h, services, db):
     assert "dragon" in await services.pets.owned((await services.players.require(1)).id)
 
 
-async def test_only_players_can_transfer_to_each_other(services, db):
+async def test_managers_can_transfer_with_players_like_anybody(services, db):
     owner = await hero(services, db, 1, "ارباب", gold=5_000)
     a = await hero(services, db, 2, "آرش", gold=5_000)
-    b = await hero(services, db, 3, "سارا", gold=5_000)
-    with pytest.raises(GameError, match="فقط بین بازیکنان"):
-        await services.economy.transfer(a, owner, 500)
-    with pytest.raises(GameError, match="فقط بین بازیکنان"):
-        await services.economy.transfer(owner, a, 500)
-    assert await services.economy.transfer(a, b, 500) >= 0
+    before = (await services.players.require(2)).gold
+    assert await services.economy.transfer(owner, a, 500) >= 0  # the owner may send to a player
+    assert (await services.players.require(2)).gold == before + 500
+    owner = await services.players.require(1)
+    assert await services.economy.transfer(a, owner, 300) >= 0  # and receive from one
