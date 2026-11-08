@@ -48,6 +48,11 @@ class Balance:
     event_interval_seconds: int = 7200
     event_min_active: int = 2
     clan_create_gold: int = 1000
+    second_class_level: int = 15
+    second_class_gold: int = 3000
+    awaken_level: int = 20
+    awaken_gold: int = 5000
+    awaken_crystal: int = 20
     #: waiting time after the 1st, 2nd, 3rd ... use of the same activity in one day (seconds; the last repeats)
     cooldown_ladder: str = "300,900,1800,3600,7200"
     boss_summon_gold: int = 200

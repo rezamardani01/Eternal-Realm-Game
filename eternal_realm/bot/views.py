@@ -57,7 +57,9 @@ def profile_header(player: Player, xp_needed: int) -> str:
     return (
         f"👤 {bold(player.name)} · سطح {fa(player.level)}\n"
         f"{player.race.emoji} {player.race.name} · {player.char_class.emoji} {player.char_class.name}\n"
-        f"⭐ تجربه {fa(player.xp)} / {fa(xp_needed)}\n{bar(player.xp, xp_needed, 10)}\n"
+        + (f"🎭 کلاس دوم: {player.class2.emoji} {player.class2.name}\n" if player.class2 else "")
+        + ("✨ قدرت پنهان بیدار شده\n" if player.awakened else "")
+        + f"⭐ تجربه {fa(player.xp)} / {fa(xp_needed)}\n{bar(player.xp, xp_needed, 10)}\n"
         f"🪙 {fa(player.gold)} سکه · 💎 {fa(player.crystal)} کریستال\n"
         f"🏆 {fa(player.wins)} پیروزی · 💀 {fa(player.losses)} شکست"
     )

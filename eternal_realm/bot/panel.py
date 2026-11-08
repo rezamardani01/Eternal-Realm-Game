@@ -233,6 +233,7 @@ async def profile(c: Ctx) -> Screen:
     ]
     if target is me:
         rows.append([c.btn("🧰 تجهیزات", "gear"), c.btn("🎒 کوله‌پشتی", "inv")])
+        rows.append([c.btn("✨ ارتقای قهرمان", "ascend")])
         rows.append(c.back("home"))
     else:
         rows.append([c.btn("🏰 قلمرو من", "home")])

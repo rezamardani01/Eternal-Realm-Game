@@ -29,6 +29,8 @@ class Player:
     daily_streak: int
     banned: bool
     created_at: int
+    class2_id: str = ""
+    awakened: bool = False
 
     @classmethod
     def from_row(cls, row: Row) -> Player:
@@ -51,6 +53,8 @@ class Player:
             daily_streak=row["daily_streak"],
             banned=bool(row["banned"]),
             created_at=row["created_at"],
+            class2_id=row["class2"],
+            awakened=bool(row["awakened"]),
         )
 
     @property
@@ -60,6 +64,10 @@ class Player:
     @property
     def char_class(self) -> CharacterClass:
         return CLASSES[self.class_id]
+
+    @property
+    def class2(self) -> CharacterClass | None:
+        return CLASSES[self.class2_id] if self.class2_id else None
 
     @property
     def mention(self) -> str:

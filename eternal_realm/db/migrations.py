@@ -271,6 +271,11 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (player_id, quest_id)
     );
     """,
+    # 16: a second class and the awakening of hidden power
+    """
+    ALTER TABLE players ADD COLUMN class2 TEXT NOT NULL DEFAULT '';
+    ALTER TABLE players ADD COLUMN awakened INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

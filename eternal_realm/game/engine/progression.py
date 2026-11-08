@@ -47,9 +47,25 @@ def seconds_to_next_energy(stored_at: int, now: int, balance: Balance) -> int:
     return max(0, balance.energy_regen_seconds - (now - stored_at) % balance.energy_regen_seconds)
 
 
-def base_stats(race_id: str, class_id: str, level: int) -> Stats:
-    """Stats from race, class and level, before any equipment."""
+SECOND_CLASS_SHARE = 0.5
+AWAKENING_SHARE = 0.10
+
+
+def base_stats(race_id: str, class_id: str, level: int, class2_id: str = "", awakened: bool = False) -> Stats:
+    """Stats from race, class and level, before any equipment.
+
+    A second class adds half of its starting stats and growth; the awakening doubles the race bonus
+    and adds a tenth on top of everything.
+    """
     race, cls = RACES[race_id], CLASSES[class_id]
     total = BASE_STATS + race.stats + cls.stats
     grown = [round(g * (level - 1)) for g in cls.growth]
-    return total + Stats(*grown)
+    total = total + Stats(*grown)
+    if class2_id:
+        other = CLASSES[class2_id]
+        extra = other.stats + Stats(*[round(g * (level - 1)) for g in other.growth])
+        total = total + extra.scaled(SECOND_CLASS_SHARE)
+    if awakened:
+        total = total + race.stats
+        total = total + total.scaled(AWAKENING_SHARE)
+    return total
