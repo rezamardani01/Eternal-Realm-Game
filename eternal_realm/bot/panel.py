@@ -976,7 +976,7 @@ async def top(c: Ctx) -> Screen:
     rows = [
         [c.btn("🏆 سطح", "top", "level"), c.btn("💰 ثروت", "top", "rich")],
         [c.btn("⚔️ دوئل", "top", "wins"), c.btn("🏅 لیگ", "top", "rating")],
-        [c.btn("🐉 شکارچیان باس", "top", "bosses")],
+        [c.btn("🐉 شکارچیان باس", "top", "bosses"), c.btn("🏁 مسابقه‌های هفته", "contests")],
     ]
     if c.is_group:
         rows.append([c.btn("🏰 این گروه", "top", "group"), c.btn("🌟 قهرمان هفته", "top", "hero")])

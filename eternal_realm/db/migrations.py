@@ -406,6 +406,16 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (dungeon_id, player_id)
     );
     """,
+    # 28: weekly contests
+    """
+    CREATE TABLE weekly_stats (
+        week      INTEGER NOT NULL,
+        contest   TEXT    NOT NULL,
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        count     INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (week, contest, player_id)
+    );
+    """,
 ]
 
 

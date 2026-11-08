@@ -12,6 +12,7 @@ from ..game.services.cards import CardService
 from ..game.services.characters import CharacterService
 from ..game.services.chests import ChestService
 from ..game.services.clans import ClanService
+from ..game.services.contests import ContestService
 from ..game.services.crafting import CraftingService
 from ..game.services.duels import DuelService
 from ..game.services.dungeon import DungeonService
@@ -61,6 +62,7 @@ class Services:
     offers: OfferService
     missions: MissionService
     gdungeon: GroupDungeonService
+    contests: ContestService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -102,6 +104,7 @@ class Services:
             offers=offers,
             missions=MissionService(ctx, offers),
             gdungeon=GroupDungeonService(ctx, players, characters, inventory),
+            contests=ContestService(ctx),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(
