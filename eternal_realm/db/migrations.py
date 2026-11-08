@@ -295,6 +295,16 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (player_id, set_id)
     );
     """,
+    # 18: companion pets
+    """
+    CREATE TABLE player_pets (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        pet_id    TEXT    NOT NULL,
+        active    INTEGER NOT NULL DEFAULT 0,
+        got_at    INTEGER NOT NULL,
+        PRIMARY KEY (player_id, pet_id)
+    );
+    """,
 ]
 
 

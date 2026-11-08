@@ -20,6 +20,7 @@ from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
 from ..game.services.market import MarketService
 from ..game.services.payments import PaymentService
+from ..game.services.pets import PetService
 from ..game.services.players import PlayerService
 from ..game.services.quests import QuestService
 from ..game.services.rankings import RankingService
@@ -47,6 +48,7 @@ class Services:
     clans: ClanService
     quests: QuestService
     cards: CardService
+    pets: PetService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -80,6 +82,7 @@ class Services:
             clans=ClanService(ctx),
             quests=QuestService(ctx, players, inventory),
             cards=cards,
+            pets=PetService(ctx),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(

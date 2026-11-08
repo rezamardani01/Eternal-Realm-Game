@@ -9,6 +9,7 @@ from ...db.repos import wallet
 from ...shared.errors import GameError
 from ...shared.text import fa
 from ..data.classes import CLASSES
+from ..data.pets import get_pet
 from ..data.stats import Stats
 from ..engine import progression
 from ..models import Player
@@ -30,7 +31,11 @@ class CharacterService:
         base = progression.base_stats(
             player.race_id, player.class_id, player.level, player.class2_id, player.awakened
         )
-        return base + await self.inventory.equipped_stats(tx, player.id)
+        pet = await tx.fetchone(
+            "SELECT pet_id FROM player_pets WHERE player_id = ? AND active = 1", (player.id,)
+        )
+        extra = get_pet(pet["pet_id"]).bonus if pet else Stats()
+        return base + await self.inventory.equipped_stats(tx, player.id) + extra
 
     def xp_needed(self, player: Player) -> int:
         return progression.xp_needed(player.level, self.ctx.balance)

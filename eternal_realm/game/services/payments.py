@@ -71,6 +71,13 @@ class PaymentService:
         if pack is None:
             raise GameError("چنین بسته‌ای در خزانه نیست.")
         amount = pack.price_rial
+        if pack.pet:
+            async with self.ctx.db.read() as tx:
+                have = await tx.fetchone(
+                    "SELECT 1 FROM player_pets WHERE player_id = ? AND pet_id = ?", (player.id, pack.pet)
+                )
+            if have is not None:
+                raise GameError("این حیوان همراه از قبل مال شماست؛ خرید دوباره لازم نیست و از شما پولی کسر نشد.")
         if deal:
             todays = find_deal(self.ctx.now(), pack_id)
             if todays is None:
@@ -134,6 +141,16 @@ class PaymentService:
         )
         for item_id, qty in items.items():
             await self.inventory.grant(tx, order.player_id, item_id, qty)
+        if pack.pet:
+            from .pets import PetService
+
+            if not await PetService(self.ctx).grant(tx, order.player_id, pack.pet):
+                # bought twice in flight: pay it back in crystals instead of losing the money
+                await wallet.apply(
+                    tx, order.player_id, crystal=20, reason=f"order:{pack.id}:duplicate_pet", now=now,
+                    ref=f"order:{order.id}:pet",
+                )
+                granted = "حیوان از قبل را داشتید؛ ۲۰ کریستال جایگزین شد."
         return granted
 
     async def expire_stale(self) -> int:
