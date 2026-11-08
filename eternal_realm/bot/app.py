@@ -12,7 +12,7 @@ from baleropy.exceptions import BaleUnauthorized
 from ..config import ConfigError, Settings
 from ..context import AppContext
 from ..db.database import Database
-from . import boss, clan_panel, duels, events, maintenance, onboarding, panel, payments, quest_panel  # noqa: F401
+from . import boss, clan_panel, group_dungeon, duels, events, maintenance, onboarding, panel, payments, quest_panel  # noqa: F401
 from . import ascend_panel, card_panel, craft_panel, dungeon_panel, mission_panel, offers, path_panel, pet_panel, transfer_panel, vip_panel  # noqa: F401
 from .commands import REGISTRY
 from .commands import router as commands_router
@@ -38,6 +38,7 @@ def build_dispatcher(services: Services) -> Dispatcher:
     # order matters: FSM-bound onboarding first, free-text commands last
     _attach(
         dp, onboarding.router, panel.listing_router, panel.router, payments.router, duels.router, boss.router,
+        group_dungeon.router,
         events.router, clan_panel.router, commands_router,
     )
     return dp

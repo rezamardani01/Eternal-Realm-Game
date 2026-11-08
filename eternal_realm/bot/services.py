@@ -17,6 +17,7 @@ from ..game.services.duels import DuelService
 from ..game.services.dungeon import DungeonService
 from ..game.services.economy import EconomyService
 from ..game.services.events import EventService
+from ..game.services.group_dungeon import GroupDungeonService
 from ..game.services.groups import GroupService
 from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
@@ -59,6 +60,7 @@ class Services:
     season: SeasonService
     offers: OfferService
     missions: MissionService
+    gdungeon: GroupDungeonService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -99,6 +101,7 @@ class Services:
             season=SeasonService(ctx, inventory, cards),
             offers=offers,
             missions=MissionService(ctx, offers),
+            gdungeon=GroupDungeonService(ctx, players, characters, inventory),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(

@@ -387,6 +387,25 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE players ADD COLUMN vip_until INTEGER NOT NULL DEFAULT 0;
     """,
+    # 27: group dungeon lobbies
+    """
+    CREATE TABLE gdungeons (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id     INTEGER NOT NULL,
+        message_id  INTEGER,
+        summoner_id INTEGER NOT NULL REFERENCES players (id),
+        status      TEXT    NOT NULL CHECK (status IN ('recruiting', 'done')),
+        created_at  INTEGER NOT NULL,
+        expires_at  INTEGER NOT NULL
+    );
+    CREATE INDEX idx_gdungeons_chat ON gdungeons (chat_id, status);
+
+    CREATE TABLE gdungeon_members (
+        dungeon_id INTEGER NOT NULL REFERENCES gdungeons (id),
+        player_id  INTEGER NOT NULL REFERENCES players (id),
+        PRIMARY KEY (dungeon_id, player_id)
+    );
+    """,
 ]
 
 

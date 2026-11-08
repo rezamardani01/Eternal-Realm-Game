@@ -44,6 +44,11 @@ class ClanCb(CallbackData, prefix="c"):
     arg: int = 0
 
 
+class DgCb(CallbackData, prefix="g"):
+    action: str
+    id: int
+
+
 class BuyCb(CallbackData, prefix="buy"):
     kind: str
     id: str
