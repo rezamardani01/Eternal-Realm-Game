@@ -323,7 +323,7 @@ tbody tr.click:hover { background: rgba(139, 107, 255, 0.11); }
 @media (max-width: 1100px) { .composer { grid-template-columns: 1fr; } }
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
-  .side { position: fixed; top: 0; bottom: 0; right: 0; width: min(300px, 84vw); transform: translateX(104%); transition: transform 0.4s var(--ease); background: var(--bg-2); }
+  .side { position: fixed; top: 0; bottom: 0; right: 0; width: min(300px, 84vw); transform: translateX(104%); transition: transform 0.4s var(--ease); background: var(--bg-2); z-index: 65; backdrop-filter: none; box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5); }
   .side.on { transform: none; }
   .icon-btn.menu-btn { display: grid; }
   .search-btn { min-width: 0; flex: 1; }

@@ -517,7 +517,8 @@ async function settings(main) {
     h("div", { class: "card reveal" }, h("h3", {}, ic("lock"), "عضویت اجباری"), h("div", { class: "row" }, sw,
       h("button", { class: "btn ghost", onclick: () => { if (state.channels.length >= 5) return toast("حداکثر ۵ کانال", true); state.channels.push({ chat: "", title: "", link: "" }); paint(); } }, ic("plus"), "افزودن کانال"),
       h("button", { class: "btn", onclick: () => run(async () => { await api("/api/membership", { method: "POST", body: { enabled: state.enabled, channels: state.channels } }); toast("تنظیمات ذخیره شد"); }) }, ic("check"), "ذخیره‌ی تنظیمات"))),
-    h("div", { class: "mt" }, list));
+    h("div", { class: "mt" }, list),
+    h("button", { class: "btn mt", style: "width:100%;justify-content:center;padding:14px", onclick: () => { if (state.channels.length >= 5) return toast("حداکثر ۵ کانال", true); state.channels.push({ chat: "", title: "", link: "" }); paint(); } }, ic("plus"), "افزودن کانال جوین اجباری"));
 }
 
 /* ---------------------------------------------------------------- shell */
@@ -590,7 +591,7 @@ async function boot() {
   $("me").textContent = `مدیر ${ME.admin_id}`;
   const navBtn = (key, [icon, label]) => h("button", { "data-page": key, onclick: () => go(key) }, ic(icon), h("span", {}, label));
   $("nav").replaceChildren(...Object.entries(PAGES).map(([k, v]) => navBtn(k, v)));
-  $("bottom").replaceChildren(...["dashboard", "players", "orders", "broadcast", "audit"].map((k) => navBtn(k, PAGES[k])));
+  $("bottom").replaceChildren(...["dashboard", "players", "orders", "broadcast", "settings"].map((k) => navBtn(k, PAGES[k])));
   $("logout").addEventListener("click", logout);
   $("themeBtn").addEventListener("click", toggleTheme);
   $("searchBtn").addEventListener("click", openPalette);
