@@ -82,7 +82,7 @@ def test_static_texts_follow_the_rules():
                  views.command_help(REGISTRY, True)):
         assert leading_symbols(text) == 1, text.split("\n")[0]
         assert len(text) < 4000
-    assert "**" in views.welcome()  # titles are bold
+    assert "*" in views.welcome() and "**" not in views.welcome()  # titles are bold
 
 
 def test_race_and_class_lists_are_short():

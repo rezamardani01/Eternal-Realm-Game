@@ -1,7 +1,7 @@
 """Text rendering.
 
 Rules of the house: every message starts with exactly ONE emoji, titles and key numbers are
-bold (with a space around the ``**`` markers, as Bale requires), each stat sits on its own
+bold (single ``*`` markers, the only bold Bale understands), each stat sits on its own
 line, and the voice is a friendly epic storyteller in simple formal Persian.
 """
 

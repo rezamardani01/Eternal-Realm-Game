@@ -88,6 +88,6 @@ async def test_no_line_or_button_starts_with_two_emojis(services, db):
 def test_every_message_gets_a_bold_headline():
     from eternal_realm.shared.text import headline
 
-    assert headline("⚡ انرژی شما کافی نیست") == "⚡ **انرژی شما کافی نیست**"
-    assert headline("سلام\nخط دوم") == "**سلام**\nخط دوم"
-    assert headline("🎉 **از قبل بولد**\nمتن") == "🎉 **از قبل بولد**\nمتن"
+    assert headline("⚡ انرژی شما کافی نیست") == "⚡ *انرژی شما کافی نیست*"
+    assert headline("سلام\nخط دوم") == "*سلام*\nخط دوم"
+    assert headline("🎉 *از قبل بولد*\nمتن") == "🎉 *از قبل بولد*\nمتن"
