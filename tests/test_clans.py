@@ -145,3 +145,19 @@ async def test_duel_result_has_glass_buttons(h, services, db):
     labels = h.labels()
     assert any("برنده" in label or "مساوی" in label for label in labels)
     assert any("مبارزه‌ی دوباره" in label for label in labels)
+
+
+async def test_clan_member_opens_a_full_profile_and_goes_back(h, services, db):
+    await hero(services, db, 1, "رهبر")
+    a = await hero(services, db, 2, "آرش")
+    await services.clans.create(await services.players.require(1), "شیرها")
+    await services.clans.join(a, (await services.clans.of(1)).id)
+    await h.say(1, "خاندان", group=True)
+    await h.click(1, h.button_data("اعضا"), group=True)
+    await h.click(1, h.button_data("آرش"), group=True)
+    await h.click(1, h.button_data("پروفایل کامل"), group=True)
+    text = h.session.sent("editMessageText")[-1]["text"]
+    assert "آرش" in text and "سطح" in text
+    assert any("حمله" in t or "جان" in t for t in h.labels())  # the stat buttons of a real profile
+    await h.click(1, h.button_data("بازگشت به عضو خاندان"), group=True)
+    assert "مقام" in h.session.sent("editMessageText")[-1]["text"]

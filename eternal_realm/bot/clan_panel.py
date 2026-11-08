@@ -113,7 +113,7 @@ async def clan_member(c: Ctx) -> Screen:
         f"⭐ سطح: {fa(m['level'])}\n"
         f"🪙 کمک به خزانه: {fa(m['donated'])} سکه"
     )
-    rows = []
+    rows = [[c.btn("👤 پروفایل کامل", "profile", pid, "cm")]]
     mypower = role_power(mine.my_role or "member")
     if pid != c.player.id and mypower >= 2 and role_power(m["role"]) < mypower:
         for role, (emoji, title, power) in ROLES.items():

@@ -255,6 +255,8 @@ async def profile(c: Ctx) -> Screen:
         rows.append([c.btn("📅 مأموریت‌های امروز", "missions"), c.btn("🕯️ محراب", "altar")])
         rows.append([c.btn("🐱 حیوان همراه من", "pets")])
         rows.append(c.back("home"))
+    elif c.b == "cm":
+        rows.append(c.back("clanmember", "🔙 بازگشت به عضو خاندان", target.id))
     else:
         rows.append([c.btn("🏰 قلمرو من", "home")])
     hint = "روی هر ویژگی بزنید تا بدانید چه می‌کند 👇"
