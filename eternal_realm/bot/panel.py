@@ -1025,17 +1025,18 @@ CHEST_BLURB = {
     "royal_chest": "گنج‌های بزرگ و تجهیزات افسانه‌ای",
 }
 PREMIUM_SECTIONS = {
-    "coins": ("🪙", "خرید سکه", "با سکه سلاح، زره و معجون می‌خرید و تجهیزاتتان را ارتقا می‌دهید."),
+    "coins": ("🪙", "خرید سکه", "با سکه تجهیزات و معجون می‌خرید و سلاح‌هایتان را ارتقا می‌دهید."),
     "crystals": ("💎", "خرید کریستال", "کریستال ارز کمیاب قلمرو است؛ با آن صندوقچه‌های جادویی و سلطنتی می‌خرید."),
-    "bundles": ("🎁", "خرید بسته", "بسته‌های ویژه چند چیز را با هم و به‌صرفه‌تر می‌دهند."),
+    "bundles": ("🎁", "خرید بسته", "چند چیز با هم و به‌صرفه‌تر."),
     "materials": ("⛓️", "خرید منابع", "سنگ آهن برای ارتقای تجهیزات؛ هر مرتبه‌ی آهنگری به آن نیاز دارد."),
-    "services": ("🎫", "خدمات قهرمان", "برگه‌ی تغییر نژاد، کلاس یا نام؛ بعد از خرید از «قهرمان من ← ارتقای قهرمان ← خدمات» مصرفش کنید."),
-    "vip": ("💠", "اشتراک VIP", "راحتی بیشتر برای ۳۰ روز؛ هیچ قدرت رزمی نمی‌دهد. جزئیات کامل را در «اشتراک VIP» ببینید."),
-    "path": ("🎟️", "بلیط مسیر قهرمانی", "بلیط این فصل، جایزه‌های ویژه‌ی ۱۰۰ مرحله را باز می‌کند (سکه، کریستال، صندوقچه و عنوان «اسطوره‌ی فصل»). جایزه‌های رایگان برای همه هست؛ بلیط کاملاً اختیاری است."),
-    "pets": ("🐱", "حیوان خانگی", "یک یار وفادار که در نبردها کنارتان می‌ماند و کمی قوی‌ترتان می‌کند. محتوا ثابت است؛ شانسی در کار نیست."),
-    "boost": ("🚀", "بوست دو برابر", "برای مدتی که انتخاب می‌کنید، هر چه می‌گیرید دو برابر می‌شود."),
+    "services": ("🎫", "خدمات قهرمان", "تغییر نام، نژاد یا کلاس قهرمان؛ بعد از خرید از «قهرمان من ← ارتقای قهرمان ← خدمات» مصرفش کنید."),
+    "vip": ("💠", "اشتراک VIP", "راحتی بیشتر برای ۳۰ روز، بدون هیچ قدرت رزمی."),
+    "path": ("🎟️", "بلیط مسیر قهرمانی", "جایزه‌های ویژه‌ی ۱۰۰ مرحله‌ی این فصل را باز می‌کند. کاملاً اختیاری است؛ جایزه‌های رایگان برای همه هست."),
+    "pets": ("🐱", "حیوان خانگی", "یار وفاداری که در نبردها کنارتان می‌ماند و قدرتتان را بیشتر می‌کند."),
+    "boost": ("🚀", "بوست دو برابر", "تا پایان بوست، دریافتی‌هایتان دو برابر می‌شود."),
     "xp": ("⭐", "بسته‌های تجربه", "سریع‌تر سطح بالا بروید و زودتر به آیتم‌ها و مرحله‌های تازه برسید."),
 }
+BUY_HINT = "👇 یک بسته را بزنید؛ فاکتور پرداخت بله برایتان می‌آید"
 
 
 @screen("premium")
@@ -1045,14 +1046,19 @@ async def premium(c: Ctx) -> Screen:
         rows = [keyboards.start_button(username)] if username else []
         return Screen("💎 خزانه قلمرو فقط در پیام خصوصی باز می‌شود؛ خرید آن‌جا امن است.", rows)
     p = await c.refresh()
-    text = (
-        f"💎 {bold('خزانه قلمرو')}\n\n"
-        "سکه، کریستال، بسته‌ی ویژه و صندوقچه؛ هر چه برای پیشرفت سریع‌تر لازم دارید.\n\n"
-        f"🪙 {fa(p.gold)} سکه · 💎 {fa(p.crystal)} کریستال\n\n"
-        "💳 پرداخت با کیف پول بله است و اطلاعات کارت ذخیره نمی‌شود.\n"
-        "👨‍👩‍👧 زیر ۱۸ سال؟ فقط با اجازه‌ی پدر و مادر خرید کنید.\n\n"
-        "یک بخش را انتخاب کنید 👇"
-    )
+    text = "\n".join([
+        f"💎 {bold('خزانه قلمرو')}",
+        "",
+        "هر چه برای پیشرفت سریع‌تر لازم دارید.",
+        "",
+        f"🪙 سکه: {bold(fa(p.gold))}",
+        f"💎 کریستال: {bold(fa(p.crystal))}",
+        "",
+        "💳 پرداخت با کیف پول بله؛ اطلاعات کارت ذخیره نمی‌شود",
+        "👨‍👩‍👧 زیر ۱۸ سال فقط با اجازه‌ی خانواده",
+        "",
+        "👇 یک بخش را انتخاب کنید",
+    ])
     rows = [
         [c.btn("🪙 خرید سکه", "prem", "coins"), c.btn("💎 خرید کریستال", "prem", "crystals")],
         [c.btn("🎁 خرید بسته", "prem", "bundles"), c.btn("📦 خرید صندوق", "prem", "chests")],
@@ -1070,20 +1076,22 @@ def _lucky_block(c: Ctx, lines: list[str]) -> list:
     from ..game.data import lucky
 
     theme = lucky.theme_of_day(c.services.ctx.now())
+    if lines and lines[-1] != "":
+        lines.append("")
     lines += [
-        "",
         f"🎲 {bold('بسته‌های شانسی امروز')}",
-        f"تم امروز: {theme.emoji} {theme.name} (فردا تم عوض می‌شود)",
-        "هر بسته سکه‌ی تضمینی دارد و چند جایزه‌ی تصادفی از همین تم.",
+        f"{theme.emoji} تم امروز: {theme.name} (فردا عوض می‌شود)",
+        "🪙 هر بسته سکه‌ی تضمینی دارد و چند جایزه‌ی تصادفی از همین تم",
         "",
     ]
     rows = []
-    for pack in (x for x in PACKS.values() if x.lucky):
+    packs = [x for x in PACKS.values() if x.lucky]
+    for pack in packs:
         tier = lucky.TIERS[pack.id]
-        lines.append(f"• {pack.label} — {fa(pack.price_toman)} تومان")
-        lines.append(f"   {fa(tier.guaranteed_gold)} سکه‌ی تضمینی + {fa(tier.rolls)} جایزه")
-        lines.append("")
+        lines += [f"🎲 {bold(pack.title)} · {fa(pack.price_toman)} تومان", f"🪙 {fa(tier.guaranteed_gold)} سکه + {fa(tier.rolls)} جایزه", ""]
         rows.append([Button.inline(f"{pack.label} — {fa(pack.price_toman)} تومان", BuyCb(kind="cash", id=pack.id), style="success")])
+    if lines and lines[-1] == "":
+        lines.pop()
     rows.append([c.btn("🎲 شانس‌های امروز", "luckyodds")])
     return rows
 
@@ -1127,43 +1135,52 @@ def _boost_or_xp_section(c: Ctx, p) -> Screen:  # noqa: ANN001 - Player
     packs = [x for x in PACKS.values() if x.section == c.a]
     if c.a == "boost":
         lines += [
-            "🪙 سکه، ⭐ تجربه و 📦 آیتم‌های ماجراجویی و شکار دو برابر می‌شود",
-            "🐉 سکه و تجربه‌ی باس، دوئل، سیاه‌چال، داستان، مأموریت و جایزه‌ی روزانه هم دو برابر است",
+            f"📋 {bold('چه چیزهایی دو برابر می‌شود؟')}",
+            "🪙 سکه",
+            "⭐ تجربه",
+            "📦 آیتم‌های ماجراجویی و شکار",
+            "🐉 جایزه‌ی باس، دوئل، سیاه‌چال و داستان",
+            "📅 جایزه‌ی مأموریت‌ها و جایزه‌ی روزانه",
+            "",
             "💎 کریستال دو برابر نمی‌شود",
             "➕ خرید دوباره به زمان باقی‌مانده اضافه می‌شود",
             "",
         ]
         if p.boost_until > now:
             lines += [f"🚀 بوست شما فعال است؛ {duration(p.boost_until - now)} مانده", ""]
+        lines.append(f"🛒 {bold('بسته‌ها')}")
         for pack in packs:
-            lines += [f"• {pack.label} — {fa(pack.price_toman)} تومان", f"   ⏳ {fa(pack.boost_hours)} ساعت · ساعتی {fa(round(pack.price_toman / pack.boost_hours))} تومان", ""]
+            lines.append(f"⏳ {fa(pack.boost_hours)} ساعته · {fa(pack.price_toman)} تومان (ساعتی {fa(round(pack.price_toman / pack.boost_hours))})")
     else:
         lines += [
-            "📈 هر بسته مقدار ثابتی تجربه می‌دهد؛ برای قهرمان‌های تازه‌کار چند سطح و برای سطح‌های بالاتر کمتر",
+            f"📋 {bold('چطور کار می‌کند؟')}",
+            "📈 هر بسته مقدار ثابتی تجربه می‌دهد",
+            "🧙 سطح پایین‌تر یعنی سطح بیشتر؛ سطح بالاتر یعنی کمتر",
             f"🎚️ تا سطح {fa(XP_PACK_MAX_LEVEL)} کار می‌کند",
             f"📅 هر هفته حداکثر {fa(XP_PACK_WEEKLY_LIMIT)} بسته",
             "",
             f"🧙 سطح شما: {bold(fa(p.level))}",
             "",
+            f"🛒 {bold('بسته‌ها برای شما')}",
         ]
         for pack in packs:
             level, _, gained = progression.apply_xp(p.level, p.xp, pack.xp, balance)
-            lines += [
-                f"• {pack.label} — {fa(pack.price_toman)} تومان",
-                f"   ⭐ {fa(pack.xp)} تجربه · " + (
-                    f"برای شما حدود {fa(gained)} سطح (می‌رسید به {fa(level)})" if gained
-                    else f"برای شما حدود {fa(round(100 * pack.xp / progression.xp_needed(p.level, balance)))}٪ از یک سطح"
-                ),
-                "",
-            ]
+            result = (
+                f"حدود {fa(gained)} سطح (می‌رسید به {fa(level)})" if gained
+                else f"حدود {fa(round(100 * pack.xp / progression.xp_needed(p.level, balance)))}٪ از یک سطح"
+            )
+            lines += [f"{pack.emoji} {pack.title} · {fa(pack.price_toman)} تومان", f"📈 {fa(pack.xp)} تجربه = {result}", ""]
+        if lines[-1] == "":
+            lines.pop()
         if p.level > XP_PACK_MAX_LEVEL:
-            lines.append(f"⚠️ سطح شما از {fa(XP_PACK_MAX_LEVEL)} بیشتر است و این بسته‌ها دیگر برایتان کار نمی‌کند.")
+            lines += ["", f"⚠️ سطح شما از {fa(XP_PACK_MAX_LEVEL)} بیشتر است و این بسته‌ها برایتان کار نمی‌کند"]
+    lines.append("")
     if not enabled:
-        lines.append("🔒 خرید با پول واقعی فعلاً بسته است.")
+        lines.append("🔒 خرید با پول واقعی فعلاً بسته است")
     else:
         for pack in packs:
             rows.append([Button.inline(f"{pack.label} — {fa(pack.price_toman)} تومان", BuyCb(kind="cash", id=pack.id), style="success")])
-        lines.append("👇 پس از زدن، فاکتور پرداخت بله برایتان می‌آید.")
+        lines.append(BUY_HINT)
     rows.append(c.back("premium"))
     return Screen("\n".join(lines), rows)
 
@@ -1174,19 +1191,16 @@ async def premium_section(c: Ctx) -> Screen:
         return await premium(c)
     p = await c.refresh()
     if c.a == "chests":
-        lines = [f"📦 {bold('خرید صندوق')}", "", "در هر صندوقچه گنجی پنهان است. با سکه یا کریستال بخرید.", ""]
+        lines = [f"📦 {bold('خرید صندوق')}", "", "در هر صندوقچه گنجی پنهان است؛ با سکه یا کریستال بخرید.", ""]
         rows = []
         for chest in CHESTS.values():
             if chest.price is None:
                 continue
             icon = "🪙" if chest.price[0] == "gold" else "💎"
             item = get_item(chest.item_id)
-            lines += [f"• {item.label} — {fa(chest.price[1])} {icon}", f"   {CHEST_BLURB.get(item.id, '')}", ""]
+            lines += [f"{item.emoji} {bold(item.name)} · {fa(chest.price[1])} {icon}", f"🎁 {CHEST_BLURB.get(item.id, '')}", ""]
             rows.append([c.btn(f"{item.label} · {fa(chest.price[1])}{icon}", "cbuyq", item.id, "p")])
-        lines += [
-            f"موجودی شما: 🪙 {fa(p.gold)} · 💎 {fa(p.crystal)}",
-            "روی هر صندوقچه بزنید تا محتویات و شانس‌هایش را ببینید و خرید را تأیید کنید 👇",
-        ]
+        lines += [f"🪙 سکه‌ی شما: {fa(p.gold)}", f"💎 کریستال شما: {fa(p.crystal)}", "", "👇 روی هر صندوقچه بزنید تا محتویات و شانس‌هایش را ببینید"]
         rows.append(c.back("premium"))
         return Screen("\n".join(lines), rows)
 
@@ -1197,17 +1211,16 @@ async def premium_section(c: Ctx) -> Screen:
     lines = [f"{emoji} {bold(title)}", "", blurb, ""]
     rows = []
     if not enabled:
-        lines.append("🔒 خرید با پول واقعی فعلاً بسته است. با بازی کردن هم می‌توانید به این‌ها برسید!")
+        lines.append("🔒 خرید با پول واقعی فعلاً بسته است؛ با بازی کردن هم می‌توانید به این‌ها برسید!")
     else:
         for pack in (x for x in PACKS.values() if x.section == c.a and not x.lucky):
-            lines.append(f"• {pack.label} — {fa(pack.price_toman)} تومان")
-            if c.a == "bundles":
-                lines.append(f"   {views.pack_description(pack, c.services.ctx.now())}")
-            lines.append("")
+            if c.a == "bundles":  # bundles hide their contents in the button, so say them here
+                lines += [f"{pack.emoji} {bold(pack.title)} · {fa(pack.price_toman)} تومان", f"🎁 {views.pack_description(pack, c.services.ctx.now()).removeprefix('شامل: ')}", ""]
             rows.append([Button.inline(f"{pack.label} — {fa(pack.price_toman)} تومان", BuyCb(kind="cash", id=pack.id), style="success")])
         if c.a == "bundles":
             rows += _lucky_block(c, lines)
-        lines.append("پس از زدن، فاکتور پرداخت بله برایتان می‌آید.")
+            lines.append("")
+        lines.append(BUY_HINT)
     rows.append(c.back("premium"))
     return Screen("\n".join(lines), rows)
 

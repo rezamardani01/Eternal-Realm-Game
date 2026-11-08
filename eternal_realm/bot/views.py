@@ -632,18 +632,19 @@ def deals_text(deals, seconds_left: int) -> str:  # noqa: ANN001
     lines = [
         f"🏷️ {bold('تخفیف‌های امروز')}",
         "",
-        f"فقط تا پایان امروز (به وقت تهران)؛ {duration(seconds_left)} دیگر. فردا فهرست تازه می‌آید.",
+        f"⏳ تا پایان امروز: {duration(seconds_left)} دیگر",
+        "🔄 فردا فهرست تازه می‌آید",
         "",
     ]
     for deal in deals:
         pack = deal.pack
         lines += [
-            f"• {pack.label} — {bold(fa(deal.percent) + '٪ تخفیف')}",
-            f"   قبلاً {fa(pack.price_toman)} تومان ← اکنون {bold(fa(deal.price_toman))} تومان",
-            f"   {pack_description(pack)}",
+            f"{pack.emoji} {bold(pack.title)} · {fa(deal.percent)}٪ تخفیف",
+            f"💰 قبلاً {fa(pack.price_toman)} ← اکنون {bold(fa(deal.price_toman))} تومان",
+            f"🎁 {pack_description(pack).replace(chr(10), ' ').removeprefix('شامل: ')}",
             "",
         ]
-    lines.append("پس از زدن، فاکتور پرداخت بله برایتان می‌آید.")
+    lines.append("👇 یک مورد را بزنید؛ فاکتور پرداخت بله برایتان می‌آید")
     return "\n".join(lines)
 
 

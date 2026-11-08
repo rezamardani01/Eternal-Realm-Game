@@ -106,7 +106,7 @@ async def test_invoice_flow_through_the_bot(h, services):
     assert "خزانه قلمرو" in h.session.last_text()
     assert len(h.labels()) == 13  # twelve sections (boost and experience included) and a back button
     await h.tap(10, "خرید کریستال")
-    assert "تومان" in h.session.last_text()
+    assert any("تومان" in b["text"] for b in h.session.last_buttons())  # the prices are on the buttons
     await h.click(10, h.button_data("۲۰ کریستال"))
     invoice = h.session.sent("sendInvoice")[-1]
     assert invoice["provider_token"].startswith("WALLET-")
@@ -160,14 +160,14 @@ async def test_premium_hub_has_four_sections_each_with_its_own_text(h, services)
     assert all("منو" not in t for t in labels)
 
     await h.tap(10, "خرید سکه")
-    assert "سلاح" in h.session.last_text() and "تومان" in h.session.last_text()
+    assert "سلاح" in h.session.last_text() and any("تومان" in b["text"] for b in h.session.last_buttons())
     await h.tap(10, "بازگشت")
     await h.tap(10, "خرید بسته")
-    assert "شامل" in h.session.last_text()
+    assert "بسته ماجراجو" in h.session.last_text() and "🎁 " in h.session.last_text()
     await h.tap(10, "بازگشت")
     await h.tap(10, "خرید صندوق")
     text = h.session.last_text()
-    assert "گنجی پنهان" in text and "\n\n• 🎁" in text  # one blank line between entries
+    assert "گنجی پنهان" in text and "\n\n🎁 " in text  # one blank line between entries
     assert not any("شانس" in x for x in h.labels())  # the odds live in the confirm page instead
     await h.tap(10, "صندوقچه جادویی")
     assert "٪" in h.session.last_text() and "موجودی" in h.session.last_text()

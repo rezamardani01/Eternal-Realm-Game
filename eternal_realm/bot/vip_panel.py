@@ -19,18 +19,17 @@ async def vip(c: Ctx) -> Screen:
     me = await c.refresh()
     now = c.services.ctx.now()
     pack = PACKS["vip_30"]
-    lines = [f"💠 {bold('اشتراک VIP')}", "", "راحتی و سرعت بیشتر؛ بدون هیچ قدرت رزمی اضافه. بازیکن رایگان در رقابت هیچ عقب نمی‌ماند.", ""]
-    lines += list(PERKS)
-    lines.append("")
+    lines = [f"💠 {bold('اشتراک VIP')}", "", "راحتی و سرعت بیشتر، بدون هیچ قدرت رزمی اضافه.", "بازیکن رایگان در رقابت هیچ عقب نمی‌ماند.", ""]
+    lines += [f"✨ {bold('امتیازها')}", *PERKS, ""]
     active = me.vip_until > now
     if active:
-        lines.append(f"✅ اشتراک شما فعال است؛ {duration(me.vip_until - now)} مانده.")
+        lines.append(f"✅ وضعیت: فعال ({duration(me.vip_until - now)} مانده)")
     else:
-        lines.append("اشتراک شما فعال نیست.")
-    lines += [f"💰 بها: {fa(pack.price_toman)} تومان برای ۳۰ روز (تمدید به باقی‌مانده اضافه می‌شود)"]
+        lines.append("⛔ وضعیت: غیرفعال")
+    lines += [f"💰 قیمت: {fa(pack.price_toman)} تومان برای ۳۰ روز", "➕ تمدید به باقی‌مانده اضافه می‌شود"]
     rows = []
     if c.is_group:
-        lines.append("خرید فقط در پیام خصوصی ربات انجام می‌شود.")
+        lines += ["", "📲 خرید فقط در پیام خصوصی ربات انجام می‌شود"]
     else:
         rows.append([c.btn(("🔁 تمدید" if active else "💠 خرید") + f" ({fa(pack.price_toman)} تومان)", "prem", "vip", style="primary")])
     rows.append(c.back("premium" if not c.is_group else "home"))
