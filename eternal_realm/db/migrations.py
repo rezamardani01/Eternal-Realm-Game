@@ -337,6 +337,17 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (player_id, season, track, tier)
     );
     """,
+    # 21: personal offers (what was sent, and who switched them off)
+    """
+    ALTER TABLE players ADD COLUMN offers_off INTEGER NOT NULL DEFAULT 0;
+
+    CREATE TABLE offers_log (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        rule_id   TEXT    NOT NULL,
+        sent_at   INTEGER NOT NULL
+    );
+    CREATE INDEX idx_offers_log ON offers_log (player_id, sent_at);
+    """,
 ]
 
 

@@ -13,7 +13,7 @@ from ..config import ConfigError, Settings
 from ..context import AppContext
 from ..db.database import Database
 from . import boss, clan_panel, duels, events, maintenance, onboarding, panel, payments, quest_panel  # noqa: F401
-from . import ascend_panel, card_panel, craft_panel, dungeon_panel, path_panel, pet_panel, transfer_panel  # noqa: F401
+from . import ascend_panel, card_panel, craft_panel, dungeon_panel, offers, path_panel, pet_panel, transfer_panel  # noqa: F401
 from .commands import REGISTRY
 from .commands import router as commands_router
 from .middlewares import ErrorMiddleware
@@ -61,6 +61,7 @@ async def run(settings: Settings) -> None:
             asyncio.create_task(maintenance.backup_loop(db), name="backup"),
             asyncio.create_task(boss.processor(bot, services), name="boss-processor"),
             asyncio.create_task(events.processor(bot, services), name="event-processor"),
+            asyncio.create_task(offers.processor(bot, services), name="offer-processor"),
         ]
         try:
             await dp.start_polling(bot, skip_updates=True)

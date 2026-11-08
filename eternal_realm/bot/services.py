@@ -21,6 +21,7 @@ from ..game.services.groups import GroupService
 from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
 from ..game.services.market import MarketService
+from ..game.services.offers import OfferService
 from ..game.services.payments import PaymentService
 from ..game.services.pets import PetService
 from ..game.services.players import PlayerService
@@ -55,6 +56,7 @@ class Services:
     dungeon: DungeonService
     crafting: CraftingService
     season: SeasonService
+    offers: OfferService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -92,6 +94,7 @@ class Services:
             dungeon=DungeonService(ctx, players, inventory, characters),
             crafting=CraftingService(ctx, inventory),
             season=SeasonService(ctx, inventory),
+            offers=OfferService(ctx),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(
