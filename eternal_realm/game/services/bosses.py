@@ -21,7 +21,7 @@ from ..data.bosses import (
     boss_attack,
     boss_by_id,
     boss_defense,
-    boss_for_level,
+    pick_boss,
     boss_max_hp,
 )
 from ..data.classes import CLASSES
@@ -158,7 +158,7 @@ class BossService:
             if wait > 0:
                 raise GameError(f"⏳ باس بعدی این گروه تا {duration(wait)} دیگر آماده می‌شود. تا آن موقع قدرت جمع کنید!")
             await wallet.apply(tx, player.id, gold=-b.boss_summon_gold, reason="boss_summon", now=now)
-            kind = boss_for_level(player.level)
+            kind = pick_boss(player.level, self.ctx.rng)
             boss_id = await repo.create(tx, chat_id, kind.id, player.level, player.id, now, now + b.boss_recruit_seconds)
             await self._enlist(tx, boss_id, player)
             row = await repo.get(tx, boss_id)
@@ -213,7 +213,10 @@ class BossService:
         avg_level = max(1, round(sum(r["level"] for r in roster) / len(roster)))
         kind = boss_by_id(row["boss_type"])
         hp = boss_max_hp(kind, len(roster), avg_level)
-        boss = Boss(kind.name, hp, hp, boss_attack(kind, avg_level), boss_defense(avg_level))
+        boss = Boss(
+            kind.name, hp, hp, boss_attack(kind, avg_level), boss_defense(avg_level),
+            special=kind.special, weak_class=kind.weak_class,
+        )
         state = {"boss": asdict(boss), "heroes": [asdict(h) for h in heroes], "pending": [], "recent": [
             f"⚔️ نبرد با {kind.name} آغاز شد!"
         ]}

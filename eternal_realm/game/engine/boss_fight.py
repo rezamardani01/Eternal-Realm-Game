@@ -43,6 +43,8 @@ class Boss:
     round: int = 0
     enraged: bool = False
     weak: int = 0
+    special: str = "مهارت ویژه"
+    weak_class: str = ""
 
 
 def _offense(hero: Hero) -> float:
@@ -55,22 +57,24 @@ def _hero_turn(hero: Hero, boss: Boss, team: list[Hero], rng: random.Random) -> 
     crit_chance = min(0.5, 0.05 + hero.luck * 0.003)
     base = _offense(hero) * rng.uniform(0.9, 1.1)
     mult, text, priority = 1.0, f"{hero.name} به باس ضربه زد", NORMAL
+    if hero.class_id == boss.weak_class:
+        mult = 1.2  # the boss's element is weak against this class
 
     if hero.class_id == "warrior":
         if rng.random() < 0.20:
-            mult, text, priority = 1.6, f"{hero.name} با شمشیر ضربه‌ای سنگین به باس وارد کرد", NOTABLE
+            mult, text, priority = mult * 1.6, f"{hero.name} با شمشیر ضربه‌ای سنگین به باس وارد کرد", NOTABLE
         else:
             text = f"{hero.name} با شمشیر به باس حمله کرد"
     elif hero.class_id == "mage":
-        mult, defense = 1.25, defense * 0.7
+        mult, defense = mult * 1.25, defense * 0.7
         text = f"{hero.name} با جادوی آتشین، بدن باس را سوزاند"
     elif hero.class_id == "archer":
-        mult, text = 1.2, f"{hero.name} چند تیر پیاپی به باس زد"
+        mult, text = mult * 1.2, f"{hero.name} چند تیر پیاپی به باس زد"
     elif hero.class_id == "rogue":
         crit_chance += 0.25
         text = f"{hero.name} از پشت و غافلگیرانه ضربه زد"
     elif hero.class_id == "guardian":
-        mult, text = 0.6, f"{hero.name} سپر را بالا برد و ضربه زد"
+        mult, text = mult * 0.6, f"{hero.name} سپر را بالا برد و ضربه زد"
         allies = [h for h in team if h.alive and h is not hero and not h.shield]
         if allies and rng.random() < 0.40:
             ally = rng.choice(allies)
@@ -135,7 +139,7 @@ def _boss_turn(boss: Boss, heroes: list[Hero], rng: random.Random) -> list[Event
         events.append((NOTABLE, f"💢 {boss.name} با چرخشی سهمگین به {target.name} حمله کرد!"))
         events += _hit_hero(boss, target, 1.8, rng, "ضربه‌ی سنگین به")
     else:
-        events.append((NOTABLE, f"✨ {boss.name} مهارت ویژه‌اش را فعال کرد!"))
+        events.append((NOTABLE, f"✨ {boss.name} «{boss.special}» را فعال کرد!"))
         for target in rng.sample(alive, min(len(alive), 2)):
             events += _hit_hero(boss, target, 1.4, rng, "مهارت ویژه به")
     return events

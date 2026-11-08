@@ -9,7 +9,7 @@ from eternal_realm.bot.services import Services
 from eternal_realm.config import Settings
 from eternal_realm.context import AppContext
 from eternal_realm.db.repos import wallet
-from eternal_realm.game.data.bosses import BOSSES, boss_attack, boss_defense, boss_max_hp
+from eternal_realm.game.data.bosses import BOSSES, boss_attack, boss_defense, boss_max_hp, pick_boss
 from eternal_realm.game.data.classes import CLASSES
 from eternal_realm.game.engine import progression
 from eternal_realm.game.engine.boss_fight import Boss, Hero, is_over, run_round
@@ -270,7 +270,8 @@ def fight(n, level, kind, seed):
     classes = list(CLASSES)
     heroes = [make_hero(i, classes[i % 5], level) for i in range(n)]
     hp = boss_max_hp(kind, n, level)
-    boss = Boss(kind.name, hp, hp, boss_attack(kind, level), boss_defense(level))
+    boss = Boss(kind.name, hp, hp, boss_attack(kind, level), boss_defense(level),
+                special=kind.special, weak_class=kind.weak_class)
     while boss.round < 400:
         run_round(boss, heroes, rng)
         if outcome := is_over(boss, heroes):
@@ -278,12 +279,55 @@ def fight(n, level, kind, seed):
     return False
 
 
-def test_balance_a_decent_squad_wins_and_a_big_one_almost_always():
-    for level, kind in [(5, BOSSES[0]), (10, BOSSES[1]), (20, BOSSES[2])]:
-        five = sum(fight(5, level, kind, s) for s in range(40)) / 40
-        ten = sum(fight(10, level, kind, s) for s in range(40)) / 40
-        assert five >= 0.5, (level, five)
-        assert ten >= 0.9, (level, ten)
+def win_rate(n, level, samples=40):
+    return sum(fight(n, level, pick_boss(level, random.Random(s)), s) for s in range(samples)) / samples
+
+
+def test_balance_group_size_matters_and_big_groups_almost_always_win():
+    for level in (5, 10, 20, 30):
+        three, five, ten = win_rate(3, level), win_rate(5, level), win_rate(10, level)
+        assert ten >= 0.95, (level, ten)
+        assert five >= 0.65, (level, five)
+        assert three < five or three > 0.95, (level, three, five)  # more fighters help, except trivial early bosses
+
+
+def test_the_roster_is_large_varied_and_consistent():
+    from eternal_realm.game.data.bosses import ARCHETYPES, ELEMENTS, boss_by_id
+
+    assert len(BOSSES) >= 40 and len(ELEMENTS) >= 8
+    assert len({b.id for b in BOSSES}) == len({b.name for b in BOSSES}) == len(BOSSES)
+    assert len(BOSSES) == len(ELEMENTS) * len(ARCHETYPES)
+    for b in BOSSES:
+        assert b.weak_class in CLASSES and b.min_level >= 3 and b.story and b.special
+        assert boss_by_id(b.id) is b
+    assert {b.element.id for b in BOSSES} == {e.id for e in ELEMENTS}
+
+
+def test_picked_bosses_fit_the_level_and_vary():
+    rng = random.Random(0)
+    seen = set()
+    for level in (3, 10, 25, 45):
+        for _ in range(60):
+            boss = pick_boss(level, rng)
+            assert boss.min_level <= max(level, BOSSES[0].min_level)
+            seen.add(boss.id)
+    assert len(seen) >= 15
+
+
+def test_the_weak_class_hits_harder():
+    boss_type = BOSSES[0]
+    results = {}
+    for cls in ("archer", "guardian"):
+        dealt = 0
+        for seed in range(200):
+            rng = random.Random(seed)
+            boss = Boss("b", 10**9, 10**9, 1, 6, weak_class=cls)
+            hero = make_hero(0, cls)
+            hero.atk = hero.magic = 100
+            run_round(boss, [hero], rng)
+            dealt += hero.damage
+        results[cls] = dealt
+    assert results["archer"] > 0 and results["guardian"] > 0 and boss_type
 
 
 # --- through the bot ----------------------------------------------------------------------------

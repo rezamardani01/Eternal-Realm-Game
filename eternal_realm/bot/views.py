@@ -518,6 +518,7 @@ def boss_recruiting(v, min_players: int, max_players: int) -> str:  # noqa: ANN0
             v.type.story,
             "فرمانده، متحدان خود را فرا بخوانید!",
             "",
+            f"🔮 عنصر: {v.type.element.emoji} {v.type.element.noun} · نقطه‌ضعف: کلاس {CLASSES[v.type.weak_class].name}",
             f"👤 احضارکننده: {v.summoner_mention}",
             f"👥 جنگجویان: {bold(fa(len(v.fighters)))} / {fa(max_players)} (حداقل {fa(min_players)})",
             f"⏳ زمان ثبت‌نام: {_clock(v.seconds_left)}",
