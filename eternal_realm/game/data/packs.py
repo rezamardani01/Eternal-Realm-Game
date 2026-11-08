@@ -57,7 +57,7 @@ SECTIONS = {
 
 #: experience packs stop working above this level, and each player may buy this many a week
 XP_PACK_MAX_LEVEL = 40
-XP_PACK_WEEKLY_LIMIT = 3
+XP_PACK_WEEKLY_LIMIT = 5
 BOOST_FACTOR = 2
 
 PACKS: dict[str, Pack] = {
