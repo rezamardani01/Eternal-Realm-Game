@@ -429,6 +429,13 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE player_pets ADD COLUMN level INTEGER NOT NULL DEFAULT 1;
     """,
+    # 31: settings the web panel can change (forced channel membership...)
+    """
+    CREATE TABLE app_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+    """,
 ]
 
 

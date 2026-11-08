@@ -25,6 +25,7 @@ from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
 from ..game.services.market import MarketService
 from ..game.services.missions import MissionService
+from ..game.services.membership import MembershipService
 from ..game.services.offers import OfferService
 from ..game.services.payments import PaymentService
 from ..game.services.pets import PetService
@@ -66,6 +67,7 @@ class Services:
     gdungeon: GroupDungeonService
     contests: ContestService
     effects: EffectService
+    membership: MembershipService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -110,6 +112,7 @@ class Services:
             gdungeon=GroupDungeonService(ctx, players, characters, inventory),
             contests=ContestService(ctx),
             effects=EffectService(ctx),
+            membership=MembershipService(ctx),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(

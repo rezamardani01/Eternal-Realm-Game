@@ -12,10 +12,11 @@ from baleropy.exceptions import BaleUnauthorized
 from ..config import ConfigError, Settings
 from ..context import AppContext
 from ..db.database import Database
-from . import boss, clan_panel, group_dungeon, duels, events, maintenance, onboarding, panel, payments, quest_panel  # noqa: F401
+from . import boss, clan_panel, group_dungeon, membership, duels, events, maintenance, onboarding, panel, payments, quest_panel  # noqa: F401
 from . import ascend_panel, altar_panel, card_panel, contest_panel, craft_panel, dungeon_panel, mission_panel, offers, path_panel, pet_panel, transfer_panel, vip_panel  # noqa: F401
 from .commands import REGISTRY
 from .commands import router as commands_router
+from .membership import MembershipMiddleware
 from .middlewares import ErrorMiddleware, UserLockMiddleware
 from .services import Services
 
@@ -31,15 +32,16 @@ def _attach(dp: Dispatcher, *routers: Router) -> None:
 
 def build_dispatcher(services: Services) -> Dispatcher:
     dp = Dispatcher(services=services, settings=services.ctx.settings)
-    locks, errors = UserLockMiddleware(), ErrorMiddleware()
+    locks, errors, gate = UserLockMiddleware(), ErrorMiddleware(), MembershipMiddleware()
     for observer in (dp.message, dp.callback_query):
         observer.middleware(locks)  # outermost: one update per player at a time
         observer.middleware(errors)
+        observer.middleware(gate)  # nobody plays before joining the required channels
     REGISTRY.configure(services.ctx.settings.command_overrides)
     # order matters: FSM-bound onboarding first, free-text commands last
     _attach(
         dp, onboarding.router, panel.listing_router, panel.router, payments.router, duels.router, boss.router,
-        group_dungeon.router,
+        membership.router, group_dungeon.router,
         events.router, clan_panel.router, commands_router,
     )
     return dp

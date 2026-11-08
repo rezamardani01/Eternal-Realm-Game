@@ -19,6 +19,7 @@ class FakeSession(BaseSession):
         super().__init__()
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.chat_admins: set[int] = set()
+        self.non_members: set[int] = set()  # users who have NOT joined the (forced) channel
         self._next_id = 1000
 
     async def _send(self, bot: Any, method: Any) -> tuple[int, bytes]:
@@ -30,7 +31,7 @@ class FakeSession(BaseSession):
         elif name == "getChatMember":
             uid = int(payload["user_id"])
             result = {
-                "status": "administrator" if uid in self.chat_admins else "member",
+                "status": "left" if uid in self.non_members else ("administrator" if uid in self.chat_admins else "member"),
                 "user": {"id": uid, "is_bot": False, "first_name": f"user{uid}"},
             }
         elif name.startswith(("send", "edit", "forward")) and name != "sendChatAction":
