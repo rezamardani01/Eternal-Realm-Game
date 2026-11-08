@@ -243,7 +243,7 @@ async def profile(c: Ctx) -> Screen:
         rows.append([c.btn("▫️▫️▫️▫️▫️▫️▫️", "noop")])
         rows.append([c.btn("🧰 تجهیزات", "gear"), c.btn("🎒 کوله‌پشتی", "inv")])
         rows.append([c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")])
-        rows.append([c.btn("📅 مأموریت‌های امروز", "missions")])
+        rows.append([c.btn("📅 مأموریت‌های امروز", "missions"), c.btn("🕯️ محراب", "altar")])
         rows.append(c.back("home"))
     else:
         rows.append([c.btn("🏰 قلمرو من", "home")])

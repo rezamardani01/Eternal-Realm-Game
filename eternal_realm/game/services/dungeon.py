@@ -141,7 +141,7 @@ class DungeonService:
                     died = True
                     lines.append(f"💀 {foe.name} شما را از پا انداخت...")
             else:
-                kind = rng.choice(("treasure", "trap", "spring"))
+                kind = rng.choice(("treasure", "trap", "spring", "shrine"))
                 if kind == "treasure":
                     emoji, title = "💰", f"اتاق {fa(stage)} · گنج"
                     found = rng.randint(40, 90) + 8 * fresh.level
@@ -152,6 +152,14 @@ class DungeonService:
                     hurt = max(1, round(max_hp * rng.uniform(0.12, 0.22)))
                     hp = max(1, hp - hurt)
                     lines.append(f"تله‌ای پنهان کار کرد و {fa(hurt)} جان از دست دادید.")
+                elif kind == "shrine":
+                    from .effects import EffectService
+
+                    service = EffectService(self.ctx)
+                    effect = service.roll(0.6)
+                    await service.give(tx, player.id, effect)
+                    emoji, title = effect.emoji, f"اتاق {fa(stage)} · محراب"
+                    lines.append(f"محرابی کهن بود. {'برکت' if effect.blessing else 'نفرین'} «{effect.name}» بر شما نشست!")
                 else:
                     emoji, title = "⛲", f"اتاق {fa(stage)} · چشمه"
                     healed = min(max_hp - hp, round(max_hp * 0.30))

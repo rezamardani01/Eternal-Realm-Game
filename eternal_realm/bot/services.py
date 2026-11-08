@@ -15,6 +15,7 @@ from ..game.services.clans import ClanService
 from ..game.services.contests import ContestService
 from ..game.services.crafting import CraftingService
 from ..game.services.duels import DuelService
+from ..game.services.effects import EffectService
 from ..game.services.dungeon import DungeonService
 from ..game.services.economy import EconomyService
 from ..game.services.events import EventService
@@ -63,6 +64,7 @@ class Services:
     missions: MissionService
     gdungeon: GroupDungeonService
     contests: ContestService
+    effects: EffectService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -105,6 +107,7 @@ class Services:
             missions=MissionService(ctx, offers),
             gdungeon=GroupDungeonService(ctx, players, characters, inventory),
             contests=ContestService(ctx),
+            effects=EffectService(ctx),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(

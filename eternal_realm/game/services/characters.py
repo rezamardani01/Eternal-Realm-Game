@@ -35,7 +35,10 @@ class CharacterService:
             "SELECT pet_id FROM player_pets WHERE player_id = ? AND active = 1", (player.id,)
         )
         extra = get_pet(pet["pet_id"]).bonus if pet else Stats()
-        return base + await self.inventory.equipped_stats(tx, player.id) + extra
+        total = base + await self.inventory.equipped_stats(tx, player.id) + extra
+        from .effects import EffectService
+
+        return await EffectService(self.ctx).apply_to(tx, player.id, total)
 
     def xp_needed(self, player: Player) -> int:
         return progression.xp_needed(player.level, self.ctx.balance)

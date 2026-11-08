@@ -416,6 +416,15 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (week, contest, player_id)
     );
     """,
+    # 29: blessings and curses
+    """
+    CREATE TABLE player_effects (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        effect_id TEXT    NOT NULL,
+        until     INTEGER NOT NULL,
+        PRIMARY KEY (player_id, effect_id)
+    );
+    """,
 ]
 
 
