@@ -37,6 +37,7 @@ PER = 6
 EVENT_NAMES = {
     "mystery_chest": "🎁 صندوقچه‌ی اسرارآمیز", "merchant": "🧳 تاجر دوره‌گرد", "double_xp": "✨ تجربه‌ی دوبرابر",
     "hidden_boss": "🌑 باس مخفی", "hidden_chest": "🗝️ صندوقچه‌ی مخفی", "invasion": "🚨 تهاجم هیولاها", "meteor": "☄️ شهاب‌سنگ",
+    "gold_rain": "🌧️ باران سکه", "spring": "💧 چشمه‌ی برکت", "wheel": "🎡 چرخ شانس", "egg": "🥚 تخم اژدها",
 }
 
 

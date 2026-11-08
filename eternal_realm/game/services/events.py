@@ -13,19 +13,46 @@ from typing import Any
 from ...context import AppContext
 from ...db.database import Row, Tx
 from ...db.repos import events as repo
+from ...db.repos import players as player_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
 from ..data.items import get_item
 from ..data.world_events import ARMIES, METEOR_LOOT, METEOR_PER_PLAYER, METEOR_PIECES, PLACES, REGIONS
+from ..engine import progression
 from ..models import Player
 from .bosses import BossService, BossView
 from .inventory import InventoryService
 
-KINDS = ("mystery_chest", "merchant", "double_xp", "hidden_boss", "hidden_chest", "invasion", "meteor")
-WEIGHTS = (30, 18, 16, 10, 12, 8, 8)
+KINDS = (
+    "mystery_chest", "merchant", "double_xp", "hidden_boss", "hidden_chest", "invasion", "meteor",
+    "gold_rain", "spring", "wheel", "egg",
+)
+BASE_WEIGHTS = {
+    "mystery_chest": 22, "merchant": 14, "double_xp": 12, "hidden_boss": 8, "hidden_chest": 10, "invasion": 6,
+    "meteor": 8, "gold_rain": 10, "spring": 8, "wheel": 10, "egg": 6,
+}
+#: busy groups get the big team events more often
+CROWD_KINDS = ("invasion", "egg", "hidden_boss")
 LIFETIME = {
     "mystery_chest": 300, "merchant": 600, "double_xp": 1800, "hidden_chest": 900, "invasion": 900, "meteor": 600,
+    "gold_rain": 480, "spring": 600, "wheel": 600, "egg": 720,
 }
+RAIN_DROPS, RAIN_PER_PLAYER, RAIN_GAP = 20, 4, 10
+SPRING_VISITORS = 12
+WARM_GAP = 6
+WHEEL_PRIZES = (
+    ("gold", 40), ("xp", 25), ("crystal", 15), ("potion", 12), ("wooden_chest", 6), ("magic_chest", 2),
+)
+
+
+def event_interval(base: int, active_members: int) -> float:
+    """The busier the group, the sooner the next surprise: from about 0.9x the base interval up to 3x as often."""
+    return base / min(3.0, 0.7 + active_members / 12)
+
+
+def weight_of(kind: str, active_members: int) -> float:
+    boost = 1 + min(active_members, 40) / 15 if kind in CROWD_KINDS else 1.0
+    return BASE_WEIGHTS[kind] * boost
 TRY_GAP = 20
 SEARCH_GAP = 20
 DEFEND_GAP = 25
@@ -91,13 +118,19 @@ class EventService:
             await repo.set_message(tx, event_id, message_id)
 
     # --- creating events ------------------------------------------------------------------------
+    async def _active_members(self, chat_id: int) -> int:
+        async with self.ctx.db.read() as tx:
+            return await repo.active_members(tx, chat_id, self.ctx.now() - 86400)
+
     async def spawn(self, chat_id: int, kind: str | None = None, force: bool = False) -> EventView | None:
         """Start an event in a group. ``None`` when the group is busy or the event cannot happen.
 
         ``force`` (the owner) ignores other events that are running in the group.
         """
         rng, now = self.ctx.rng, self.ctx.now()
-        kind = kind or rng.choices(KINDS, weights=WEIGHTS, k=1)[0]
+        if kind is None:
+            members = await self._active_members(chat_id)
+            kind = rng.choices(KINDS, weights=[weight_of(k, members) for k in KINDS], k=1)[0]
         if kind == "hidden_boss":
             try:
                 boss = await self.bosses.summon_event(chat_id, force)
@@ -116,6 +149,15 @@ class EventService:
                 state = await self._new_invasion(tx, chat_id, now)
             elif kind == "meteor":
                 state = {"region": rng.choice(REGIONS), "left": METEOR_PIECES, "taken": {}, "names": {}, "at": {}}
+            elif kind == "gold_rain":
+                state = {"left": RAIN_DROPS, "taken": {}, "names": {}, "at": {}, "gold": {}}
+            elif kind == "spring":
+                state = {"left": SPRING_VISITORS, "names": {}}
+            elif kind == "wheel":
+                state = {"spins": {}, "names": {}}
+            elif kind == "egg":
+                members = max(2, await repo.active_members(tx, chat_id, now - 86400))
+                state = {"need": min(150, max(25, 8 * members)), "warm": 0, "hits": {}, "names": {}, "at": {}}
             elif kind == "merchant":
                 picks = rng.sample(MERCHANT_STOCK, 3)
                 state = {"stock": [{"item": i, "price": round(p * rng.uniform(0.6, 0.85)), "left": rng.randint(2, 3)}
@@ -242,6 +284,128 @@ class EventService:
             assert fresh is not None
             return self._view(fresh), item
 
+    # --- gold rain: coins fall for whoever is quick, a few per person ----------------------------------------
+    async def grab(self, event_id: int, player: Player) -> tuple[EventView, int]:
+        now, rng = self.ctx.now(), self.ctx.rng
+        async with self.ctx.db.transaction() as tx:
+            row = await self._live(tx, event_id, "gold_rain")
+            state = json.loads(row["state"])
+            key = str(player.id)
+            if state["left"] <= 0:
+                raise GameError("🌧️ همه‌ی سکه‌ها برداشته شد.")
+            if state["taken"].get(key, 0) >= RAIN_PER_PLAYER:
+                raise GameError(f"هر نفر حداکثر {RAIN_PER_PLAYER} مشت می‌تواند بردارد؛ بقیه را برای دیگران بگذارید.")
+            wait = state["at"].get(key, 0) + RAIN_GAP - now
+            if wait > 0:
+                raise GameError(f"⏳ {wait} ثانیه دیگر دوباره بردارید.")
+            gold = rng.randint(60, 180) + 6 * player.level
+            await wallet.apply(tx, player.id, gold=gold, reason="gold_rain", now=now)
+            state["left"] -= 1
+            state["taken"][key] = state["taken"].get(key, 0) + 1
+            state["gold"][key] = state["gold"].get(key, 0) + gold
+            state["names"][key] = player.mention
+            state["at"][key] = now
+            if state["left"] == 0:
+                await repo.finish(tx, event_id, "done")
+            await repo.save_state(tx, event_id, json.dumps(state))
+            fresh = await repo.get(tx, event_id)
+            assert fresh is not None
+            return self._view(fresh), gold
+
+    # --- blessing spring: the first few visitors get all their energy back ----------------------------------
+    async def drink(self, event_id: int, player: Player) -> EventView:
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            row = await self._live(tx, event_id, "spring")
+            state = json.loads(row["state"])
+            key = str(player.id)
+            if key in state["names"]:
+                raise GameError("از این چشمه یک بار نوشیده‌اید؛ بگذارید دیگران هم برکت بگیرند.")
+            if state["left"] <= 0:
+                raise GameError("💧 جای نوشیدن تمام شد.")
+            await player_repo.set_energy(tx, player.id, progression.max_energy(player.level, self.ctx.balance), now)
+            await self.bosses.players.grant_xp(tx, player.id, 40 + 5 * player.level)
+            state["names"][key] = player.mention
+            state["left"] -= 1
+            if state["left"] == 0:
+                await repo.finish(tx, event_id, "done")
+            await repo.save_state(tx, event_id, json.dumps(state))
+            fresh = await repo.get(tx, event_id)
+            assert fresh is not None
+            return self._view(fresh)
+
+    # --- lucky wheel: one spin each, anything can come up ----------------------------------------------------
+    async def spin(self, event_id: int, player: Player) -> tuple[EventView, str]:
+        now, rng = self.ctx.now(), self.ctx.rng
+        async with self.ctx.db.transaction() as tx:
+            row = await self._live(tx, event_id, "wheel")
+            state = json.loads(row["state"])
+            key = str(player.id)
+            if key in state["spins"]:
+                raise GameError("هر نفر یک بار چرخ را می‌چرخاند؛ شانستان را آزموده‌اید.")
+            prize = rng.choices([p for p, _ in WHEEL_PRIZES], weights=[w for _, w in WHEEL_PRIZES], k=1)[0]
+            if prize == "gold":
+                amount = rng.randint(200, 800) + 10 * player.level
+                await wallet.apply(tx, player.id, gold=amount, reason="wheel", now=now)
+                text = f"🪙 {amount} سکه"
+            elif prize == "xp":
+                amount = rng.randint(100, 300) + 10 * player.level
+                await self.bosses.players.grant_xp(tx, player.id, amount)
+                text = f"⭐ {amount} تجربه"
+            elif prize == "crystal":
+                amount = rng.randint(1, 3)
+                await wallet.apply(tx, player.id, crystal=amount, reason="wheel", now=now)
+                text = f"💎 {amount} کریستال"
+            elif prize == "potion":
+                await self.inventory.grant(tx, player.id, "big_energy_potion", 1)
+                text = f"🧪 {get_item('big_energy_potion').name}"
+            else:
+                await self.inventory.grant(tx, player.id, prize, 1)
+                text = f"🎁 {get_item(prize).name}"
+            state["spins"][key] = text
+            state["names"][key] = player.mention
+            await repo.save_state(tx, event_id, json.dumps(state))
+            fresh = await repo.get(tx, event_id)
+            assert fresh is not None
+            return self._view(fresh), text
+
+    # --- dragon egg: everyone warms it together; when it hatches all who helped are paid --------------------
+    async def warm(self, event_id: int, player: Player) -> tuple[EventView, bool]:
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            row = await self._live(tx, event_id, "egg")
+            state = json.loads(row["state"])
+            key = str(player.id)
+            wait = state["at"].get(key, 0) + WARM_GAP - now
+            if wait > 0:
+                raise GameError(f"⏳ {wait} ثانیه دیگر دوباره گرم کنید.")
+            state["at"][key] = now
+            state["hits"][key] = state["hits"].get(key, 0) + 1
+            state["names"][key] = player.mention
+            state["warm"] += 1
+            hatched = state["warm"] >= state["need"] and await repo.finish(tx, event_id, "done")
+            if hatched:
+                state["payouts"] = await self._pay_egg(tx, event_id, state, now)
+            await repo.save_state(tx, event_id, json.dumps(state))
+            fresh = await repo.get(tx, event_id)
+            assert fresh is not None
+            return self._view(fresh), bool(hatched)
+
+    async def _pay_egg(self, tx: Tx, event_id: int, state: dict[str, Any], now: int) -> list[dict[str, Any]]:
+        paid = []
+        for index, (pid, taps) in enumerate(sorted(state["hits"].items(), key=lambda kv: -kv[1])):
+            player = await player_repo.get(tx, int(pid))
+            level = player.level if player else 1
+            gold = 250 + 25 * level + 10 * taps
+            await wallet.apply(tx, int(pid), gold=gold, crystal=2, reason="egg", now=now, ref=f"egg:{event_id}:{pid}")
+            await self.bosses.players.grant_xp(tx, int(pid), 80 + 8 * level)
+            chest = ""
+            if index == 0:
+                chest = "magic_chest"
+                await self.inventory.grant(tx, int(pid), chest, 1)
+            paid.append({"mention": state["names"][pid], "taps": taps, "gold": gold, "chest": chest})
+        return paid
+
     async def hunters(self, chat_id: int, min_level: int, limit: int = 30) -> list[int]:
         """Players of this group who could join a boss now and have not switched personal messages off."""
         now = self.ctx.now()
@@ -271,8 +435,9 @@ class EventService:
             due = [r["chat_id"] for r in await repo.due_groups(tx, now)]
         for chat_id in due:
             async with self.ctx.db.transaction() as tx:
-                busy = await repo.active_members(tx, chat_id, now - 86400) < b.event_min_active
-                delay = 1800 if busy else int(b.event_interval_seconds * rng.uniform(0.7, 1.3))
+                members = await repo.active_members(tx, chat_id, now - 86400)
+                busy = members < b.event_min_active
+                delay = 1800 if busy else int(event_interval(b.event_interval_seconds, members) * rng.uniform(0.7, 1.3))
                 await repo.schedule(tx, chat_id, now + delay)
             if busy:
                 continue

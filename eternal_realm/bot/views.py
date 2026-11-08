@@ -715,7 +715,92 @@ def event_text(view) -> str:  # noqa: ANN001 - EventView
         return _invasion_text(view)
     if view.kind == "meteor":
         return _meteor_text(view)
+    if view.kind == "gold_rain":
+        return _rain_text(view)
+    if view.kind == "spring":
+        return _spring_text(view)
+    if view.kind == "wheel":
+        return _wheel_text(view)
+    if view.kind == "egg":
+        return _egg_text(view)
     return f"{view.kind}"
+
+
+def _rain_text(view) -> str:  # noqa: ANN001 - EventView
+    st = view.state
+    if view.status == "active":
+        lines = [
+            f"🌧️ {bold('باران سکه!')}", "",
+            "ابرهای زرین بالای گروه باز شده‌اند و سکه از آسمان می‌بارد.",
+            "هر نفر حداکثر ۴ مشت برمی‌دارد.", "",
+        ]
+    else:
+        lines = [f"☀️ {bold('باران سکه تمام شد')}", ""]
+    lines.append(f"🪙 مشت‌های مانده: {fa(st['left'])}")
+    if st["taken"]:
+        top = sorted(st["gold"].items(), key=lambda kv: -kv[1])[:5]
+        lines += ["", bold("🏅 پرسودترین‌ها")] + [f"• {st['names'][pid]} — {fa(g)} سکه" for pid, g in top]
+    if view.status == "active":
+        lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "👇 زود باشید"]
+    return "\n".join(lines)
+
+
+def _spring_text(view) -> str:  # noqa: ANN001 - EventView
+    st = view.state
+    if view.status == "active":
+        lines = [
+            f"💧 {bold('چشمه‌ی برکت پیدا شد!')}", "",
+            "هر که از آب این چشمه بنوشد، انرژی‌اش کامل می‌شود و کمی تجربه می‌گیرد.",
+            "جا برای چند نفر اول است و هر نفر یک بار می‌نوشد.", "",
+            f"👥 جای خالی: {fa(st['left'])}",
+        ]
+    else:
+        lines = [f"🌙 {bold('چشمه خشک شد')}", ""]
+    if st["names"]:
+        lines += ["", bold("نوشندگان")] + [f"• {name}" for name in st["names"].values()]
+    if view.status == "active":
+        lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "👇 بنوشید"]
+    return "\n".join(lines)
+
+
+def _wheel_text(view) -> str:  # noqa: ANN001 - EventView
+    st = view.state
+    if view.status == "active":
+        lines = [
+            f"🎡 {bold('چرخ شانس آمد!')}", "",
+            "کاروان بازیگران چرخ بزرگش را وسط گروه گذاشته. هر نفر یک بار می‌چرخاند.",
+            "جایزه‌ها: سکه، تجربه، کریستال، معجون و حتی صندوقچه!",
+        ]
+    else:
+        lines = [f"🎪 {bold('چرخ شانس رفت')}", "", "کاروان بازیگران چرخش را جمع کرد."]
+    if st["spins"]:
+        lines += ["", bold("🎯 چرخانندگان")] + [f"• {st['names'][pid]} → {text}" for pid, text in list(st["spins"].items())[-8:]]
+    if view.status == "active":
+        lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "👇 شانستان را بسنجید"]
+    return "\n".join(lines)
+
+
+def _egg_text(view) -> str:  # noqa: ANN001 - EventView
+    st = view.state
+    if view.status == "done":
+        lines = [f"🐲 {bold('تخم اژدها شکست!')}", "", "جوجه‌اژدها با خوشحالی به همه‌ی گرم‌کننده‌ها نگاه می‌کند."]
+        for p in st.get("payouts", []):
+            extra = f" + {get_item(p['chest']).label}" if p["chest"] else ""
+            lines.append(f"• {p['mention']}: {fa(p['gold'])} سکه · ۲ کریستال{extra}")
+        return "\n".join(lines)
+    if view.status == "expired":
+        return f"🧊 {bold('تخم اژدها سرد شد')}\n\nگرمای کافی نبود و تخم دوباره به خواب رفت."
+    percent = round(100 * st["warm"] / st["need"]) if st["need"] else 0
+    lines = [
+        f"🥚 {bold('تخم اژدها!')}", "",
+        "تخمی غول‌پیکر در گروه پیدا شد. اگر با هم گرمش کنید، جوجه‌اژدها بیرون می‌آید و به همه‌ی گرم‌کننده‌ها پاداش می‌دهد.", "",
+        f"🔥 گرمای تخم: {bar(st['warm'], st['need'], 10)} {fa(percent)}٪",
+    ]
+    if st["hits"]:
+        top = sorted(st["hits"].items(), key=lambda kv: -kv[1])[:5]
+        lines += ["", bold("🏅 گرم‌کننده‌های برتر")] + [f"• {st['names'][pid]} — {fa(n)}" for pid, n in top]
+    lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "👇 همه با هم گرمش کنید"]
+    return "\n".join(lines)
 
 
 def _hidden_chest_text(view) -> str:  # noqa: ANN001 - EventView
@@ -800,14 +885,16 @@ def events_overview(views_, double_xp: bool) -> str:  # noqa: ANN001
         for v in views_:
             label = {"mystery_chest": "🎁 صندوقچه‌ی اسرارآمیز", "merchant": "🧳 تاجر دوره‌گرد",
                      "double_xp": "✨ تجربه‌ی دوبرابر", "hidden_chest": "🗝️ صندوقچه‌ی مخفی",
-                     "invasion": "🚨 تهاجم هیولاها", "meteor": "☄️ شهاب‌سنگ"}.get(v.kind, v.kind)
+                     "invasion": "🚨 تهاجم هیولاها", "meteor": "☄️ شهاب‌سنگ", "gold_rain": "🌧️ باران سکه",
+                     "spring": "💧 چشمه‌ی برکت", "wheel": "🎡 چرخ شانس", "egg": "🥚 تخم اژدها"}.get(v.kind, v.kind)
             lines.append(f"• {label} — {duration(v.seconds_left)} مانده")
         lines.append("")
     else:
         lines += ["الان رویدادی در جریان نیست.", ""]
     lines += [
         "ربات گاهی خودش در گروه‌های فعال اتفاق می‌اندازد: صندوقچه‌ی اسرارآمیز، صندوقچه‌ی مخفی با سرنخ، "
-        "تاجر دوره‌گرد، ستاره‌ی تجربه، باس مخفی، تهاجم هیولاها و شهاب‌سنگ.",
+        "تاجر دوره‌گرد، ستاره‌ی تجربه، باس مخفی، تهاجم هیولاها، شهاب‌سنگ، باران سکه، چشمه‌ی برکت، چرخ شانس و تخم اژدها. "
+        "هرچه گروه فعال‌تر باشد، رویدادها بیشتر و بزرگ‌تر می‌شوند.",
         "",
         "مدیران گروه با «غیرفعال رویدادها» می‌توانند آن‌ها را خاموش کنند.",
     ]

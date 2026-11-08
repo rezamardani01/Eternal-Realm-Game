@@ -118,6 +118,14 @@ def event_buttons(view) -> Rows | None:  # noqa: ANN001 - EventView
         return [[Button.inline("⚔️ دفاع از قلمرو", EventCb(action="defend", id=view.id), style="danger")]]
     if view.kind == "meteor":
         return [[Button.inline("⛏️ برداشتن تکه", EventCb(action="collect", id=view.id), style="success")]]
+    if view.kind == "gold_rain":
+        return [[Button.inline("🪙 برداشتن سکه", EventCb(action="grab", id=view.id), style="success")]]
+    if view.kind == "spring":
+        return [[Button.inline("💧 نوشیدن", EventCb(action="drink", id=view.id), style="success")]]
+    if view.kind == "wheel":
+        return [[Button.inline("🎡 چرخاندن", EventCb(action="spin", id=view.id), style="success")]]
+    if view.kind == "egg":
+        return [[Button.inline("🔥 گرم کردن تخم", EventCb(action="warm", id=view.id), style="danger")]]
     return None
 
 

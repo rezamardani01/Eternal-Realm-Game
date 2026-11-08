@@ -336,3 +336,90 @@ async def test_a_big_group_or_the_owner_adding_keeps_the_bot(h):
     h.session.member_count = 3
     await _bot_added(h, adder=1)  # the owner may keep the bot in a tiny test group
     assert not h.session.sent("leaveChat")
+
+
+def test_busy_groups_get_events_sooner_and_more_team_events():
+    from eternal_realm.game.services.events import BASE_WEIGHTS, CROWD_KINDS, KINDS, event_interval, weight_of
+
+    assert set(BASE_WEIGHTS) == set(KINDS) and len(KINDS) >= 11
+    assert event_interval(7200, 2) > event_interval(7200, 12) > event_interval(7200, 40)
+    assert event_interval(7200, 200) == 7200 / 3.0  # at most three times as often
+    for kind in CROWD_KINDS:
+        assert weight_of(kind, 40) > weight_of(kind, 2)
+    assert weight_of("wheel", 40) == weight_of("wheel", 2)
+
+
+async def test_gold_rain_is_limited_per_player(services, db, clock):
+    a = await hero(services, db, 1, "آرش", gold=0)
+    view = await services.events.spawn(CHAT, "gold_rain")
+    assert view is not None and view.state["left"] == 20
+    gold = (await services.players.require(1)).gold
+    for _ in range(4):
+        view, got = await services.events.grab(view.id, a)
+        assert got > 0
+        clock.advance(11)
+    assert (await services.players.require(1)).gold > gold
+    with pytest.raises(GameError, match="حداکثر"):
+        await services.events.grab(view.id, a)
+    assert "باران سکه" in events_ui.text_for(view)
+
+
+async def test_spring_refills_energy_once_for_the_first_visitors(services, db):
+    a, b = await hero(services, db, 1, "آرش"), await hero(services, db, 2, "سارا")
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET energy = 0")
+    view = await services.events.spawn(CHAT, "spring")
+    view = await services.events.drink(view.id, a)
+    assert (await services.players.require(1)).energy > 5
+    with pytest.raises(GameError, match="یک بار"):
+        await services.events.drink(view.id, a)
+    view = await services.events.drink(view.id, b)
+    assert view.state["left"] == 10 and "چشمه‌ی برکت" in events_ui.text_for(view)
+
+
+async def test_wheel_gives_one_spin_each_and_a_prize(services, db):
+    a, b = await hero(services, db, 1, "آرش"), await hero(services, db, 2, "سارا")
+    view = await services.events.spawn(CHAT, "wheel")
+    view, prize = await services.events.spin(view.id, a)
+    assert prize and "آرش" in events_ui.text_for(view)
+    with pytest.raises(GameError, match="یک بار"):
+        await services.events.spin(view.id, a)
+    view, _ = await services.events.spin(view.id, b)
+    assert len(view.state["spins"]) == 2
+
+
+async def test_dragon_egg_hatches_together_and_pays_everybody(services, db, clock):
+    a, b = await hero(services, db, 1, "آرش"), await hero(services, db, 2, "سارا")
+    await active_group(services, db, [a, b])
+    view = await services.events.spawn(CHAT, "egg")
+    need = view.state["need"]
+    assert need >= 25 and "تخم اژدها" in events_ui.text_for(view)
+    gold = [(await services.players.require(u)).gold for u in (1, 2)]
+    hatched = False
+    for _ in range(need * 3):
+        for p in (a, b):
+            try:
+                view, hatched = await services.events.warm(view.id, p)
+            except GameError:
+                continue
+            if hatched:
+                break
+        if hatched:
+            break
+        clock.advance(7)
+    assert hatched and view.status == "done" and len(view.state["payouts"]) == 2
+    for uid, before in zip((1, 2), gold):
+        assert (await services.players.require(uid)).gold > before
+    assert (await services.players.require(1)).crystal >= 2
+
+
+async def test_owner_can_summon_the_new_events_and_players_can_tap_them(h, services, db):
+    a = await hero(services, db, 1, "ارباب")
+    await services.groups.touch(CHAT, "گروه")
+    for word in ("باران سکه", "چشمه", "چرخ شانس", "تخم اژدها"):
+        await h.say(1, f"احضار {word}", group=True)
+    kinds = sorted(v.kind for v in await services.events.active(CHAT))
+    assert kinds == ["egg", "gold_rain", "spring", "wheel"]
+    wheel = next(v for v in await services.events.active(CHAT) if v.kind == "wheel")
+    await h.click(1, f"e:spin:{wheel.id}:0", group=True)
+    assert any("🎡" in x.get("text", "") for x in h.session.callback_answers())
