@@ -103,7 +103,7 @@ async def services_hub(c: Ctx) -> Screen:
     have = await _tickets(c)
     text = (
         f"🎫 {bold('خدمات قهرمان')}\n\n"
-        "با برگه‌های خدمات می‌توانید نژاد، کلاس یا نام قهرمانتان را عوض کنید. برگه‌ها را از «خزانه‌ی ویژه» (پیام خصوصی ربات) می‌خرید.\n\n"
+        "با برگه‌های خدمات می‌توانید نژاد، کلاس یا نام قهرمانتان را عوض کنید. برگه‌ها را از «خزانه قلمرو» (پیام خصوصی ربات) می‌خرید.\n\n"
         f"🧬 برگه‌ی تغییر نژاد: {fa(have.get('race_ticket', 0))}\n\n"
         f"⚔️ برگه‌ی تغییر کلاس: {fa(have.get('class_ticket', 0))}\n\n"
         f"🏷️ برگه‌ی تغییر نام: {fa(have.get('rename_ticket', 0))}"
@@ -121,7 +121,7 @@ async def svc_race(c: Ctx) -> Screen:
     from ..game.data.races import RACES
 
     if not (await _tickets(c)).get("race_ticket"):
-        return Screen(None, toast="🧬 برگه‌ی تغییر نژاد ندارید؛ از خزانه‌ی ویژه بخرید.", alert=True)
+        return Screen(None, toast="🧬 برگه‌ی تغییر نژاد ندارید؛ از خزانه قلمرو بخرید.", alert=True)
     options = [r for r in RACES.values() if r.id != c.player.race_id]
     text = f"🧬 {bold('نژاد تازه را انتخاب کنید')}\n\n" + "\n\n".join(f"{r.emoji} {r.name} — {r.description}" for r in options)
     rows = [[c.btn(f"{r.emoji} {r.name}", "svcraceq", r.id)] for r in options] + [c.back("svc")]
@@ -152,7 +152,7 @@ async def svc_race_do(c: Ctx) -> Screen:
 @screen("svcclass")
 async def svc_class(c: Ctx) -> Screen:
     if not (await _tickets(c)).get("class_ticket"):
-        return Screen(None, toast="⚔️ برگه‌ی تغییر کلاس ندارید؛ از خزانه‌ی ویژه بخرید.", alert=True)
+        return Screen(None, toast="⚔️ برگه‌ی تغییر کلاس ندارید؛ از خزانه قلمرو بخرید.", alert=True)
     options = [k for k in CLASSES.values() if k.id != c.player.class_id]
     text = f"⚔️ {bold('کلاس تازه را انتخاب کنید')}\n\n" + "\n\n".join(f"{k.emoji} {k.name} — {k.description}" for k in options)
     rows = [[c.btn(f"{k.emoji} {k.name}", "svcclassq", k.id)] for k in options] + [c.back("svc")]

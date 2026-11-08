@@ -21,12 +21,12 @@ async def pets(c: Ctx) -> Screen:
     rows = []
     for pet in PETS:
         if pet.id in owned:
-            mark = (" · همراه من" if owned[pet.id] else " · دارید") + f" · سطح {fa(levels[pet.id])}"
+            tag = ("✅ همراه من" if owned[pet.id] else "🐾 دارید") + f" · سطح {fa(levels[pet.id])}"
         elif pet.price_gold:
-            mark = f" · {fa(pet.price_gold)}🪙"
+            tag = f"🪙 {fa(pet.price_gold)}"
         else:
-            mark = " · خزانه‌ی ویژه"
-        rows.append([c.btn(f"{pet.emoji} {pet.name}{mark}", "pet", pet.id)])
+            tag = "💎 خزانه قلمرو"
+        rows.append([c.btn(f"{pet.emoji} {pet.name}", "pet", pet.id), c.btn(tag, "pet", pet.id)])  # name, then its price or state
     if not owned:
         lines.append("هنوز حیوان خانگی ندارید. یکی از ارزان‌ترها را با سکه بگیرید!")
     rows.append(c.back("home"))
@@ -54,7 +54,7 @@ async def pet(c: Ctx) -> Screen:
         lines += ["", f"🪙 بها: {bold(fa(p.price_gold))} سکه"]
         rows.append([c.btn(f"🛍️ خرید ({fa(p.price_gold)}🪙)", "petbuyq", p.id, style="success")])
     else:
-        lines += ["", "💎 این حیوان خانگی در «خزانه‌ی ویژه» (پیام خصوصی ربات) فروخته می‌شود."]
+        lines += ["", "💎 این حیوان خانگی در «خزانه قلمرو» (پیام خصوصی ربات) فروخته می‌شود."]
     rows.append(c.back("pets"))
     return Screen("\n".join(lines), rows)
 

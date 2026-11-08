@@ -83,7 +83,7 @@ async def rename(ctx: CommandContext) -> None:
     name = clean_name(ctx.raw_args)
     view = await ctx.services.inventory.view(ctx.me.id)
     if not any(i.id == "rename_ticket" and q > 0 for i, q in view.stacks):
-        raise GameError("برای تغییر نام «برگه‌ی تغییر نام» لازم است. از «خزانه‌ی ویژه» (پیام خصوصی ربات) تهیه کنید.")
+        raise GameError("برای تغییر نام «برگه‌ی تغییر نام» لازم است. از «خزانه قلمرو» (پیام خصوصی ربات) تهیه کنید.")
     await ctx.reply(
         f"🏷️ {bold('تأیید تغییر نام')}\n\n"
         f"نام فعلی: {ctx.me.name}\n\nنام تازه: {bold(name)}\n\n"

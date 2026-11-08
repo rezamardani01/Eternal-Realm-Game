@@ -25,7 +25,7 @@ class InsufficientFunds(GameError):
             lines.append(f"{icon} {name}: دارید {_num(have)} · نیاز دارید {_num(need)} · کمبود {_num(need - have)}")
         lines.append("")
         if any(name == "کریستال" for _, name, _, _ in shortages):
-            lines.append("💡 کریستال از «خزانه‌ی ویژه» یا گنج‌های کمیاب ماجراجویی به دست می‌آید.")
+            lines.append("💡 کریستال از «خزانه قلمرو» یا گنج‌های کمیاب ماجراجویی به دست می‌آید.")
         else:
             lines.append("💡 با ماهیگیری، معدن، شکار و جایزه‌ی روزانه سکه جمع کنید.")
         super().__init__("\n".join(lines))

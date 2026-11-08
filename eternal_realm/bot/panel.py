@@ -1043,10 +1043,10 @@ async def premium(c: Ctx) -> Screen:
     if c.is_group:
         username = c.services.bot_username
         rows = [keyboards.start_button(username)] if username else []
-        return Screen("💎 خزانه‌ی ویژه فقط در پیام خصوصی باز می‌شود؛ خرید آن‌جا امن است.", rows)
+        return Screen("💎 خزانه قلمرو فقط در پیام خصوصی باز می‌شود؛ خرید آن‌جا امن است.", rows)
     p = await c.refresh()
     text = (
-        f"💎 {bold('خزانه‌ی ویژه')}\n\n"
+        f"💎 {bold('خزانه قلمرو')}\n\n"
         "سکه، کریستال، بسته‌ی ویژه و صندوقچه؛ هر چه برای پیشرفت سریع‌تر لازم دارید.\n\n"
         f"🪙 {fa(p.gold)} سکه · 💎 {fa(p.crystal)} کریستال\n\n"
         "💳 پرداخت با کیف پول بله است و اطلاعات کارت ذخیره نمی‌شود.\n"

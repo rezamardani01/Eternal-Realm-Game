@@ -79,7 +79,7 @@ class PetService:
     async def buy_with_gold(self, player: Player, pet_id: str) -> Pet:
         pet = get_pet(pet_id)
         if pet.price_gold <= 0:
-            raise GameError("این حیوان همراه فقط از «خزانه‌ی ویژه» خریداری می‌شود.")
+            raise GameError("این حیوان همراه فقط از «خزانه قلمرو» خریداری می‌شود.")
         async with self.ctx.db.transaction() as tx:
             if pet_id in await self.owned_in(tx, player.id):
                 raise GameError(f"{pet.name} از قبل همراه شماست؛ خرید دوباره لازم نیست.")

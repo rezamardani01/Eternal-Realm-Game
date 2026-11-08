@@ -26,7 +26,7 @@ def _is_private(message: Message) -> bool:
 async def on_buy(query: CallbackQuery, callback_data: BuyCb, services: Services, bot: Bot) -> None:
     message = query.message
     if message is None or not _is_private(message):
-        raise GameError("خزانه‌ی ویژه فقط در پیام خصوصی ربات باز می‌شود؛ آنجا بیایید و خرید کنید.")
+        raise GameError("خزانه قلمرو فقط در پیام خصوصی ربات باز می‌شود؛ آنجا بیایید و خرید کنید.")
     player = await services.players.require(query.from_user.id)
 
     order = await services.payments.create_order(player, callback_data.id, deal=callback_data.kind == "deal")

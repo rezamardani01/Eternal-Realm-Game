@@ -152,3 +152,16 @@ def test_stronger_pets_cost_more_and_the_legendary_ones_are_sold_for_real_money_
     strongest_gold = max(power(p) for p in gold_pets)
     assert max(power(p) for p in premium) > strongest_gold  # paid pets are stronger than anything coins buy
     assert max(power(p) for p in PETS if p.rarity == 6) > max(power(p) for p in PETS if p.rarity == 5) * 0.9
+
+
+async def test_the_pet_list_has_two_buttons_per_row_name_and_price(h, services, db):
+    await services.players.register(7, "u", "آرش", "elf", "archer")
+    await h.say(7, "حیوان", group=True)
+    markup = h.session.last_markup_rows()
+    pet_rows = [row for row in markup if any("pet" in b.get("callback_data", "") for b in row)]
+    assert len(pet_rows) == len(PETS) and all(len(row) == 2 for row in pet_rows)
+    rabbit = next(row for row in pet_rows if "خرگوش" in row[0]["text"])
+    assert "۲٬۰۰۰" in rabbit[1]["text"] and rabbit[0]["callback_data"] == rabbit[1]["callback_data"]  # both open the pet
+    legendary = next(row for row in pet_rows if "اژدهای کوچک" in row[0]["text"])
+    assert legendary[1]["text"] == "💎 خزانه قلمرو"
+    assert "خزانه‌ی ویژه" not in h.session.last_text()

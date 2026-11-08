@@ -103,7 +103,7 @@ async def test_invoice_flow_through_the_bot(h, services):
     p = await reg(services)
     await h.say(10, "/start")
     await h.panel(10, "premium")
-    assert "خزانه‌ی ویژه" in h.session.last_text()
+    assert "خزانه قلمرو" in h.session.last_text()
     assert len(h.labels()) == 13  # twelve sections (boost and experience included) and a back button
     await h.tap(10, "خرید کریستال")
     assert "تومان" in h.session.last_text()
