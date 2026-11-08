@@ -128,14 +128,14 @@ async def home(c: Ctx) -> Screen:
         "امروز به کجا حمله می‌کنید؟"
     )
     rows = [
-        [c.btn("🗺️ ماجراجویی", "adv", style="primary"), c.btn("👤 شخصیت من", "profile")],
-        [c.btn("🎒 کوله‌پشتی", "inv"), c.btn("🛒 فروشگاه", "shop")],
-        [c.btn("🏪 بازار", "market"), c.btn("🏆 تالار", "top")],
+        [c.btn("🗺️ ماجراجویی", "adv", style="primary"), c.btn("👤 قهرمان من", "profile")],
+        [c.btn("🎒 کوله‌پشتی", "inv"), c.btn("🛒 فروشگاه آیتم", "shop")],
+        [c.btn("🏪 بازارچه", "market"), c.btn("🏆 تالار بزرگان", "top")],
         [c.btn("🏯 خاندان", "clan"), c.btn("📜 داستان‌ها", "quests")],
-        [c.btn("🃏 آلبوم کارت", "album"), c.btn("🐾 حیوان همراه", "pets")],
-        [c.btn("🕳️ سیاه‌چال", "dungeon"), c.btn("🔥 کوره", "craft")],
-        [c.btn("💎 خزانه‌ی ویژه", "premium"), c.btn("🎁 جایزه روزانه", "daily")],
-        [c.btn("😴 استراحت", "rest"), c.btn("❓ راهنما", "help")],
+        [c.btn("🃏 کلکسیون کارت", "album"), c.btn("🐱 حیوان خانگی", "pets")],
+        [c.btn("🕳️ سیاه‌چال", "dungeon"), c.btn("🔥 کوره آهنگری", "craft")],
+        [c.btn("💎 خزانه قلمرو", "premium"), c.btn("🎁 جایزه روزانه", "daily")],
+        [c.btn("😴 استراحت", "rest"), c.btn("❓ راهنمایی", "help")],
     ]
     if c.is_group:
         rows.insert(-1, [c.btn("🐉 باس گروه", "boss")])
@@ -758,6 +758,8 @@ async def market(c: Ctx) -> Screen:
         c.btn(f"📂 دسته: {MARKET_TABS[tab][0].split(' ', 1)[1]}", "mcat", 0, f"{tab}.{sort}"),
         c.btn(f"🔎 فیلتر: {MARKET_SORTS[sort].split(' ', 1)[1]}", "mfilter", 0, f"{tab}.{sort}"),
     ]]
+    if not found:
+        rows.append([c.btn("🚫 هیچ آیتمی برای خرید وجود ندارد", "market", 0, f"{tab}.{sort}")])
     rows += [
         [c.btn(f"{lst.label} {lst.item.rarity_label.split(' ')[0]} — {fa(lst.price)}🪙", "listing", lst.id)]
         for lst in found
@@ -978,8 +980,8 @@ PREMIUM_SECTIONS = {
     "crystals": ("💎", "خرید کریستال", "کریستال ارز کمیاب قلمرو است؛ با آن صندوقچه‌های جادویی و سلطنتی می‌خرید."),
     "bundles": ("🎁", "خرید بسته", "بسته‌های ویژه چند چیز را با هم و به‌صرفه‌تر می‌دهند."),
     "materials": ("⛓️", "خرید مواد", "سنگ آهن برای ارتقای تجهیزات؛ هر مرتبه‌ی آهنگری به آن نیاز دارد."),
-    "services": ("🎫", "خدمات قهرمان", "برگه‌ی تغییر نژاد، کلاس یا نام؛ بعد از خرید از «شخصیت من ← ارتقای قهرمان ← خدمات» مصرفش کنید."),
-    "pets": ("🐾", "حیوان همراه", "یک یار وفادار که در نبردها کنارتان می‌ماند و کمی قوی‌ترتان می‌کند. محتوا ثابت است؛ شانسی در کار نیست."),
+    "services": ("🎫", "خدمات قهرمان", "برگه‌ی تغییر نژاد، کلاس یا نام؛ بعد از خرید از «قهرمان من ← ارتقای قهرمان ← خدمات» مصرفش کنید."),
+    "pets": ("🐱", "حیوان خانگی", "یک یار وفادار که در نبردها کنارتان می‌ماند و کمی قوی‌ترتان می‌کند. محتوا ثابت است؛ شانسی در کار نیست."),
 }
 
 
@@ -1001,7 +1003,7 @@ async def premium(c: Ctx) -> Screen:
     rows = [
         [c.btn("🪙 خرید سکه", "prem", "coins"), c.btn("💎 خرید کریستال", "prem", "crystals")],
         [c.btn("🎁 خرید بسته", "prem", "bundles"), c.btn("📦 خرید صندوق", "prem", "chests")],
-        [c.btn("⛓️ خرید مواد", "prem", "materials"), c.btn("🐾 حیوان همراه", "prem", "pets")],
+        [c.btn("⛓️ خرید مواد", "prem", "materials"), c.btn("🐱 حیوان خانگی", "prem", "pets")],
         [c.btn("🎫 خدمات قهرمان", "prem", "services")],
         [c.btn("🏷️ تخفیف‌های امروز", "deals", style="success")],
         c.back("home"),

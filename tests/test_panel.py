@@ -137,7 +137,7 @@ async def test_group_words_open_panels_and_personal_panel_goes_private(h, servic
     await h.say(10, "کیف من", group=True)
     assert h.session.last_buttons()[0]["url"].startswith("https://ble.ir/")
     await h.say(10, "کیف من")
-    assert any("شخصیت من" in t for t in h.labels())
+    assert any("قهرمان من" in t for t in h.labels())
 
 
 # --- equipment ----------------------------------------------------------------------------------

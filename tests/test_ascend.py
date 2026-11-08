@@ -70,7 +70,7 @@ async def test_awakening_costs_gold_and_crystals_once(services, db):
 async def test_glass_flow_and_profile_lines(h, services, db):
     await hero(services, db, 5, "رها")
     await h.say(5, "قلمرو", group=True)
-    await h.tap(5, "شخصیت من", group=True)
+    await h.tap(5, "قهرمان من", group=True)
     await h.tap(5, "ارتقای قهرمان", group=True)
     await h.tap(5, "انتخاب کلاس دوم", group=True)
     await h.click(5, h.button_data("جادوگر"), group=True)

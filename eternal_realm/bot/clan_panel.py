@@ -36,7 +36,7 @@ def clan_text(view: ClanView, mention: bool = False) -> str:
         f"🪙 خزانه: {fa(view.treasury)} سکه",
         f"🚪 در خاندان: {door}",
     ]
-    return "\n\n".join(lines)
+    return "\n".join(lines)
 
 
 # --- home of the clan ---------------------------------------------------------------------------
@@ -109,8 +109,8 @@ async def clan_member(c: Ctx) -> Screen:
     mine, m = await _member_row(c, pid)
     text = (
         f"{ROLES[m['role']][0]} {bold(m['name']) if not c.is_group else '[' + m['name'] + '](uid:' + str(m['platform_user_id']) + ')'}\n\n"
-        f"🎖️ مقام: {ROLES[m['role']][1]}\n\n"
-        f"⭐ سطح: {fa(m['level'])}\n\n"
+        f"🎖️ مقام: {ROLES[m['role']][1]}\n"
+        f"⭐ سطح: {fa(m['level'])}\n"
         f"🪙 کمک به خزانه: {fa(m['donated'])} سکه"
     )
     rows = []
@@ -232,8 +232,8 @@ async def clan_donate(c: Ctx) -> Screen:
     need = next((n for n in (1000 * lv * lv for lv in range(1, 60)) if n > mine.donated), mine.donated)
     text = (
         f"💰 {bold('خزانه‌ی خاندان')}\n\n"
-        f"🪙 موجودی خزانه: {fa(mine.treasury)} سکه\n\n"
-        f"⭐ سطح خاندان: {fa(mine.level)}\n\n"
+        f"🪙 موجودی خزانه: {fa(mine.treasury)} سکه\n"
+        f"⭐ سطح خاندان: {fa(mine.level)}\n"
         f"🎯 برای سطح بعد: {fa(max(0, need - mine.donated))} سکه‌ی دیگر\n\n"
         f"👛 کیف شما: {fa(c.player.gold)} سکه\n\n"
         "هر سطح، جای بیشتری برای عضو تازه باز می‌کند. چقدر کمک می‌کنید؟"
@@ -359,7 +359,7 @@ async def clan_war(c: Ctx) -> Screen:
     for i, row in enumerate(view.week_rows):
         place = medals[i] if i < 3 else f"{fa(i + 1)}."
         you = " ← خاندان شما" if row.mine else ""
-        lines += [f"{place} {row.name} — {fa(row.points)} امتیاز{you}", ""]
+        lines.append(f"{place} {row.name} — {fa(row.points)} امتیاز{you}")
     rows = []
     if view.prize:
         lines += [f"🎁 خاندان شما هفته‌ی پیش جایگاه {fa(view.last_place)} را گرفت! جایزه‌ی شما {fa(view.prize)} سکه است."]

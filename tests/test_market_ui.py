@@ -147,3 +147,22 @@ async def test_buying_listed_gear_then_selling_it_to_the_npc_does_not_crash(h, s
     sold, total = await services.shop.sell_gear(await services.players.require(11), cap)
     assert sold.item.id == "leather_cap" and total > 0
     assert buyer
+
+
+async def test_empty_market_shows_one_wide_notice_button_between_the_rows(h, services, db):
+    await reg(services, 11, "سارا")
+    await h.panel(11, "market")
+    labels = h.labels()
+    notice = next(i for i, t in enumerate(labels) if "هیچ آیتمی برای خرید وجود ندارد" in t)
+    assert "دسته" in labels[notice - 2] and "فیلتر" in labels[notice - 1]
+    assert "فروش کالای من" in labels[notice + 1]
+
+
+async def test_home_menu_uses_the_new_names(h, services, db):
+    await reg(services, 11, "سارا")
+    await h.say(11, "قلمرو", group=True)
+    labels = " ".join(h.labels())
+    for name in ("قهرمان من", "فروشگاه آیتم", "بازارچه", "تالار بزرگان", "کلکسیون کارت", "حیوان خانگی",
+                 "کوره آهنگری", "خزانه قلمرو", "راهنمایی"):
+        assert name in labels
+    assert "🐱 حیوان خانگی" in h.labels()
