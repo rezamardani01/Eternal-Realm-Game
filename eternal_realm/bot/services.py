@@ -75,7 +75,7 @@ class Services:
             hunting=HuntService(ctx, players, inventory, characters, cards),
             duels=DuelService(ctx, players, characters),
             shop=ShopService(ctx, inventory),
-            economy=EconomyService(ctx),
+            economy=EconomyService(ctx, inventory),
             market=MarketService(ctx, inventory),
             rankings=RankingService(ctx),
             chests=ChestService(ctx, inventory),

@@ -65,13 +65,62 @@ async def test_daily_limit_resets_next_day(services, db, clock):
     await services.economy.transfer(await services.players.require(10), b, 100)
 
 
-async def test_transfer_command_by_reply(h, services, db):
+async def test_transfer_panel_flow_for_gold(h, services, db):
     await pair(services, db)
-    await h.say(10, "انتقال 500", group=True, reply_to=h.message_of(11))
-    assert "بخشید" in h.session.last_text()
+    before = [(await services.players.require(u)).gold for u in (10, 11)]
     await h.say(10, "انتقال", group=True, reply_to=h.message_of(11))
-    assert "ریپلای" in h.session.last_text()
-    await h.say(10, "انتقال 500", group=True)
+    assert "انتقال هدیه" in h.session.last_text()
+    await h.tap(10, "سکه", group=True)
+    await h.tap(10, "+۵", group=True)
+    await h.tap(10, "+۱", group=True)
+    assert "۱۶" in h.session.last_text() and "مقدار هدیه" in h.session.last_text()
+    await h.tap(10, "+۱٬۰۰۰", group=True)
+    await h.tap(10, "تأیید مقدار", group=True)
+    assert "مطمئنید" in h.session.last_text()
+    assert (await services.players.require(10)).gold == before[0]  # nothing moved yet
+    await h.tap(10, "تأیید و انتقال", group=True)
+    assert "هدیه رسید" in h.session.last_text()
+    assert (await services.players.require(10)).gold == before[0] - 1_016
+    assert (await services.players.require(11)).gold == before[1] + 1_016
+    dm = [c for c in h.session.sent("sendMessage") if str(c["chat_id"]) == "11"]
+    assert dm and "هدیه‌ای برای شما رسید" in dm[-1]["text"] and "۱٬۰۱۶" in dm[-1]["text"]
+
+
+async def test_transfer_panel_cancel_and_other_users_cannot_press(h, services, db):
+    await pair(services, db)
+    before = (await services.players.require(10)).gold
+    await h.say(10, "انتقال 500", group=True, reply_to=h.message_of(11))
+    assert "مقدار هدیه" in h.session.last_text()
+    data = h.button_data("تأیید مقدار")
+    await h.click(11, data, group=True)
+    assert any("مال شما نیست" in a.get("text", "") for a in h.session.callback_answers())
+    await h.tap(10, "انصراف", group=True)
+    assert "لغو شد" in h.session.last_text() and (await services.players.require(10)).gold == before
+
+
+async def test_transfer_crystals_items_and_gear(services, db):
+    a, b = await pair(services, db)
+    async with db.transaction() as tx:
+        await wallet.apply(tx, a.id, crystal=30, reason="t", now=services.ctx.now())
+        await services.inventory.grant(tx, a.id, "iron_ore", 5)
+        gid = (await services.inventory.grant(tx, a.id, "leather_cap", 1))[0]
+    me = await services.players.require(10)
+    receipt = await services.economy.send(me, b, "crystal", 12)
+    assert receipt.left == 200 - 12 and (await services.players.require(11)).crystal == 12
+    await services.economy.send(me, b, "iron_ore", 3)
+    stacks = {i.id: q for i, q in (await services.inventory.view(b.id)).stacks}
+    assert stacks["iron_ore"] == 3
+    with pytest.raises(GameError):
+        await services.economy.send(me, b, "iron_ore", 50)
+    await services.economy.send(me, b, f"g{gid}", 1)
+    assert any(g.id == gid for g in (await services.inventory.view(b.id)).gear)
+    with pytest.raises(GameError):
+        await services.economy.send(me, b, "rename_ticket", 1)  # tickets cannot be traded
+
+
+async def test_transfer_without_reply_explains(h, services, db):
+    await pair(services, db)
+    await h.say(10, "انتقال", group=True)
     assert "ریپلای" in h.session.last_text()
 
 

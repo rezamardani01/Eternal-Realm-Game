@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ...shared.errors import GameError
 from ...shared.text import bold, fa, to_int
+from .. import panel
 from .context import CommandContext
 from .registry import command
 
@@ -14,15 +15,13 @@ from .registry import command
 )
 async def transfer(ctx: CommandContext) -> None:
     target = await ctx.replied_player()
+    if target is None:
+        raise GameError("برای بخشیدن هدیه، روی پیام دوستتان ریپلای کنید و «انتقال» بنویسید.")
     amount = to_int(ctx.args[0]) if ctx.args else None
-    if target is None or amount is None:
-        raise GameError("برای بخشش سکه، روی پیام دوستتان ریپلای کنید و بنویسید: «انتقال 500».")
-    left = await ctx.services.economy.transfer(ctx.me, target, amount)
-    await ctx.reply(
-        f"💸 {bold('دست‌ودل‌بازی از فرمانده')} {ctx.who(ctx.me)}\n\n"
-        f"مبلغ {bold(fa(amount))} سکه به {ctx.who(target)} بخشیده شد.\n\n"
-        f"🏦 امروز می‌توانید {fa(left)} سکه‌ی دیگر ببخشید."
-    )
+    if amount is not None:  # «انتقال 500»: open the amount page with gold already chosen
+        await panel.send(ctx.message, ctx.services, ctx.me, "xamt", f"{target.id}.coin", str(amount), reply=True)
+    else:
+        await panel.send(ctx.message, ctx.services, ctx.me, "xfer", str(target.id), reply=True)
 
 
 @command("wallet", ["کیف پول", "موجودی من", "سکه", "wallet"], "نمایش سکه و کریستال", category="💰 اقتصاد", points=0)

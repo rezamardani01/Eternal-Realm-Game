@@ -79,10 +79,11 @@ async def apply(
         raise
 
 
-async def spent_since(tx: Tx, player_id: int, reason: str, since: int) -> int:
-    """Total gold moved out for ``reason`` since a timestamp (positive number)."""
+async def spent_since(tx: Tx, player_id: int, reason: str, since: int, currency: str = "gold") -> int:
+    """Total gold (or crystal) moved out for ``reason`` since a timestamp (positive number)."""
+    column = "crystal_delta" if currency == "crystal" else "gold_delta"
     total = await tx.scalar(
-        "SELECT SUM(-gold_delta) FROM transactions"
+        f"SELECT SUM(-{column}) FROM transactions"  # noqa: S608
         " WHERE player_id = ? AND reason = ? AND created_at >= ?",
         (player_id, reason, since),
         default=0,
