@@ -31,6 +31,8 @@ class Hero:
     damage: int = 0
     absorbed: int = 0
     shield: bool = False
+    #: how many fallen friends this hero can still bring back (mages and guardians)
+    revive: int = 1
 
 
 @dataclass
@@ -45,14 +47,38 @@ class Boss:
     weak: int = 0
     special: str = "مهارت ویژه"
     weak_class: str = ""
+    #: normal | hunter (picks the weakest hero) | healer (mends itself) | berserk (angrier the more hurt)
+    behavior: str = "normal"
+    phase: int = 1
+    heals_left: int = 3
+    #: rounds during which a warrior is holding the boss down (mages hit harder)
+    pinned: int = 0
 
 
 def _offense(hero: Hero) -> float:
     return max(hero.atk, hero.magic * 0.8)
 
 
+def _try_revive(hero: Hero, team: list[Hero], rng: random.Random) -> list[Event] | None:
+    """A mage or guardian may spend their turn raising a fallen friend."""
+    if hero.class_id not in ("mage", "guardian") or hero.revive <= 0:
+        return None
+    fallen = [h for h in team if not h.alive]
+    if not fallen or rng.random() >= 0.35:
+        return None
+    friend = rng.choice(fallen)
+    hero.revive -= 1
+    friend.alive = True
+    friend.hp = max(1, round(friend.max_hp * 0.4))
+    how = "با طلسم نور" if hero.class_id == "mage" else "با سپر مقدس"
+    return [(MAJOR, f"✨ {hero.name} {how} {friend.name} را به میدان برگرداند!")]
+
+
 def _hero_turn(hero: Hero, boss: Boss, team: list[Hero], rng: random.Random) -> list[Event]:
     events: list[Event] = []
+    revived = _try_revive(hero, team, rng)
+    if revived is not None:
+        return revived
     defense = boss.defense * (0.6 if boss.weak > 0 else 1.0)
     crit_chance = min(0.5, 0.05 + hero.luck * 0.003)
     base = _offense(hero) * rng.uniform(0.9, 1.1)
@@ -63,11 +89,18 @@ def _hero_turn(hero: Hero, boss: Boss, team: list[Hero], rng: random.Random) -> 
     if hero.class_id == "warrior":
         if rng.random() < 0.20:
             mult, text, priority = mult * 1.6, f"{hero.name} با شمشیر ضربه‌ای سنگین به باس وارد کرد", NOTABLE
+        elif boss.pinned <= 0 and rng.random() < 0.25 and any(h.alive and h.class_id == "mage" for h in team):
+            boss.pinned = 2
+            events.append((NOTABLE, f"🤝 {hero.name} باس را مهار کرد؛ جادوگران فرصت طلایی دارند!"))
+            text = f"{hero.name} با شمشیر حمله کرد"
         else:
             text = f"{hero.name} با شمشیر به باس حمله کرد"
     elif hero.class_id == "mage":
         mult, defense = mult * 1.25, defense * 0.7
         text = f"{hero.name} با جادوی آتشین، بدن باس را سوزاند"
+        if boss.pinned > 0:
+            mult *= 1.4
+            text = f"{hero.name} با طلسم ترکیبی، باس مهارشده را سوزاند"
     elif hero.class_id == "archer":
         mult, text = mult * 1.2, f"{hero.name} چند تیر پیاپی به باس زد"
     elif hero.class_id == "rogue":
@@ -102,7 +135,8 @@ def _hero_turn(hero: Hero, boss: Boss, team: list[Hero], rng: random.Random) -> 
 def _hit_hero(boss: Boss, hero: Hero, power: float, rng: random.Random, label: str) -> list[Event]:
     if rng.random() < min(0.20, hero.speed * 0.004):
         return [(NORMAL, f"💨 {hero.name} از ضربه‌ی باس جاخالی داد")]
-    raw = boss.atk * power * (1.5 if boss.enraged else 1.0) * rng.uniform(0.9, 1.1)
+    rage = 1.0 + (1 - boss.hp / max(boss.max_hp, 1)) * 0.5 if boss.behavior == "berserk" else 1.0
+    raw = boss.atk * power * rage * (1.5 if boss.enraged else 1.0) * rng.uniform(0.9, 1.1)
     amount = max(1, round(raw - hero.defense * 0.5))
     if hero.shield:
         hero.shield = False
@@ -121,10 +155,21 @@ def _boss_turn(boss: Boss, heroes: list[Hero], rng: random.Random) -> list[Event
     if not alive or boss.hp <= 0:
         return []
     events: list[Event] = []
+    if boss.phase == 1 and boss.hp < boss.max_hp * 0.50:
+        boss.phase = 2
+        boss.atk = round(boss.atk * 1.15)
+        events.append((MAJOR, f"⚡ {boss.name} وارد فاز دوم شد! تندتر و خطرناک‌تر می‌جنگد"))
+    if boss.behavior == "healer" and boss.heals_left > 0 and boss.round % 3 == 0 and boss.hp < boss.max_hp:
+        boss.heals_left -= 1
+        mended = min(boss.max_hp - boss.hp, round(boss.max_hp * 0.05))
+        boss.hp += mended
+        events.append((NOTABLE, f"💚 {boss.name} زخم‌هایش را بست و {fa(mended)} جان گرفت"))
     if not boss.enraged and boss.hp < boss.max_hp * 0.30:
         boss.enraged = True
         events.append((MAJOR, f"🔥 {boss.name} وارد حالت خشم شد! حمله‌هایش سنگین‌تر می‌شود"))
     roll = rng.random()
+    if boss.phase >= 2 and roll < 0.08:
+        roll = 0.95  # in phase two the special move comes more often
     if roll < 0.45:
         events += _boss_single(boss, alive, rng)
     elif roll < 0.65:
@@ -146,7 +191,10 @@ def _boss_turn(boss: Boss, heroes: list[Hero], rng: random.Random) -> list[Event
 
 
 def _boss_single(boss: Boss, alive: list[Hero], rng: random.Random) -> list[Event]:
-    target = rng.choice(alive)
+    if boss.behavior == "hunter":
+        target = min(alive, key=lambda h: h.hp / max(h.max_hp, 1))
+    else:
+        target = rng.choice(alive)
     return _hit_hero(boss, target, 1.0, rng, f"{boss.name} به")
 
 
@@ -162,6 +210,8 @@ def run_round(boss: Boss, heroes: list[Hero], rng: random.Random) -> list[Event]
         events += _boss_turn(boss, heroes, rng)
     if boss.weak > 0:
         boss.weak -= 1
+    if boss.pinned > 0:
+        boss.pinned -= 1
     return events
 
 

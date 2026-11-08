@@ -7,6 +7,7 @@ line, and the voice is a friendly epic storyteller in simple formal Persian.
 
 from __future__ import annotations
 
+from ..game.data.bosses import behavior_of
 from ..game.data.classes import CLASSES
 from ..game.data.races import RACES, Race
 from ..game.data.stats import Stats
@@ -582,6 +583,7 @@ def boss_started(v) -> str:  # noqa: ANN001 - BossView
         f"🚀 {bold('نبرد آغاز شد!')}\n\n"
         f"{fa(len(v.fighters))} جنگجو در برابر {v.type.emoji} {bold(v.type.name)} صف کشیدند. "
         f"زمین می‌لرزد و شمشیرها از نیام بیرون آمده‌اند.\n\n"
+        f"🧠 ویژگی باس: {behavior_of(v.type)[1]}\n\n"
         f"👀 لحظه‌ای تماشا می‌کنیم...\n\n" + boss_fight(v)
     )
 

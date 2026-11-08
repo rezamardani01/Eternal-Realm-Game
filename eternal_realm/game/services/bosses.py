@@ -18,6 +18,7 @@ from ...shared.errors import GameError, NotRegistered
 from ...shared.text import duration, fa
 from ..data.bosses import (
     BossType,
+    behavior_of,
     boss_attack,
     boss_by_id,
     boss_defense,
@@ -242,7 +243,7 @@ class BossService:
         hp = boss_max_hp(kind, len(roster), avg_level)
         boss = Boss(
             kind.name, hp, hp, boss_attack(kind, avg_level), boss_defense(avg_level),
-            special=kind.special, weak_class=kind.weak_class,
+            special=kind.special, weak_class=kind.weak_class, behavior=behavior_of(kind)[0],
         )
         state = {"boss": asdict(boss), "heroes": [asdict(h) for h in heroes], "pending": [], "recent": [
             f"⚔️ نبرد با {kind.name} آغاز شد!"
