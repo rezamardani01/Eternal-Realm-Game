@@ -108,7 +108,7 @@ async def test_sell_flow_pick_item_then_choose_quantity_then_type_the_price(h, s
     await h.tap(10, "×۵")
     assert "قیمت فروش" in h.session.last_text()
     await h.say(10, "450")
-    await h.tap(10, "در بازارچه بگذار")
+    await h.tap(10, "بله")
     assert "آگهی شما نصب شد" in h.session.last_text()
 
     listing = (await services.market.mine(await services.players.require(10)))[0]
@@ -131,7 +131,7 @@ async def test_selling_in_a_group_works_and_chatter_still_reaches_commands(h, se
     assert "آرش" in h.session.last_text()
     await h.say(10, "نمی‌دانم", group=True)  # chatter is ignored, the prompt stays
     await h.say(10, "800", group=True)
-    await h.tap(10, "در بازارچه بگذار", group=True)
+    await h.tap(10, "بله", group=True)
     assert "آگهی شما نصب شد" in h.session.last_text()
     assert (await services.market.mine(seller))[0].price == 800
 

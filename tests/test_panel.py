@@ -244,7 +244,7 @@ async def test_listing_and_buying_through_the_panel(h, services, db):
     await h.tap(10, "عرضه در بازار")
     assert "قیمت فروش" in h.session.last_text()
     await h.say(10, "1200")  # the answer to the price prompt
-    await h.tap(10, "در بازارچه بگذار")
+    await h.tap(10, "بله")
     assert "آگهی شما نصب شد" in h.session.last_text()
 
     await h.panel(11, "market")
@@ -265,7 +265,7 @@ async def test_cancelling_a_listing_returns_the_item(h, services, db):
     await h.panel(10, "piece", str(spare))
     await h.tap(10, "عرضه در بازار")
     await h.say(10, "500")
-    await h.tap(10, "در بازارچه بگذار")
+    await h.tap(10, "بله")
     await h.panel(10, "mine")
     await h.tap(10, "کلاه چرمی")
     await h.tap(10, "لغو آگهی")
@@ -512,8 +512,8 @@ async def test_the_listing_confirmation_compares_the_price_with_the_real_value(h
     assert "تأیید آگهی" in text and "ارزش واقعی" in text and "قیمتی که زدید" in text
     assert "بالاتر از ارزش واقعی" in text and "قیمت خیلی بالاست" in text and "در «بازارچه» برای همه" in text
     labels = h.labels()
-    assert any("بله" in t for t in labels) and any("رد کن" in t for t in labels)
-    await h.tap(10, "رد کن")  # declining puts nothing on the board
+    assert any("بله" in t for t in labels) and any("نه" in t for t in labels)
+    await h.tap(10, "نه")  # declining puts nothing on the board
     assert not await services.market.mine(await services.players.require(10))
 
 

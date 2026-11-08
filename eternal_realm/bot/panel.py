@@ -1253,8 +1253,8 @@ async def got_listing_price(message: Message, state: FSMContext, services: Servi
         "\n".join(lines),
         buttons=[
             [
-                keyboards.panel_button("✅ بله، در بازارچه بگذار", "lconfirm", owner, kind, f"{ref}~{price}"),
-                keyboards.panel_button("❌ نه، رد کن", "market", owner),
+                keyboards.panel_button("✅ بله", "lconfirm", owner, kind, f"{ref}~{price}"),
+                keyboards.panel_button("❌ نه", "market", owner),
             ]
         ],
     )
