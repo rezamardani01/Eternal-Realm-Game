@@ -137,4 +137,4 @@ pytest
 موجودات همراه و تخم، انجمن‌ها (Guild) با گروه رسمی، مأموریت‌ها و دستاوردها، رویدادهای تصادفی و باس گروهی،
 معجون‌سازی، مناطق جهان. ساختار برای افزودن آن‌ها آماده است (داده‌محور + سرویس مستقل).
 
-> Pushes to `main` are tested and deployed to the server automatically (see `deploy/`).
+> Pushes to `main` are tested by GitHub Actions; the server checks every minute and deploys green commits (see `deploy/`).

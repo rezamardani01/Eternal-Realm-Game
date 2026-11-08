@@ -1,5 +1,7 @@
 name: test-and-deploy
 
+# GitHub only runs the tests. The server watches this repository itself (deploy/auto-update.sh) and
+# deploys a commit once the "test" job below is green, so no inbound SSH to the server is needed.
 on:
   push:
     branches: [main]
@@ -14,22 +16,3 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: python -m pytest -q
-
-  deploy:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Update the server over SSH
-        env:
-          HOST: ${{ secrets.SERVER_HOST }}
-          USER_NAME: ${{ secrets.SERVER_USER }}
-          KEY: ${{ secrets.SERVER_SSH_KEY }}
-        run: |
-          if [ -z "$HOST" ]; then echo "No server configured yet (add the SERVER_* secrets); skipping deploy."; exit 0; fi
-          HOST=$(printf '%s' "$HOST" | tr -d '[:space:]')
-          USER_NAME=$(printf '%s' "$USER_NAME" | tr -d '[:space:]')
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          echo "Connecting to ${USER_NAME}@${HOST} ..."
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o BatchMode=yes "$USER_NAME@$HOST" "bash /opt/eternal-realm/deploy/deploy.sh"
