@@ -55,6 +55,9 @@ class Tx:
         return default if row is None or row[0] is None else row[0]
 
 
+LOCK_TIMEOUT = 30.0
+
+
 class Database:
     def __init__(self, path: str | Path) -> None:
         self.path = str(path)
@@ -85,10 +88,18 @@ class Database:
             raise RuntimeError("Database is not connected")
         return self._conn
 
+    async def _acquire(self) -> None:
+        """Take the database lock, but never wait forever: a stuck holder becomes a logged error."""
+        try:
+            await asyncio.wait_for(self._lock.acquire(), LOCK_TIMEOUT)
+        except TimeoutError as exc:
+            raise RuntimeError("database lock timeout: another task held the database for too long") from exc
+
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[Tx]:
         """Serialised write transaction: commits on success, rolls back on any exception."""
-        async with self._lock:
+        await self._acquire()
+        try:
             conn = self.conn
             await conn.execute("BEGIN IMMEDIATE")
             try:
@@ -98,12 +109,17 @@ class Database:
                 raise
             else:
                 await conn.execute("COMMIT")
+        finally:
+            self._lock.release()
 
     @asynccontextmanager
     async def read(self) -> AsyncIterator[Tx]:
         """Read-only access that still waits for any running write transaction."""
-        async with self._lock:
+        await self._acquire()
+        try:
             yield Tx(self.conn)
+        finally:
+            self._lock.release()
 
     async def backup(self, destination: str | Path) -> Path:
         """Consistent online copy of the database (safe while the bot is running)."""

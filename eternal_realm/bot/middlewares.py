@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -48,3 +49,31 @@ class ErrorMiddleware(BaseMiddleware):
                 await event.reply(headline(text))
         except BaleAPIError:
             log.warning("could not deliver an error message", exc_info=True)
+
+
+class UserLockMiddleware(BaseMiddleware):
+    """Handles one update at a time per player.
+
+    Two fast taps (or two devices) can no longer interleave halfway through a purchase, a claim or an
+    animation; the second tap simply waits for the first to finish and then sees the new state.
+    """
+
+    def __init__(self) -> None:
+        self._locks: dict[int, asyncio.Lock] = {}
+        self._waiting: dict[int, int] = {}
+
+    async def __call__(self, handler: Any, event: Any, data: dict[str, Any]) -> Any:
+        user = getattr(event, "from_user", None)
+        if user is None:
+            return await handler(event, data)
+        uid = user.id
+        lock = self._locks.setdefault(uid, asyncio.Lock())
+        self._waiting[uid] = self._waiting.get(uid, 0) + 1
+        try:
+            async with lock:
+                return await handler(event, data)
+        finally:
+            self._waiting[uid] -= 1
+            if not self._waiting[uid]:  # nobody queued: forget the lock so the table never grows
+                self._waiting.pop(uid, None)
+                self._locks.pop(uid, None)

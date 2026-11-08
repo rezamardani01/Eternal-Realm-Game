@@ -16,7 +16,7 @@ from . import boss, clan_panel, group_dungeon, duels, events, maintenance, onboa
 from . import ascend_panel, altar_panel, card_panel, contest_panel, craft_panel, dungeon_panel, mission_panel, offers, path_panel, pet_panel, transfer_panel, vip_panel  # noqa: F401
 from .commands import REGISTRY
 from .commands import router as commands_router
-from .middlewares import ErrorMiddleware
+from .middlewares import ErrorMiddleware, UserLockMiddleware
 from .services import Services
 
 log = logging.getLogger("eternal_realm")
@@ -31,9 +31,10 @@ def _attach(dp: Dispatcher, *routers: Router) -> None:
 
 def build_dispatcher(services: Services) -> Dispatcher:
     dp = Dispatcher(services=services, settings=services.ctx.settings)
-    errors = ErrorMiddleware()
-    dp.message.middleware(errors)
-    dp.callback_query.middleware(errors)
+    locks, errors = UserLockMiddleware(), ErrorMiddleware()
+    for observer in (dp.message, dp.callback_query):
+        observer.middleware(locks)  # outermost: one update per player at a time
+        observer.middleware(errors)
     REGISTRY.configure(services.ctx.settings.command_overrides)
     # order matters: FSM-bound onboarding first, free-text commands last
     _attach(

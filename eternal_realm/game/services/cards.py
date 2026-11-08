@@ -227,6 +227,8 @@ class CardService:
                 "UPDATE card_listings SET status = 'sold', buyer_id = ? WHERE id = ? AND status = 'active'",
                 (buyer.id, listing_id),
             )
+            if tx.rowcount != 1:  # somebody else got there first: the status flip is the gate
+                raise GameError("این کارت دیگر برای فروش نیست؛ شاید کسی زودتر خریده یا فروشنده پس گرفته است.")
             fee = row["price"] * FEE_PERCENT // 100
             await wallet.apply(tx, buyer.id, gold=-row["price"], reason="card_buy", now=now)
             await wallet.apply(tx, row["seller_id"], gold=row["price"] - fee, reason="card_sale", now=now)
