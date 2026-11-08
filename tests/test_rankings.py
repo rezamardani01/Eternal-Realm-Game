@@ -56,3 +56,27 @@ async def test_group_board_counts_command_points(h, services, db):
     text = h.session.last_text()
     assert "سارا" in text and "آرش" in text
     assert text.index("سارا") < text.index("آرش")  # two activities beat one
+
+
+async def test_the_path_board_ranks_players_by_their_hero_path_tier(h, services, db):
+    from eternal_realm.db.repos import season as season_repo
+    from eternal_realm.game.data.season import POINTS_PER_TIER
+
+    a = await services.players.register(1, "a", "آرش", "elf", "warrior")
+    b = await services.players.register(2, "b", "سارا", "elf", "mage")
+    c = await services.players.register(3, "c", "رها", "elf", "archer")
+    now = services.ctx.now()
+    async with db.transaction() as tx:
+        await season_repo.add_points(tx, a.id, "daily", now)
+        for pid, tier in ((b.id, 21), (c.id, 3)):
+            await tx.execute(
+                "INSERT INTO season_progress (player_id, season, points) VALUES (?, ?, ?)",
+                (pid, season_repo.season_of(now), tier * POINTS_PER_TIER + 5),
+            )
+    board = await services.rankings.path_board(await services.players.require(3))
+    assert [e.name for e in board.entries] == ["سارا", "رها"]  # the first player has not reached tier 1: not listed
+    assert [e.value for e in board.entries] == [21, 3] and board.unit == "مرحله" and board.my_position == 2
+    await h.say(3, "رتبه", group=True)
+    await h.tap(3, "مسیر قهرمانی", group=True)
+    text = h.session.last_text()
+    assert "تالار مسیر قهرمانی" in text and "مرحله" in text and text.index("سارا") < text.index("رها") and "جایگاه شما" in text

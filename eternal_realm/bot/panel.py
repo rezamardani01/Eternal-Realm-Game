@@ -1003,13 +1003,16 @@ async def top(c: Ctx) -> Screen:
             board = await ranking.hero_of_the_week(c.chat_id)
         elif board_id == "bosses":
             board = await ranking.boss_hunters(c.player)
+        elif board_id == "path":
+            board = await ranking.path_board(c.player)
         else:
             board = await ranking.global_board(board_id, c.player)
         text = views.ranking(board, mentions=c.is_group)
     rows = [
         [c.btn("🏆 سطح", "top", "level"), c.btn("💰 ثروت", "top", "rich")],
         [c.btn("⚔️ دوئل", "top", "wins"), c.btn("🏅 لیگ", "top", "rating")],
-        [c.btn("🐉 شکارچیان باس", "top", "bosses"), c.btn("🏁 مسابقه‌های هفته", "contests")],
+        [c.btn("🎟️ مسیر قهرمانی", "top", "path"), c.btn("🐉 شکارچیان باس", "top", "bosses")],
+        [c.btn("🏁 مسابقه‌های هفته", "contests")],
     ]
     if c.is_group:
         rows.append([c.btn("🏰 این گروه", "top", "group"), c.btn("🌟 قهرمان هفته", "top", "hero")])

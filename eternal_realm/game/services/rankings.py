@@ -78,6 +78,34 @@ class RankingService:
         ]
         return Board(title, unit, entries, position)
 
+    async def path_board(self, me: Player | None = None, limit: int = 10) -> Board:
+        """The season's hero path: whoever has climbed to the highest tier is first."""
+        from ..data.season import POINTS_PER_TIER, TIERS, season_of
+
+        season = season_of(self.ctx.now())
+        async with self.ctx.db.read() as tx:
+            rows = await tx.fetchall(
+                "SELECT p.display_name, p.platform_user_id AS uid, p.race, p.class, p.level, s.points AS points"
+                " FROM season_progress s JOIN players p ON p.id = s.player_id"
+                " WHERE s.season = ? AND p.banned = 0 AND s.points >= ? ORDER BY s.points DESC, p.level DESC LIMIT ?",
+                (season, POINTS_PER_TIER, limit),
+            )
+            position = None
+            if me is not None:
+                mine = int(await tx.scalar(
+                    "SELECT points FROM season_progress WHERE player_id = ? AND season = ?", (me.id, season), 0
+                ))
+                if mine >= POINTS_PER_TIER:
+                    position = 1 + int(await tx.scalar(
+                        "SELECT COUNT(*) FROM season_progress s JOIN players p ON p.id = s.player_id"
+                        " WHERE s.season = ? AND p.banned = 0 AND s.points > ?", (season, mine), 0,
+                    ))
+        entries = [
+            Entry(r["display_name"], _badge(r["race"], r["class"]), min(TIERS, r["points"] // POINTS_PER_TIER), r["level"], r["uid"])
+            for r in rows
+        ]
+        return Board("🎟️ تالار مسیر قهرمانی (این فصل)", "مرحله", entries, position)
+
     async def boss_hunters(self, me: Player | None = None, limit: int = 10) -> Board:
         """Everybody's total damage against group bosses."""
         async with self.ctx.db.read() as tx:
