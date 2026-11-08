@@ -20,6 +20,8 @@ from ..data import lucky
 from ..data.items import get_item
 from ..data.deals import find_deal
 from ..data.packs import ORDER_TTL_SECONDS, PACKS, Pack
+from ..engine import progression
+from ...shared.text import fa
 from ..models import Player
 from .inventory import InventoryService
 
@@ -59,6 +61,9 @@ class Delivery:
     granted: str = ""
 
 
+XP_PACK_IDS = tuple(p.id for p in PACKS.values() if p.xp)
+
+
 class PaymentService:
     def __init__(self, ctx: AppContext, inventory: InventoryService) -> None:
         self.ctx = ctx
@@ -78,6 +83,8 @@ class PaymentService:
                 st = await season_repo.state(tx, player.id, self.ctx.now())
             if st.premium:
                 raise GameError("بلیط این فصل را از قبل دارید؛ خرید دوباره لازم نیست و پولی کسر نشد.")
+        if pack.xp:
+            await self._check_xp_pack(player, pack)
         if pack.pet:
             async with self.ctx.db.read() as tx:
                 have = await tx.fetchone(
@@ -94,6 +101,28 @@ class PaymentService:
             payload = f"ER-{secrets.token_hex(8)}"
             order_id = await repo.create(tx, player.id, pack.id, amount, payload, self.ctx.now())
         return Order(order_id, player.id, pack, amount, "pending", payload)
+
+    async def _check_xp_pack(self, player: Player, pack: Pack) -> None:
+        """Experience packs are for climbing, not for the top: a level limit and a few per week."""
+        from ..data.packs import XP_PACK_MAX_LEVEL, XP_PACK_WEEKLY_LIMIT
+
+        if player.level > XP_PACK_MAX_LEVEL:
+            raise GameError(
+                f"⭐ بسته‌های تجربه برای قهرمان‌های تا سطح {fa(XP_PACK_MAX_LEVEL)} است؛ شما سطح {fa(player.level)} هستید. "
+                "پولی از شما کسر نشد."
+            )
+        week_ago = self.ctx.now() - 7 * 86400
+        async with self.ctx.db.read() as tx:
+            bought = int(await tx.scalar(
+                "SELECT COUNT(*) FROM orders WHERE player_id = ? AND status = 'delivered' AND delivered_at >= ?"
+                " AND pack_id IN (" + ",".join("?" * len(XP_PACK_IDS)) + ")",
+                (player.id, week_ago, *XP_PACK_IDS), 0,
+            ))
+        if bought >= XP_PACK_WEEKLY_LIMIT:
+            raise GameError(
+                f"⭐ در هر هفته حداکثر {fa(XP_PACK_WEEKLY_LIMIT)} بسته‌ی تجربه می‌شود خرید و شما سهمیه‌ی این هفته را "
+                "گرفته‌اید. پولی از شما کسر نشد؛ هفته‌ی بعد دوباره بیایید."
+            )
 
     async def check_precheckout(self, platform_user_id: int, payload: str, amount: int) -> str | None:
         """``None`` when the payment may go ahead, else the reason shown to the buyer."""
@@ -148,6 +177,19 @@ class PaymentService:
         )
         for item_id, qty in items.items():
             await self.inventory.grant(tx, order.player_id, item_id, qty)
+        if pack.boost_hours:
+            await tx.execute(
+                "UPDATE players SET boost_until = MAX(boost_until, ?) + ? WHERE id = ?",
+                (now, pack.boost_hours * 3600, order.player_id),
+            )
+        if pack.xp:
+            buyer = await player_repo.get(tx, order.player_id)
+            assert buyer is not None
+            level, xp, gained = progression.apply_xp(buyer.level, buyer.xp, pack.xp, self.ctx.balance)
+            await player_repo.set_progress(tx, order.player_id, level, xp)
+            granted = f"⭐ {fa(pack.xp)} تجربه به شما رسید\n" + (
+                f"🎉 از سطح {fa(buyer.level)} به سطح {fa(level)} رسیدید" if gained else "هنوز به سطح بعد نرسیده‌اید؛ ادامه بدهید"
+            )
         if pack.vip_days:
             await tx.execute(
                 "UPDATE players SET vip_until = MAX(vip_until, ?) + ? WHERE id = ?",

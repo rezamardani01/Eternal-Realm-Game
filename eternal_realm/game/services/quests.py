@@ -96,17 +96,24 @@ class QuestService:
             )
             view = self._build(quest, choice.next, flags, done)
             if nxt.reward is not None:
-                view.reward = nxt.reward
+                from dataclasses import replace as _replace
+
+                boost = await self.players.boost_factor(tx, player.id)
+                reward = nxt.reward if boost == 1 else _replace(
+                    nxt.reward, gold=nxt.reward.gold * boost, xp=nxt.reward.xp * boost,
+                    items=tuple((item_id, qty * boost) for item_id, qty in nxt.reward.items),
+                )
+                view.reward = reward
                 from ...db.repos import season as season_repo
 
                 await season_repo.add_points(tx, player.id, "quest", now)
                 await wallet.apply(
-                    tx, player.id, gold=nxt.reward.gold, crystal=nxt.reward.crystal, reason=f"quest:{quest_id}",
+                    tx, player.id, gold=reward.gold, crystal=reward.crystal, reason=f"quest:{quest_id}",
                     now=now, ref=f"quest:{quest_id}:{player.id}",
                 )
-                for item_id, qty in nxt.reward.items:
+                for item_id, qty in reward.items:
                     await self.inventory.grant(tx, player.id, item_id, qty)
-                if nxt.reward.xp:
-                    up = await self.players.grant_xp(tx, player.id, nxt.reward.xp)
+                if reward.xp:
+                    up = await self.players.grant_xp(tx, player.id, reward.xp)
                     view.level_up = up.new_level if up else None
             return view

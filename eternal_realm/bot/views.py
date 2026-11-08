@@ -104,6 +104,7 @@ def profile_header(player: Player, xp_needed: int, now: int = 0) -> str:
         f"👤 {bold(player.name)} · سطح {fa(player.level)}\n"
         + (f"🏅 عنوان: {player.honor}\n" if player.honor else "")
         + ("💠 اشتراک VIP فعال\n" if player.vip_until > now > 0 else "")
+        + (f"🚀 بوست دو برابر فعال · {duration(player.boost_until - now)} مانده\n" if player.boost_until > now > 0 else "")
         + f"{player.race.emoji} {player.race.name} · {player.char_class.emoji} {player.char_class.name}\n"
         + (f"🎭 کلاس دوم: {player.class2.emoji} {player.class2.name}\n" if player.class2 else "")
         + ("✨ قدرت پنهان بیدار شده\n" if player.awakened else "")
@@ -370,6 +371,7 @@ def activity_result(name: str, result) -> str:  # noqa: ANN001 - ActivityResult
         "",
         f"⏰ {result.activity.title} بعدی: {duration(result.next_in)} دیگر",
         *(["✨ ستاره‌ی تجربه فعال است؛ تجربه‌ی این کار دو برابر شد!"] if result.double_xp else []),
+        *(["🚀 بوست فعال است؛ سکه، تجربه و آیتم‌ها دو برابر شد!"] if getattr(result, "boosted", False) else []),
         "",
         "🎁 چیزهایی که به دست آوردید 👇",
     ]
@@ -402,6 +404,8 @@ def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
     lines += ["", f"⏰ شکار بعدی: {duration(r.next_in)} دیگر"]
     if r.double_xp:
         lines.append("✨ ستاره‌ی تجربه فعال است؛ تجربه‌ی این شکار دو برابر شد!")
+    if getattr(r, "boosted", False):
+        lines.append("🚀 بوست فعال است؛ سکه، تجربه و غنیمت دو برابر شد!")
     if r.card is not None:
         lines += ["", f"🃏 {bold('کارت تازه پیدا کردید!')}", f"{r.card.emoji} {r.card.name}"]
     lines += ["", "🎁 چیزهایی که به دست آوردید 👇"]
@@ -577,6 +581,16 @@ def pack_description(pack, now: int | None = None) -> str:  # noqa: ANN001 - Pac
             "شامل: بلیط طلایی این فصل.\nجایزه‌های ویژه‌ی همه‌ی مرحله‌ها برایتان باز شد؛ "
             "از «قهرمان من ← مسیر قهرمانی» دریافتشان کنید."
         )
+    if pack.boost_hours:
+        return (
+            f"شامل: {fa(pack.boost_hours)} ساعت بوست دو برابر.\n"
+            "در این مدت سکه و تجربه‌ی بازی و آیتم‌های ماجراجویی و شکار دو برابر می‌شود. خرید دوباره به زمان باقی‌مانده اضافه می‌شود."
+        )
+    if pack.xp:
+        return (
+            f"شامل: {fa(pack.xp)} تجربه.\n"
+            "همان لحظه به تجربه‌ی شما اضافه می‌شود؛ هرچه سطحتان پایین‌تر باشد، سطح بیشتری بالا می‌روید."
+        )
     if pack.vip_days:
         return (
             f"شامل: {fa(pack.vip_days)} روز اشتراک VIP.\n"
@@ -591,7 +605,10 @@ def pack_description(pack, now: int | None = None) -> str:  # noqa: ANN001 - Pac
 
 
 def delivery(order, granted: str = "") -> str:  # noqa: ANN001 - Order
-    body = f"🎲 این‌ها از بسته درآمد:\n{granted}" if granted else pack_description(order.pack)
+    if granted and order.pack.lucky:
+        body = f"🎲 این‌ها از بسته درآمد:\n{granted}"
+    else:
+        body = granted or pack_description(order.pack)
     return (
         f"✅ {bold('پرداخت موفق بود')}\n"
         f"{order.pack.label} به گنجینه‌ی شما رسید.\n\n{body}\n\n"
@@ -601,7 +618,8 @@ def delivery(order, granted: str = "") -> str:  # noqa: ANN001 - Order
 
 SECTION_NAMES = {
     "coins": "بسته‌ی سکه", "crystals": "بسته‌ی کریستال", "bundles": "بسته‌ی ویژه",
-    "materials": "منابع", "lucky": "بسته‌ی شانسی روزانه", "deal": "تخفیف روز",
+    "materials": "منابع", "lucky": "بسته‌ی شانسی روزانه", "deal": "تخفیف روز", "boost": "بوست دو برابر",
+    "xp": "بسته‌ی تجربه",
 }
 
 

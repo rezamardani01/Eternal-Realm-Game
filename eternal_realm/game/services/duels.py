@@ -236,6 +236,8 @@ class DuelService:
                     payout.xp = b.duel_win_xp
                 elif lost or battle.winner is None:
                     payout.xp = b.duel_lose_xp
+            boost = await self.players.boost_factor(tx, pid)
+            payout.gold, payout.xp = payout.gold * boost, payout.xp * boost
             if payout.gold:
                 await wallet.apply(
                     tx, pid, gold=payout.gold, reason="duel_win", now=now, ref=f"duel:{duel.id}:{pid}"

@@ -426,6 +426,8 @@ class BossService:
             pid, share = r["player_id"], weights[r["player_id"]] / total
             gold = max(round(40 * factor), round(pool * share))
             xp = round((60 + 10 * row["level"]) * (0.5 + share) * factor)
+            boost = await self.players.boost_factor(tx, pid)
+            gold, xp = gold * boost, xp * boost
             await wallet.apply(tx, pid, gold=gold, reason="boss_reward", now=now, ref=f"boss:{row['id']}:{pid}")
             level_up = await self.players.grant_xp(tx, pid, xp)
             await clan_repo.add_war_points(tx, pid, round((10 + 60 * share) * factor), now)

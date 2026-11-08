@@ -177,7 +177,9 @@ class DungeonService:
                 await season_repo.add_points(tx, player.id, "dungeon", self.ctx.now())
                 if not died:
                     await season_repo.add_points(tx, player.id, "dungeon_win", self.ctx.now())
-                view.paid_gold, view.paid_xp = round(gold * share), round(xp * share)
+                boost = await self.players.boost_factor(tx, player.id)
+                view.paid_gold, view.paid_xp = round(gold * share) * boost, round(xp * share) * boost
+                loot = {item_id: qty * boost for item_id, qty in loot.items()}
                 now = self.ctx.now()
                 await wallet.apply(
                     tx, player.id, gold=view.paid_gold, reason="dungeon", now=now, ref=f"dungeon:{player.id}:{now}"

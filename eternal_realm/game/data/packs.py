@@ -27,6 +27,10 @@ class Pack:
     season: bool = False
     #: days of VIP the pack adds
     vip_days: int = 0
+    #: hours of the 2x reward boost the pack adds
+    boost_hours: int = 0
+    #: experience the pack gives (applied to the buyer's current level)
+    xp: int = 0
 
     @property
     def price_toman(self) -> int:
@@ -47,7 +51,14 @@ SECTIONS = {
     "services": "🎫 خدمات",
     "path": "🎟️ مسیر قهرمانی",
     "vip": "💠 اشتراک VIP",
+    "boost": "🚀 بوست دو برابر",
+    "xp": "⭐ بسته‌های تجربه",
 }
+
+#: experience packs stop working above this level, and each player may buy this many a week
+XP_PACK_MAX_LEVEL = 40
+XP_PACK_WEEKLY_LIMIT = 3
+BOOST_FACTOR = 2
 
 PACKS: dict[str, Pack] = {
     p.id: p
@@ -89,6 +100,12 @@ PACKS: dict[str, Pack] = {
         Pack("pet_dragon", "🐲", "حیوان همراه: اژدهای کوچک", 900_000, pet="dragon", section="pets"),
         Pack("season_ticket", "🎟️", "بلیط مسیر قهرمانی (این فصل)", 499_000, season=True, section="path"),
         Pack("vip_30", "💠", "اشتراک VIP ۳۰ روزه", 199_000, vip_days=30, section="vip"),
+        Pack("boost_24", "🚀", "بوست دو برابر ۲۴ ساعته", 60_000, boost_hours=24, section="boost"),
+        Pack("boost_48", "🚀", "بوست دو برابر ۴۸ ساعته", 100_000, boost_hours=48, section="boost"),
+        Pack("boost_72", "🚀", "بوست دو برابر ۷۲ ساعته", 130_000, boost_hours=72, section="boost"),
+        Pack("xp_s", "⭐", "بسته‌ی تجربه‌ی کوچک", 40_000, xp=1_500, section="xp"),
+        Pack("xp_m", "🌟", "بسته‌ی تجربه‌ی متوسط", 120_000, xp=6_000, section="xp"),
+        Pack("xp_l", "✨", "بسته‌ی تجربه‌ی بزرگ", 300_000, xp=20_000, section="xp"),
         Pack("svc_rename", "🏷️", "برگه‌ی تغییر نام", 40_000, items={"rename_ticket": 1}, section="services"),
         Pack("svc_race", "🧬", "برگه‌ی تغییر نژاد", 100_000, items={"race_ticket": 1}, section="services"),
         Pack("svc_class", "⚔️", "برگه‌ی تغییر کلاس", 100_000, items={"class_ticket": 1}, section="services"),

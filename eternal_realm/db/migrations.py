@@ -506,6 +506,10 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_bet_duels_status ON bet_duels (status, expires_at);
     CREATE INDEX idx_bet_duels_duel ON bet_duels (duel_id);
     """,
+    # 36: the 2x reward boost (bought in 24/48/72 hour packs)
+    """
+    ALTER TABLE players ADD COLUMN boost_until INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

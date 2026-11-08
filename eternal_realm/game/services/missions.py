@@ -104,6 +104,10 @@ class MissionService:
             fresh = await player_repo.get(tx, player.id)
             assert fresh is not None
             gold = reward_for(kind, fresh.level)
+            if fresh.boost_until > now:  # the bought 2x boost is running
+                from ..data.packs import BOOST_FACTOR
+
+                gold *= BOOST_FACTOR
             await tx.execute(
                 "UPDATE daily_missions SET claimed = 1 WHERE player_id = ? AND day = ? AND slot = ?",
                 (player.id, day, slot),

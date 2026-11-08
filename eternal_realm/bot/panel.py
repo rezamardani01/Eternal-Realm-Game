@@ -1033,6 +1033,8 @@ PREMIUM_SECTIONS = {
     "vip": ("💠", "اشتراک VIP", "راحتی بیشتر برای ۳۰ روز؛ هیچ قدرت رزمی نمی‌دهد. جزئیات کامل را در «اشتراک VIP» ببینید."),
     "path": ("🎟️", "بلیط مسیر قهرمانی", "بلیط این فصل، جایزه‌های ویژه‌ی ۱۰۰ مرحله را باز می‌کند (سکه، کریستال، صندوقچه و عنوان «اسطوره‌ی فصل»). جایزه‌های رایگان برای همه هست؛ بلیط کاملاً اختیاری است."),
     "pets": ("🐱", "حیوان خانگی", "یک یار وفادار که در نبردها کنارتان می‌ماند و کمی قوی‌ترتان می‌کند. محتوا ثابت است؛ شانسی در کار نیست."),
+    "boost": ("🚀", "بوست دو برابر", "برای مدتی که انتخاب می‌کنید، هر چه می‌گیرید دو برابر می‌شود."),
+    "xp": ("⭐", "بسته‌های تجربه", "سریع‌تر سطح بالا بروید و زودتر به آیتم‌ها و مرحله‌های تازه برسید."),
 }
 
 
@@ -1056,6 +1058,7 @@ async def premium(c: Ctx) -> Screen:
         [c.btn("🎁 خرید بسته", "prem", "bundles"), c.btn("📦 خرید صندوق", "prem", "chests")],
         [c.btn("⛓️ خرید منابع", "prem", "materials"), c.btn("🐱 حیوان خانگی", "prem", "pets")],
         [c.btn("🎫 خدمات قهرمان", "prem", "services"), c.btn("🎟️ مسیر قهرمانی", "prem", "path")],
+        [c.btn("🚀 بوست دو برابر", "prem", "boost", style="primary"), c.btn("⭐ بسته‌های تجربه", "prem", "xp", style="primary")],
         [c.btn("💠 اشتراک VIP", "vip")],
         [c.btn("🏷️ تخفیف‌های امروز", "deals", style="success")],
         c.back("home"),
@@ -1110,6 +1113,61 @@ async def lucky_odds(c: Ctx) -> Screen:
     return Screen(views.lucky_odds(lucky.theme_of_day(c.services.ctx.now())), [c.back("prem", "🔙 بازگشت", "bundles")])
 
 
+def _boost_or_xp_section(c: Ctx, p) -> Screen:  # noqa: ANN001 - Player
+    """The two sections that sell speed: the 2x boost, and experience packs sized by the buyer's own level."""
+    from ..game.data.packs import XP_PACK_MAX_LEVEL, XP_PACK_WEEKLY_LIMIT
+    from ..game.engine import progression
+
+    now = c.services.ctx.now()
+    balance = c.services.ctx.balance
+    enabled = c.services.ctx.settings.payments_enabled
+    emoji, title, blurb = PREMIUM_SECTIONS[c.a]
+    lines = [f"{emoji} {bold(title)}", "", blurb, ""]
+    rows = []
+    packs = [x for x in PACKS.values() if x.section == c.a]
+    if c.a == "boost":
+        lines += [
+            "🪙 سکه، ⭐ تجربه و 📦 آیتم‌های ماجراجویی و شکار دو برابر می‌شود",
+            "🐉 سکه و تجربه‌ی باس، دوئل، سیاه‌چال، داستان، مأموریت و جایزه‌ی روزانه هم دو برابر است",
+            "💎 کریستال دو برابر نمی‌شود",
+            "➕ خرید دوباره به زمان باقی‌مانده اضافه می‌شود",
+            "",
+        ]
+        if p.boost_until > now:
+            lines += [f"🚀 بوست شما فعال است؛ {duration(p.boost_until - now)} مانده", ""]
+        for pack in packs:
+            lines += [f"• {pack.label} — {fa(pack.price_toman)} تومان", f"   ⏳ {fa(pack.boost_hours)} ساعت · ساعتی {fa(round(pack.price_toman / pack.boost_hours))} تومان", ""]
+    else:
+        lines += [
+            "📈 هر بسته مقدار ثابتی تجربه می‌دهد؛ برای قهرمان‌های تازه‌کار چند سطح و برای سطح‌های بالاتر کمتر",
+            f"🎚️ تا سطح {fa(XP_PACK_MAX_LEVEL)} کار می‌کند",
+            f"📅 هر هفته حداکثر {fa(XP_PACK_WEEKLY_LIMIT)} بسته",
+            "",
+            f"🧙 سطح شما: {bold(fa(p.level))}",
+            "",
+        ]
+        for pack in packs:
+            level, _, gained = progression.apply_xp(p.level, p.xp, pack.xp, balance)
+            lines += [
+                f"• {pack.label} — {fa(pack.price_toman)} تومان",
+                f"   ⭐ {fa(pack.xp)} تجربه · " + (
+                    f"برای شما حدود {fa(gained)} سطح (می‌رسید به {fa(level)})" if gained
+                    else f"برای شما حدود {fa(round(100 * pack.xp / progression.xp_needed(p.level, balance)))}٪ از یک سطح"
+                ),
+                "",
+            ]
+        if p.level > XP_PACK_MAX_LEVEL:
+            lines.append(f"⚠️ سطح شما از {fa(XP_PACK_MAX_LEVEL)} بیشتر است و این بسته‌ها دیگر برایتان کار نمی‌کند.")
+    if not enabled:
+        lines.append("🔒 خرید با پول واقعی فعلاً بسته است.")
+    else:
+        for pack in packs:
+            rows.append([Button.inline(f"{pack.label} — {fa(pack.price_toman)} تومان", BuyCb(kind="cash", id=pack.id), style="success")])
+        lines.append("👇 پس از زدن، فاکتور پرداخت بله برایتان می‌آید.")
+    rows.append(c.back("premium"))
+    return Screen("\n".join(lines), rows)
+
+
 @screen("prem")
 async def premium_section(c: Ctx) -> Screen:
     if c.is_group:
@@ -1132,6 +1190,8 @@ async def premium_section(c: Ctx) -> Screen:
         rows.append(c.back("premium"))
         return Screen("\n".join(lines), rows)
 
+    if c.a in ("boost", "xp"):
+        return _boost_or_xp_section(c, p)
     emoji, title, blurb = PREMIUM_SECTIONS.get(c.a, PREMIUM_SECTIONS["coins"])
     enabled = c.services.ctx.settings.payments_enabled
     lines = [f"{emoji} {bold(title)}", "", blurb, ""]

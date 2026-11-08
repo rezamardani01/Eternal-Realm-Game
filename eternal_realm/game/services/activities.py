@@ -30,6 +30,8 @@ class ActivityResult:
     #: seconds until this activity may be used again
     next_in: int = 0
     double_xp: bool = False
+    #: the player's bought 2x boost was running
+    boosted: bool = False
 
 
 class ActivityService:
@@ -77,6 +79,11 @@ class ActivityService:
             double = chat_id is not None and await event_repo.double_xp_active(tx, chat_id, now)
             if double:
                 rolled.xp *= 2
+            boost = await self.players.boost_factor(tx, player_id)
+            if boost > 1:  # coins, experience and every item are doubled (crystals are not)
+                rolled.gold *= boost
+                rolled.xp *= boost
+                rolled.items = {item_id: qty * boost for item_id, qty in rolled.items.items()}
             await wallet.apply(
                 tx, player_id, gold=rolled.gold, crystal=rolled.crystal,
                 reason=f"activity:{activity.id}", now=now,
@@ -90,4 +97,4 @@ class ActivityService:
             after = await player_repo.get(tx, player_id)
             assert after is not None
         items = [(get_item(i).label, q, i) for i, q in rolled.items.items()]
-        return ActivityResult(activity, rolled, level_up, self.players.with_energy(after), items, wait, double)
+        return ActivityResult(activity, rolled, level_up, self.players.with_energy(after), items, wait, double, boost > 1)

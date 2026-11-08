@@ -134,6 +134,14 @@ class PlayerService:
             player = await repo.get_by_name(tx, name)
         return self.with_energy(player) if player else None
 
+    # --- the 2x boost ---------------------------------------------------------------------------
+    async def boost_factor(self, tx: Tx, player_id: int) -> int:
+        """2 while the player's bought boost runs, else 1. Used wherever coins, experience or loot are paid."""
+        from ..data.packs import BOOST_FACTOR
+
+        until = int(await tx.scalar("SELECT boost_until FROM players WHERE id = ?", (player_id,), 0))
+        return BOOST_FACTOR if until > self.ctx.now() else 1
+
     # --- energy and experience (called inside the caller's transaction) -----------------------
     def is_owner(self, player: Player) -> bool:
         """The realm owner has no waiting times, energy cost or daily limits."""
@@ -218,6 +226,7 @@ class PlayerService:
             streak = player.daily_streak + 1 if player.daily_at and elapsed < 2 * DAY else 1
             bonus = min(streak, balance.daily_streak_cap) - 1
             gold = balance.daily_gold + balance.daily_gold_per_level * player.level + 50 * bonus
+            gold *= await self.boost_factor(tx, player_id)
             await wallet.apply(
                 tx, player_id, gold=gold, reason="daily", now=now, ref=f"daily:{player_id}:{now // DAY}"
             )

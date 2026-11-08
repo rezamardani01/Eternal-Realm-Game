@@ -227,6 +227,8 @@ class GroupDungeonService:
             share = (h.damage + h.absorbed) / total
             gold = max(round(40 * factor), round(pool * share))
             xp = round((70 + 12 * avg) * (0.5 + share) * factor)
+            boost = await self.players.boost_factor(tx, h.pid)
+            gold, xp = gold * boost, xp * boost
             await wallet.apply(
                 tx, h.pid, gold=gold, reason="gdungeon", now=now, ref=f"gdungeon:{row['id']}:{h.pid}"
             )

@@ -12,7 +12,7 @@ from ...game.services.invites import GIFT_PACKS
 from ...game.data.pets import PETS
 from ...game.services.events import EventAction
 from ...shared.errors import GameError
-from ...shared.text import bold, fa, to_int
+from ...shared.text import bold, duration, fa, to_int
 from .. import events as events_ui
 from ..invite_panel import box_button, notify_box
 from .context import CommandContext
@@ -37,6 +37,7 @@ OWNER_COMMANDS = """\
 • اهدا سنگ آهن 399 — هر آیتم با نام و تعداد
 • اهدا بسته کوچک | متوسط | بزرگ | ماجراجو — صندوق با دکمه‌ی باز کردن
 • اهدا برگه تغییر نام | نژاد | کلاس
+• اهدا بوست 24 — بوست دو برابر (ساعت)
 • اهدا سطح 40 — تعیین سطح
 • اهدا انرژی — پر کردن انرژی
 • اهدا ریست — پاک شدن همه‌ی زمان‌های انتظار
@@ -143,6 +144,19 @@ _ticket_command("gift_race_ticket", "اهدا برگه تغییر نژاد", "ra
                 "از «قهرمان من ← ارتقای قهرمان ← خدمات» مصرفش کنید.")
 _ticket_command("gift_class_ticket", "اهدا برگه تغییر کلاس", "class_ticket", "⚔️", "برگه‌ی تغییر کلاس",
                 "از «قهرمان من ← ارتقای قهرمان ← خدمات» مصرفش کنید.")
+
+
+@command("gift_boost", ["اهدا بوست"], "(مالک) اهدای بوست دو برابر: اهدا بوست 24", **_OPTIONS)
+async def gift_boost(ctx: CommandContext) -> None:
+    if not _owner(ctx):
+        return
+    hours = to_int(ctx.args[0]) if ctx.args else None
+    if hours is None:
+        raise GameError("ساعت را بنویسید؛ مثال: «اهدا بوست 24»")
+    target = await _target(ctx)
+    until = await ctx.services.admin.give_boost(ctx.user.id, target.id, hours)
+    left = until - ctx.services.ctx.now()
+    await _announce(ctx, target, f"🚀 {fa(hours)} ساعت بوست دو برابر", f"بوست شما {duration(left)} دیگر فعال است؛ سکه، تجربه و غنیمت‌ها دو برابر می‌شود.")
 
 
 @command("gift_level", ["اهدا سطح"], "(مالک) تعیین سطح: اهدا سطح 40", **_OPTIONS)

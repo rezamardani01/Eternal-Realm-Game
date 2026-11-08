@@ -110,6 +110,18 @@ class AdminService:
             await self._log(tx, admin_id, "set_level", f"{player.name} -> {level}")
             return player
 
+    async def give_boost(self, admin_id: int, player_id: int, hours: int) -> int:
+        """Add ``hours`` of the 2x boost (it stacks on what is left). Returns when the boost now ends."""
+        if not 1 <= hours <= 720:
+            raise GameError("ساعت بوست باید بین ۱ تا ۷۲۰ باشد.")
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            player = await self._by_id(tx, player_id)
+            until = max(player.boost_until, now) + hours * 3600
+            await tx.execute("UPDATE players SET boost_until = ? WHERE id = ?", (until, player.id))
+            await self._log(tx, admin_id, "give_boost", f"{player.name} +{hours}h")
+            return until
+
     async def rename_id(self, admin_id: int, player_id: int, new_name: str) -> Player:
         """Give a hero a new (already validated and free) name."""
         async with self.ctx.db.transaction() as tx:

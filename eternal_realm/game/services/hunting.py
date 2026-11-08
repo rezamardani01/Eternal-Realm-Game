@@ -48,6 +48,7 @@ class HuntResult:
     next_in: int = 0
     double_xp: bool = False
     card: object | None = None
+    boosted: bool = False
 
 
 class HuntService:
@@ -106,6 +107,10 @@ class HuntService:
             double = chat_id is not None and await event_repo.double_xp_active(tx, chat_id, now)
             if double:
                 xp *= 2
+            boost = await self.players.boost_factor(tx, player_id)
+            if boost > 1:
+                gold, xp = gold * boost, xp * boost
+                items = {item_id: qty * boost for item_id, qty in items.items()}
             await wallet.apply(tx, player_id, gold=gold, reason="hunt", now=now)
             for item_id, qty in items.items():
                 await self.inventory.grant(tx, player_id, item_id, qty)
@@ -122,5 +127,5 @@ class HuntService:
             monster=monster, won=won, rounds=min(battle.round, battle.max_rounds),
             hero_hp=max(0, hero.hp), hero_max_hp=hero.max_hp, gold=gold, xp=xp,
             items=[(get_item(i).label, q, i) for i, q in items.items()], level_up=level_up,
-            player=self.players.with_energy(after), highlights=log[-3:], log=log, next_in=wait, double_xp=double, card=card,
+            player=self.players.with_energy(after), highlights=log[-3:], log=log, next_in=wait, double_xp=double, card=card, boosted=boost > 1,
         )
