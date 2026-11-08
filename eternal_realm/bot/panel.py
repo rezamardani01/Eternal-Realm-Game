@@ -668,8 +668,8 @@ async def shop_category(c: Ctx) -> Screen:
     page = _int(c.b or "0", "صفحه")
     chunk, prev, nxt = _page(goods, page)
     owned = {p_.item.id for p_ in (await c.services.inventory.view(c.player.id)).gear} if want_gear else set()
-    rows = [
-        [c.btn(f"{i.label} — " + ("دارید ✔" if i.id in owned else f"{fa(i.buy)}🪙"), "shopitem", i.id, c.a)]
+    rows = [  # two columns: the item, then its price (or «owned»); both open the item
+        [c.btn(i.label, "shopitem", i.id, c.a), c.btn("دارید ✔" if i.id in owned else f"🪙 {fa(i.buy)}", "shopitem", i.id, c.a)]
         for i in chunk
     ]
     # paging keeps the category in `a` and the page in `b`

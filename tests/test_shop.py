@@ -138,3 +138,15 @@ async def test_selling_a_stack_needs_confirmation(services, db, h):
     assert "تأیید فروش" in h.session.last_text() and (await services.players.require(10)).gold == before
     await h.tap(10, "بله، بفروش")
     assert (await services.players.require(10)).gold == before + 4 * get_item("stone").sell
+
+
+async def test_shop_categories_have_two_columns_name_and_price(h, services):
+    await services.players.register(7, "u", "آرش", "elf", "archer")
+    await h.say(7, "فروشگاه", group=True)
+    for category in ("سلاح و زره", "معجون"):
+        await h.tap(7, category, group=True)
+        rows = [row for row in h.session.last_markup_rows() if any("shopitem" in b.get("callback_data", "") for b in row)]
+        assert rows and all(len(row) == 2 for row in rows)
+        assert all(row[0]["callback_data"] == row[1]["callback_data"] for row in rows)  # both buttons open the item
+        assert any(("🪙" in row[1]["text"] or "دارید" in row[1]["text"]) for row in rows)
+        await h.tap(7, "بازگشت", group=True)
