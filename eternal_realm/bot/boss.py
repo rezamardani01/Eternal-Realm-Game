@@ -1,7 +1,8 @@
-"""Group boss UI: posting the boss message, the hit buttons and the end-of-fight announcement."""
+"""Group boss UI: sign-up message, join/start buttons and the loop that plays the fights."""
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 
@@ -9,8 +10,7 @@ from baleropy import Bot, Router
 from baleropy.exceptions import BaleAPIError
 from baleropy.types import CallbackQuery, Message
 
-from ..game.services.bosses import BossView
-from ..shared.text import fa
+from ..game.services.bosses import BossUpdate, BossView
 from . import keyboards, views
 from .callbacks import BossCb
 from .services import Services
@@ -19,40 +19,72 @@ log = logging.getLogger("eternal_realm.boss")
 router = Router(name="boss")
 
 
-def buttons_for(services: Services, view: BossView) -> keyboards.Rows:
+def text_for(services: Services, view: BossView) -> str:
     b = services.ctx.balance
-    return keyboards.boss_buttons(view.id, b.boss_hit_energy, b.boss_heavy_energy)
+    if view.phase == "recruiting":
+        return views.boss_recruiting(view, b.boss_min_players, b.boss_max_players)
+    if view.phase == "fighting":
+        return views.boss_fight(view)
+    return views.boss_final(view)
 
 
-async def post(message: Message, services: Services, view: BossView, text: str | None = None) -> Message:
-    """Send the boss message to the chat and remember it, so it can be edited as the fight goes on."""
-    sent = await message.answer(text or views.boss_status(view), buttons=buttons_for(services, view))
+def buttons_for(view: BossView) -> keyboards.Rows | None:
+    return keyboards.boss_buttons(view.id) if view.phase == "recruiting" else None
+
+
+async def post(message: Message, services: Services, view: BossView) -> Message:
+    """Send the boss message and remember it, so the processor can keep editing it."""
+    text, buttons = text_for(services, view), buttons_for(view)
+    sent = await message.answer(text, buttons=buttons) if buttons else await message.answer(text)
     await services.bosses.attach_message(view.id, sent.message_id)
     return sent
+
+
+async def _edit(bot: Bot, services: Services, view: BossView) -> None:
+    if view.message_id is None:
+        return
+    text, buttons = text_for(services, view), buttons_for(view)
+    with contextlib.suppress(BaleAPIError):  # a missed edit is harmless: the next report fixes it
+        if buttons:
+            await bot.edit_message_text(view.chat_id, view.message_id, text, buttons=buttons)
+        else:
+            await bot.edit_message_text(view.chat_id, view.message_id, text)
 
 
 @router.callback_query(BossCb.filter())
 async def on_boss_button(query: CallbackQuery, callback_data: BossCb, services: Services) -> None:
     player = await services.players.require(query.from_user.id)
-    result = await services.bosses.hit(callback_data.id, player, heavy=callback_data.action == "heavy")
-    view = result.view
-    last = (
-        f"{'💥' if result.heavy else '⚔️'} {player.name}: {fa(result.damage)} آسیب"
-        + (" (ضربه‌ی کاری!)" if result.crit else "")
-    )
+    if callback_data.action == "join":
+        view = await services.bosses.join(callback_data.id, player)
+        toast = "⚔️ به نبرد پیوستید!"
+    elif callback_data.action == "start":
+        view = await services.bosses.start(callback_data.id, player)
+        toast = "🚀 نبرد شروع شد!"
+    else:
+        await query.answer()
+        return
     if query.message is not None:
-        with contextlib.suppress(BaleAPIError):  # many players tap at once; a missed edit is harmless
-            if result.finished:
-                await query.message.edit_text(views.boss_final(view))
+        text, buttons = text_for(services, view), buttons_for(view)
+        with contextlib.suppress(BaleAPIError):
+            if buttons:
+                await query.message.edit_text(text, buttons=buttons)
             else:
-                await query.message.edit_text(views.boss_status(view, last), buttons=buttons_for(services, view))
-    toast = f"{'💥' if result.heavy else '⚔️'} {fa(result.damage)} آسیب زدید" + (" — ضربه‌ی کاری!" if result.crit else "")
+                await query.message.edit_text(text)
     await query.answer(toast)
 
 
-async def announce_expired(bot: Bot, services: Services) -> None:
-    """Called by the janitor: bosses that ran out of time flee and their message says so."""
-    for view in await services.bosses.expire_stale():
-        if view.message_id is not None:
-            with contextlib.suppress(BaleAPIError):
-                await bot.edit_message_text(view.chat_id, view.message_id, views.boss_final(view))
+async def apply_updates(bot: Bot, services: Services, updates: list[BossUpdate]) -> None:
+    for update in updates:
+        await _edit(bot, services, update.view)
+
+
+async def processor(bot: Bot, services: Services, interval: float = 3.0) -> None:
+    """The single central loop: every few seconds advance whichever fights are due."""
+    while True:
+        try:
+            await apply_updates(bot, services, await services.bosses.process_due())
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("boss processor failed")
+        await asyncio.sleep(interval)

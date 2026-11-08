@@ -150,7 +150,7 @@ async def boss_panel(c: Ctx) -> Screen:
         f"🐉 {bold('احضار باس')}\n\n"
         f"هزینه: {bold(fa(b.boss_summon_gold))} سکه\n"
         f"از سطح {fa(b.boss_min_level)} · هر گروه هر {duration(b.boss_cooldown_seconds)} یک باس\n\n"
-        "همه‌ی اعضا می‌توانند به باس ضربه بزنند و پاداش را به نسبت ضربه‌هایشان می‌برند.\n\n"
+        "همه‌ی اعضا می‌پیوندند، نبرد خودکار انجام می‌شود و پاداش به نسبت سهم هر نفر تقسیم می‌شود.\n\n"
         "احضار کنیم؟"
     )
     return Screen(text, [[c.btn("🐉 احضار", "bsummon", style="danger"), c.btn("↩️ نه", "home")]])
@@ -162,7 +162,7 @@ async def boss_summon(c: Ctx) -> Screen:
 
     view = await c.services.bosses.summon(c.player, c.chat_id)
     if c.message is not None:
-        await boss_ui.post(c.message, c.services, view, views.boss_summoned(view, c.player.name))
+        await boss_ui.post(c.message, c.services, view)
     return Screen(f"🐉 {bold('باس احضار شد')}\n\nپیامش را در پایین ببینید 👇", [c.back("home")])
 
 

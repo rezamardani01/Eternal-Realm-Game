@@ -61,11 +61,11 @@ def result_rows(
     return rows
 
 
-def boss_buttons(boss_id: int, hit_energy: int, heavy_energy: int) -> Rows:
+def boss_buttons(boss_id: int) -> Rows:
     return [
         [
-            Button.inline(f"⚔️ حمله · {fa(hit_energy)}⚡", BossCb(action="hit", id=boss_id), style="primary"),
-            Button.inline(f"💥 حمله سنگین · {fa(heavy_energy)}⚡", BossCb(action="heavy", id=boss_id), style="danger"),
+            Button.inline("⚔️ پیوستن به نبرد", BossCb(action="join", id=boss_id), style="success"),
+            Button.inline("🚀 شروع نبرد", BossCb(action="start", id=boss_id), style="danger"),
         ]
     ]
 

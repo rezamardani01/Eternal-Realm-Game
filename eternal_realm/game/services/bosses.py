@@ -1,27 +1,44 @@
-"""Group bosses: summon, hit together, share the rewards by damage."""
+"""Group bosses: summon, sign up, then the bot plays the fight round by round.
+
+Nothing runs per boss in memory. The whole fight lives in the database (a JSON snapshot plus the
+time of the next round), and one central processor, :meth:`BossService.process_due`, advances every
+fight that is due. A restart simply continues from the stored state.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import json
+from dataclasses import asdict, dataclass, field
 
 from ...context import AppContext
 from ...db.database import Row, Tx
 from ...db.repos import bosses as repo
-from ...db.repos import inventory as inv_repo
-from ...db.repos import players as player_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError, NotRegistered
 from ...shared.text import duration, fa
-from ..data.bosses import BOSSES, BossType, boss_for_level
+from ..data.bosses import (
+    BossType,
+    boss_attack,
+    boss_by_id,
+    boss_defense,
+    boss_for_level,
+    boss_max_hp,
+)
+from ..data.classes import CLASSES
+from ..engine.boss_fight import Boss, Hero, is_over, run_round
 from ..models import Player
 from .characters import CharacterService
 from .inventory import InventoryService
 from .players import PlayerService
 
+MAX_CATCH_UP_ROUNDS = 3
+REPORT_LINES = 7
+
 
 @dataclass
 class Payout:
     name: str
+    mention: str
     damage: int
     share: float
     gold: int
@@ -31,33 +48,54 @@ class Payout:
 
 
 @dataclass
+class FighterView:
+    name: str
+    mention: str
+    emoji: str
+    hp: int
+    max_hp: int
+    alive: bool
+    damage: int
+
+
+@dataclass
 class BossView:
     id: int
     chat_id: int
     message_id: int | None
     type: BossType
     level: int
+    phase: str  # recruiting | fighting | ended
+    status: str  # active | defeated | expired
     hp: int
     max_hp: int
-    status: str
+    summoner: str
+    summoner_mention: str
+    recruit_until: int
     expires_at: int
     now: int
-    top: list[tuple[str, int, int]] = field(default_factory=list)
-    participants: int = 0
+    round: int = 0
+    fighters: list[FighterView] = field(default_factory=list)
+    report: list[str] = field(default_factory=list)
     payouts: list[Payout] = field(default_factory=list)
+    #: how a finished fight ended: won | lost | fled | cancelled
+    outcome: str | None = None
 
     @property
     def seconds_left(self) -> int:
-        return max(0, self.expires_at - self.now)
+        end = self.recruit_until if self.phase == "recruiting" else self.expires_at
+        return max(0, end - self.now)
+
+    @property
+    def alive_count(self) -> int:
+        return sum(f.alive for f in self.fighters)
 
 
 @dataclass
-class HitResult:
+class BossUpdate:
     view: BossView
-    damage: int
-    crit: bool
-    heavy: bool
-    finished: bool
+    #: started | report | final | cancelled
+    kind: str
 
 
 class BossService:
@@ -69,29 +107,41 @@ class BossService:
         self.inventory = inventory
         self.characters = characters
 
-    # --- reading ------------------------------------------------------------------------------
-    async def _view(self, tx: Tx, row: Row, payouts: list[Payout] | None = None) -> BossView:
-        hitters = await repo.hitters(tx, row["id"])
-        boss_type = next(b for b in BOSSES if b.id == row["boss_type"])
+    # --- views --------------------------------------------------------------------------------
+    async def _view(
+        self, tx: Tx, row: Row, payouts: list[Payout] | None = None, outcome: str | None = None
+    ) -> BossView:
+        roster = await repo.fighters(tx, row["id"])
+        summoner = next((r for r in roster if r["player_id"] == row["summoner_id"]), None)
+        state = json.loads(row["state"] or "{}")
+        phase = "ended" if row["status"] != "active" else row["phase"]
         return BossView(
-            row["id"], row["chat_id"], row["message_id"], boss_type, row["level"], row["hp"], row["max_hp"],
-            row["status"], row["expires_at"], self.ctx.now(),
-            top=[(h["name"], h["damage"], h["hits"]) for h in hitters[:5]],
-            participants=len(hitters), payouts=payouts or [],
+            id=row["id"], chat_id=row["chat_id"], message_id=row["message_id"], type=boss_by_id(row["boss_type"]),
+            level=row["level"], phase=phase, status=row["status"], hp=row["hp"], max_hp=row["max_hp"],
+            summoner=summoner["name"] if summoner else "؟",
+            summoner_mention=f"[{summoner['name']}](uid:{summoner['platform_user_id']})" if summoner else "؟",
+            recruit_until=row["recruit_until"], expires_at=row["expires_at"], now=self.ctx.now(),
+            round=state.get("boss", {}).get("round", 0),
+            fighters=[
+                FighterView(
+                    r["name"], f"[{r['name']}](uid:{r['platform_user_id']})", CLASSES[r["class_id"]].emoji,
+                    r["hp"], r["max_hp"], bool(r["alive"]), r["damage"],
+                )
+                for r in roster
+            ],
+            report=state.get("recent", []), payouts=payouts or [], outcome=outcome,
         )
 
     async def active(self, chat_id: int) -> BossView | None:
         async with self.ctx.db.read() as tx:
             row = await repo.active_in_chat(tx, chat_id)
-            if row is None or row["expires_at"] <= self.ctx.now():
-                return None
-            return await self._view(tx, row)
+            return await self._view(tx, row) if row is not None else None
 
     async def attach_message(self, boss_id: int, message_id: int) -> None:
         async with self.ctx.db.transaction() as tx:
             await repo.set_message(tx, boss_id, message_id)
 
-    # --- summoning ----------------------------------------------------------------------------
+    # --- summon and sign-up ---------------------------------------------------------------------
     async def summon(self, player: Player, chat_id: int) -> BossView:
         b, now = self.ctx.balance, self.ctx.now()
         if player.level < b.boss_min_level:
@@ -101,80 +151,184 @@ class BossService:
             )
         async with self.ctx.db.transaction() as tx:
             current = await repo.active_in_chat(tx, chat_id)
-            if current is not None and current["expires_at"] > now:
-                raise GameError("🐉 در این گروه یک باس زنده است! پیامش را بالاتر ببینید یا «باس» را دوباره بنویسید.")
             if current is not None:
-                await self._settle(tx, current, "expired", now)
+                raise GameError("🐉 در این گروه یک باس زنده است! پیامش را بالاتر ببینید یا «باس» را دوباره بنویسید.")
             last = await repo.last_created(tx, chat_id)
             wait = last + b.boss_cooldown_seconds - now if last else 0
             if wait > 0:
                 raise GameError(f"⏳ باس بعدی این گروه تا {duration(wait)} دیگر آماده می‌شود. تا آن موقع قدرت جمع کنید!")
             await wallet.apply(tx, player.id, gold=-b.boss_summon_gold, reason="boss_summon", now=now)
             kind = boss_for_level(player.level)
-            boss_id = await repo.create(
-                tx, chat_id, kind.id, player.level, kind.max_hp(player.level), player.id, now,
-                now + b.boss_duration_seconds,
-            )
+            boss_id = await repo.create(tx, chat_id, kind.id, player.level, player.id, now, now + b.boss_recruit_seconds)
+            await self._enlist(tx, boss_id, player)
             row = await repo.get(tx, boss_id)
             assert row is not None
             return await self._view(tx, row)
 
-    # --- hitting ------------------------------------------------------------------------------
-    async def hit(self, boss_id: int, player: Player, heavy: bool = False) -> HitResult:
-        b, now, rng = self.ctx.balance, self.ctx.now(), self.ctx.rng
+    async def _enlist(self, tx: Tx, boss_id: int, player: Player) -> None:
+        stats = await self.characters.stats_in(tx, player)
+        if not await repo.add_fighter(tx, boss_id, player.id, stats.hp):
+            raise GameError("شما همین الان در این نبرد هستید، فرمانده!")
+
+    async def join(self, boss_id: int, player: Player) -> BossView:
+        b, now = self.ctx.balance, self.ctx.now()
         async with self.ctx.db.transaction() as tx:
             row = await repo.get(tx, boss_id)
             if row is None or row["status"] != "active":
-                raise GameError("🐉 این باس دیگر در میدان نیست.")
-            if row["expires_at"] <= now:
-                raise GameError("⌛ زمان نبرد با این باس تمام شد.")
-            key = f"boss:{boss_id}:{'h' if heavy else 'n'}"
-            until = await inv_repo.cooldown_until(tx, player.id, key)
-            if until > now:
-                raise GameError(f"⏳ دست‌هایتان خسته است! {duration(until - now)} دیگر دوباره ضربه بزنید.")
-            await self.players.spend_energy(tx, player.id, b.boss_heavy_energy if heavy else b.boss_hit_energy)
+                raise GameError("🐉 این نبرد تمام شده است.")
+            if row["phase"] != "recruiting" or row["recruit_until"] <= now:
+                raise GameError("⏳ ثبت‌نام این نبرد بسته شده؛ نبرد شروع شده یا در حال شروع است.")
+            if len(await repo.fighters(tx, boss_id)) >= b.boss_max_players:
+                raise GameError(f"👥 ظرفیت پر است! حداکثر {fa(b.boss_max_players)} جنگجو می‌توانند شرکت کنند.")
+            await self._enlist(tx, boss_id, player)
+            return await self._view(tx, row)
 
-            fresh = await player_repo.get(tx, player.id)
-            if fresh is None:
-                raise NotRegistered
-            stats = await self.characters.stats_in(tx, fresh)
-            offense = max(stats.atk, stats.magic * 0.8) * rng.uniform(0.9, 1.1)
-            crit = rng.random() < min(0.5, 0.05 + stats.luck * 0.003 + fresh.char_class.crit_bonus)
-            raw = offense * (1.5 if crit else 1.0) * (2.2 if heavy else 1.0) - BossType.defense(row["level"]) * 0.5
-            amount = min(max(1, round(raw)), row["hp"])
-            if not await repo.damage(tx, boss_id, amount):
-                raise GameError("🐉 این باس همین الان افتاد!")
-            await repo.add_hit(tx, boss_id, player.id, amount)
-            await inv_repo.set_cooldown(
-                tx, player.id, key, now + (b.boss_heavy_cooldown if heavy else b.boss_hit_cooldown)
+    async def start(self, boss_id: int, player: Player) -> BossView:
+        async with self.ctx.db.transaction() as tx:
+            row = await repo.get(tx, boss_id)
+            if row is None or row["status"] != "active":
+                raise GameError("🐉 این نبرد تمام شده است.")
+            if row["summoner_id"] != player.id:
+                raise GameError("🚀 فقط احضارکننده‌ی باس می‌تواند نبرد را شروع کند.")
+            if row["phase"] != "recruiting":
+                raise GameError("⚔️ نبرد همین الان در جریان است!")
+            return await self._begin(tx, row, self.ctx.now())
+
+    async def _begin(self, tx: Tx, row: Row, now: int) -> BossView:
+        b = self.ctx.balance
+        roster = await repo.fighters(tx, row["id"])
+        if len(roster) < b.boss_min_players:
+            raise GameError(
+                f"👥 برای شروع نبرد حداقل {fa(b.boss_min_players)} جنگجو لازم است؛ "
+                f"الان {fa(len(roster))} نفر هستید. دوستانتان را صدا بزنید!"
             )
-            fresh_row = await repo.get(tx, boss_id)
-            assert fresh_row is not None
-            finished = fresh_row["hp"] <= 0
-            payouts = await self._settle(tx, fresh_row, "defeated", now) if finished else None
-            if finished:
-                fresh_row = await repo.get(tx, boss_id)
-                assert fresh_row is not None
-            view = await self._view(tx, fresh_row, payouts)
-            return HitResult(view, amount, crit, heavy, finished)
+        heroes: list[Hero] = []
+        for r in roster:
+            player = await self.players_get(tx, r["player_id"])
+            stats = await self.characters.stats_in(tx, player)
+            heroes.append(
+                Hero(player.id, player.name, player.class_id, stats.hp, stats.hp, stats.atk, stats.defense,
+                     stats.magic, stats.speed, stats.luck)
+            )
+        avg_level = max(1, round(sum(r["level"] for r in roster) / len(roster)))
+        kind = boss_by_id(row["boss_type"])
+        hp = boss_max_hp(kind, len(roster), avg_level)
+        boss = Boss(kind.name, hp, hp, boss_attack(kind, avg_level), boss_defense(avg_level))
+        state = {"boss": asdict(boss), "heroes": [asdict(h) for h in heroes], "pending": [], "recent": [
+            f"⚔️ نبرد با {kind.name} آغاز شد!"
+        ]}
+        begun = await repo.begin_fight(
+            tx, row["id"], avg_level, hp, json.dumps(state, ensure_ascii=False), now,
+            now + b.boss_round_seconds, now + b.boss_fight_seconds,
+        )
+        if not begun:
+            raise GameError("⚔️ نبرد همین الان در جریان است!")
+        fresh = await repo.get(tx, row["id"])
+        assert fresh is not None
+        return await self._view(tx, fresh)
 
-    # --- ending -------------------------------------------------------------------------------
+    async def players_get(self, tx: Tx, player_id: int) -> Player:
+        from ...db.repos import players as player_repo
+
+        player = await player_repo.get(tx, player_id)
+        if player is None:
+            raise NotRegistered
+        return player
+
+    # --- the central processor ------------------------------------------------------------------
+    async def process_due(self) -> list[BossUpdate]:
+        """Advance every boss that needs it. Call this every few seconds from one place."""
+        now = self.ctx.now()
+        async with self.ctx.db.read() as tx:
+            ids = [r["id"] for r in await repo.all_active(tx)]
+        updates: list[BossUpdate] = []
+        for boss_id in ids:
+            async with self.ctx.db.transaction() as tx:
+                row = await repo.get(tx, boss_id)
+                if row is None or row["status"] != "active":
+                    continue
+                update = await self._process(tx, row, now)
+                if update is not None:
+                    updates.append(update)
+        return updates
+
+    async def _process(self, tx: Tx, row: Row, now: int) -> BossUpdate | None:
+        if row["phase"] == "recruiting":
+            if row["recruit_until"] > now:
+                return None
+            roster = await repo.fighters(tx, row["id"])
+            if len(roster) >= self.ctx.balance.boss_min_players:
+                return BossUpdate(await self._begin(tx, row, now), "started")
+            await repo.close(tx, row["id"], "expired", now)
+            await wallet.apply(
+                tx, row["summoner_id"], gold=self.ctx.balance.boss_summon_gold, reason="boss_refund", now=now,
+                ref=f"boss:{row['id']}:refund",
+            )
+            fresh = await repo.get(tx, row["id"])
+            assert fresh is not None
+            return BossUpdate(await self._view(tx, fresh, outcome="cancelled"), "cancelled")
+        return await self._advance(tx, row, now)
+
+    async def _advance(self, tx: Tx, row: Row, now: int) -> BossUpdate | None:
+        b, rng = self.ctx.balance, self.ctx.rng
+        state = json.loads(row["state"])
+        boss = Boss(**state["boss"])
+        heroes = [Hero(**h) for h in state["heroes"]]
+        pending: list[list] = state["pending"]
+        next_at, rounds, outcome = row["next_round_at"], 0, None
+        while next_at <= now and rounds < MAX_CATCH_UP_ROUNDS and outcome is None:
+            pending += [[prio, text] for prio, text in run_round(boss, heroes, rng)]
+            next_at += b.boss_round_seconds
+            rounds += 1
+            outcome = is_over(boss, heroes)
+        if next_at < now - b.boss_round_seconds:
+            next_at = now  # after a long outage do not hoard a backlog of rounds
+        if outcome is None and now >= row["expires_at"]:
+            outcome = "fled"
+        if rounds == 0 and outcome is None:
+            return None
+
+        for hero in heroes:
+            await repo.save_fighter(tx, row["id"], hero.pid, hero.hp, hero.alive, hero.damage, hero.absorbed)
+        state["boss"], state["heroes"] = asdict(boss), [asdict(h) for h in heroes]
+
+        report_due = now - row["last_report_at"] >= b.boss_report_seconds
+        if outcome is not None or report_due:
+            state["recent"] = _pick_report(pending)
+            state["pending"], last_report = [], now
+        else:
+            state["pending"], last_report = pending[-60:], row["last_report_at"]
+        await repo.save_fight(tx, row["id"], boss.hp, json.dumps(state, ensure_ascii=False), next_at, last_report)
+
+        if outcome is None:
+            if not report_due:
+                return None
+            fresh = await repo.get(tx, row["id"])
+            assert fresh is not None
+            return BossUpdate(await self._view(tx, fresh), "report")
+        status = "defeated" if outcome == "won" else "expired"
+        payouts = await self._settle(tx, row, status, now)
+        fresh = await repo.get(tx, row["id"])
+        assert fresh is not None
+        return BossUpdate(await self._view(tx, fresh, payouts, outcome), "final")
+
+    # --- rewards --------------------------------------------------------------------------------
     async def _settle(self, tx: Tx, row: Row, status: str, now: int) -> list[Payout]:
-        """Close the boss (once) and pay everyone who hit it. ``expired`` pays a small consolation."""
+        """Close the boss (once) and pay every fighter by contribution. A lost fight pays a consolation."""
         if not await repo.close(tx, row["id"], status, now):
             return []
         factor = 1.0 if status == "defeated" else 0.25
-        hitters = await repo.hitters(tx, row["id"])
-        total = sum(h["damage"] for h in hitters) or 1
+        roster = await repo.fighters(tx, row["id"])
+        weights = {r["player_id"]: r["damage"] + r["absorbed"] for r in roster}
+        total = sum(weights.values()) or 1
+        ranked = sorted(roster, key=lambda r: -weights[r["player_id"]])
         pool = round((500 + 100 * row["level"]) * factor)
         payouts: list[Payout] = []
-        for index, hitter in enumerate(hitters):
-            pid, share = hitter["player_id"], hitter["damage"] / total
+        for index, r in enumerate(ranked):
+            pid, share = r["player_id"], weights[r["player_id"]] / total
             gold = max(round(40 * factor), round(pool * share))
             xp = round((60 + 10 * row["level"]) * (0.5 + share) * factor)
-            await wallet.apply(
-                tx, pid, gold=gold, reason="boss_reward", now=now, ref=f"boss:{row['id']}:{pid}"
-            )
+            await wallet.apply(tx, pid, gold=gold, reason="boss_reward", now=now, ref=f"boss:{row['id']}:{pid}")
             level_up = await self.players.grant_xp(tx, pid, xp)
             chest = None
             if status == "defeated":
@@ -182,17 +336,14 @@ class BossService:
                 if chest:
                     await self.inventory.grant(tx, pid, chest, 1)
             payouts.append(
-                Payout(hitter["name"], hitter["damage"], share, gold, xp, chest, level_up.new_level if level_up else None)
+                Payout(r["name"], f"[{r['name']}](uid:{r['platform_user_id']})", r["damage"], share, gold, xp, chest,
+                       level_up.new_level if level_up else None)
             )
         return payouts
 
-    async def expire_stale(self) -> list[BossView]:
-        """Bosses nobody finished in time flee; their fighters get a small consolation."""
-        now, results = self.ctx.now(), []
-        async with self.ctx.db.transaction() as tx:
-            for row in await repo.stale(tx, now):
-                payouts = await self._settle(tx, row, "expired", now)
-                fresh = await repo.get(tx, row["id"])
-                assert fresh is not None
-                results.append(await self._view(tx, fresh, payouts))
-        return results
+
+def _pick_report(pending: list[list]) -> list[str]:
+    """The lines worth showing: the most important events, kept in the order they happened."""
+    indexed = list(enumerate(pending))
+    best = sorted(indexed, key=lambda item: (-item[1][0], -item[0]))[:REPORT_LINES]
+    return [text for _, (_, text) in sorted(best)]

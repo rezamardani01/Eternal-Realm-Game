@@ -185,6 +185,18 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (boss_id, player_id)
     );
     """,
+    # 9: boss fights became automatic: a sign-up phase, a stored simulation state and per-fighter health
+    """
+    ALTER TABLE bosses ADD COLUMN phase TEXT NOT NULL DEFAULT 'fighting';
+    ALTER TABLE bosses ADD COLUMN recruit_until INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE bosses ADD COLUMN next_round_at INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE bosses ADD COLUMN last_report_at INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE bosses ADD COLUMN state TEXT NOT NULL DEFAULT '{}';
+    ALTER TABLE boss_hits ADD COLUMN hp INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE boss_hits ADD COLUMN max_hp INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE boss_hits ADD COLUMN alive INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE boss_hits ADD COLUMN absorbed INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

@@ -1,4 +1,6 @@
 import asyncio
+import json
+import random
 
 import pytest
 
@@ -7,6 +9,10 @@ from eternal_realm.bot.services import Services
 from eternal_realm.config import Settings
 from eternal_realm.context import AppContext
 from eternal_realm.db.repos import wallet
+from eternal_realm.game.data.bosses import BOSSES, boss_attack, boss_defense, boss_max_hp
+from eternal_realm.game.data.classes import CLASSES
+from eternal_realm.game.engine import progression
+from eternal_realm.game.engine.boss_fight import Boss, Hero, is_over, run_round
 from eternal_realm.shared.errors import GameError
 
 from .harness import Harness
@@ -32,168 +38,306 @@ async def hero(services, db, uid, name, level=5, gold=1_000, cls="warrior"):
     return await services.players.require(uid)
 
 
-async def set_hp(db, boss_id, hp):
+async def squad(services, db, n=4):
+    """A summoner plus ``n - 1`` friends, all signed up for the same boss."""
+    names = ["آرش", "سارا", "رها", "امیر", "علی", "محمد", "نگار", "پویا", "مینا", "کیان"]
+    classes = list(CLASSES)
+    players = [await hero(services, db, 10 + i, names[i], cls=classes[i % 5], gold=5_000) for i in range(n)]
+    view = await services.bosses.summon(players[0], CHAT)
+    for p in players[1:]:
+        view = await services.bosses.join(view.id, await services.players.require(p.platform_user_id))
+    return players, view
+
+
+async def advance_until_ended(services, clock, limit=500):
+    updates = []
+    for _ in range(limit):
+        clock.advance(services.ctx.balance.boss_round_seconds)
+        batch = await services.bosses.process_due()
+        updates += batch
+        if any(u.kind in ("final", "cancelled") for u in batch):
+            return updates
+    raise AssertionError("fight did not end")
+
+
+async def edit_state(db, boss_id, change):
     async with db.transaction() as tx:
-        await tx.execute("UPDATE bosses SET hp = ? WHERE id = ?", (hp, boss_id))
+        row = await tx.fetchone("SELECT state, hp FROM bosses WHERE id = ?", (boss_id,))
+        state = json.loads(row["state"])
+        change(state)
+        await tx.execute(
+            "UPDATE bosses SET state = ?, hp = ? WHERE id = ?", (json.dumps(state), state["boss"]["hp"], boss_id)
+        )
 
 
-async def test_summon_rules(services, db, clock):
+# --- summoning and sign-up ----------------------------------------------------------------------
+async def test_summon_rules_and_cost(services, db, clock):
     rookie = await hero(services, db, 10, "تازه‌کار", level=1)
     with pytest.raises(GameError, match="سطح"):
         await services.bosses.summon(rookie, CHAT)
 
-    poor = await hero(services, db, 11, "آرش", level=5, gold=0)
+    poor = await hero(services, db, 11, "آرش", gold=0)
     async with db.transaction() as tx:
         await tx.execute("UPDATE players SET gold = 50 WHERE id = ?", (poor.id,))
     with pytest.raises(wallet.InsufficientFunds):
-        await services.bosses.summon(await services.players.require(11), CHAT)  # the ritual costs 200 gold
-    lead = await hero(services, db, 12, "سارا", level=5, gold=0)
+        await services.bosses.summon(await services.players.require(11), CHAT)
+
+    lead = await hero(services, db, 12, "سارا", gold=0)
     view = await services.bosses.summon(lead, CHAT)
-    assert view.hp == view.max_hp > 0 and view.status == "active"
+    assert view.phase == "recruiting" and len(view.fighters) == 1 and view.fighters[0].name == "سارا"
     assert (await services.players.require(12)).gold == services.ctx.balance.start_gold - 200
     with pytest.raises(GameError, match="باس زنده"):
         await services.bosses.summon(lead, CHAT)
 
 
-async def test_cooldown_between_bosses_in_the_same_group(services, db, clock):
-    lead = await hero(services, db, 10, "آرش", gold=5_000)
-    view = await services.bosses.summon(lead, CHAT)
-    clock.advance(services.ctx.balance.boss_duration_seconds + 1)  # it fled
-    with pytest.raises(GameError, match="باس بعدی"):
-        await services.bosses.summon(await services.players.require(10), CHAT)
-    clock.advance(services.ctx.balance.boss_cooldown_seconds)
-    again = await services.bosses.summon(await services.players.require(10), CHAT)
-    assert again.id != view.id
-    # another group is not affected
-    other = await services.bosses.summon(await services.players.require(10), -999)
-    assert other.chat_id == -999
+async def test_join_rules(services, db, clock):
+    players, view = await squad(services, db, 2)
+    with pytest.raises(GameError, match="همین الان"):
+        await services.bosses.join(view.id, await services.players.require(11))  # already in
+    capped = services.ctx.balance.__class__(**{**services.ctx.balance.__dict__, "boss_max_players": 2})
+    object.__setattr__(services.ctx.settings, "balance", capped)
+    third = await hero(services, db, 20, "رها")
+    with pytest.raises(GameError, match="ظرفیت"):
+        await services.bosses.join(view.id, third)
+    clock.advance(services.ctx.balance.boss_recruit_seconds + 1)
+    with pytest.raises(GameError, match="بسته شده"):
+        await services.bosses.join(view.id, third)
 
 
-async def test_hits_cost_energy_have_cooldowns_and_reduce_hp(services, db, clock):
-    lead = await hero(services, db, 10, "آرش", gold=5_000)
-    view = await services.bosses.summon(lead, CHAT)
-    hit = await services.bosses.hit(view.id, await services.players.require(10))
-    assert hit.damage > 0 and hit.view.hp == view.max_hp - hit.damage
-    assert (await services.players.require(10)).energy == lead.energy - services.ctx.balance.boss_hit_energy
-    with pytest.raises(GameError, match="خسته"):
-        await services.bosses.hit(view.id, await services.players.require(10))
-    heavy = await services.bosses.hit(view.id, await services.players.require(10), heavy=True)  # own cooldown
-    assert heavy.heavy
-    clock.advance(services.ctx.balance.boss_hit_cooldown + 1)
-    await services.bosses.hit(view.id, await services.players.require(10))
+async def test_only_the_summoner_starts_and_needs_enough_fighters(services, db):
+    players, view = await squad(services, db, 2)
+    with pytest.raises(GameError, match="فقط احضارکننده"):
+        await services.bosses.start(view.id, await services.players.require(11))
+    with pytest.raises(GameError, match="حداقل"):
+        await services.bosses.start(view.id, await services.players.require(10))
+
+    third = await hero(services, db, 20, "رها")
+    await services.bosses.join(view.id, third)
+    started = await services.bosses.start(view.id, await services.players.require(10))
+    assert started.phase == "fighting" and started.hp == started.max_hp > 0
+    with pytest.raises(GameError, match="در جریان"):
+        await services.bosses.start(view.id, await services.players.require(10))
+    with pytest.raises(GameError, match="بسته شده"):
+        await services.bosses.join(view.id, await hero(services, db, 21, "امیر"))
 
 
-async def test_defeating_the_boss_pays_by_damage_exactly_once(services, db, clock):
-    a = await hero(services, db, 10, "آرش", gold=5_000)
-    b = await hero(services, db, 11, "سارا", gold=0)
-    c = await hero(services, db, 12, "رها", gold=0)
-    view = await services.bosses.summon(a, CHAT)
-    await set_hp(db, view.id, 400)
-    await services.bosses.hit(view.id, await services.players.require(10))
-    await services.bosses.hit(view.id, await services.players.require(11))
-    await set_hp(db, view.id, 5)  # the last blow
-    done = await services.bosses.hit(view.id, await services.players.require(12))
+async def test_more_fighters_means_a_bigger_boss(services, db):
+    _, small = await squad(services, db, 3)
+    big_players = [await hero(services, db, 40 + i, f"ج{i}") for i in range(6)]
+    big = await services.bosses.summon(big_players[0], -777)
+    for p in big_players[1:]:
+        big = await services.bosses.join(big.id, p)
+    a = await services.bosses.start(small.id, await services.players.require(10))
+    b = await services.bosses.start(big.id, big_players[0])
+    assert b.max_hp > a.max_hp * 1.7
 
-    assert done.finished and done.view.status == "defeated" and done.view.hp == 0
-    names = [p.name for p in done.view.payouts]
-    assert set(names) == {"آرش", "سارا", "رها"} and abs(sum(p.share for p in done.view.payouts) - 1) < 1e-9
-    assert done.view.payouts[0].chest == "magic_chest"  # whoever hit hardest
-    paid = {p.name: p.gold for p in done.view.payouts}
-    assert all(g >= 40 for g in paid.values())
 
+async def test_recruiting_ends_by_itself_start_or_refund(services, db, clock):
+    players, view = await squad(services, db, 4)
+    clock.advance(services.ctx.balance.boss_recruit_seconds + 1)
+    updates = await services.bosses.process_due()
+    assert [u.kind for u in updates] == ["started"] and updates[0].view.phase == "fighting"
+
+    lonely = await hero(services, db, 60, "تنها", gold=0)
+    before = (await services.players.require(60)).gold
+    view = await services.bosses.summon(lonely, -888)
+    assert (await services.players.require(60)).gold == before - 200
+    clock.advance(services.ctx.balance.boss_recruit_seconds + 1)
+    cancelled = [u for u in await services.bosses.process_due() if u.view.chat_id == -888]
+    assert cancelled and cancelled[0].kind == "cancelled" and cancelled[0].view.outcome == "cancelled"
+    assert (await services.players.require(60)).gold == before  # the ritual fee came back
+    assert await services.bosses.process_due() == []
+
+
+# --- the automatic fight ------------------------------------------------------------------------
+async def test_rounds_run_on_a_timer_and_reports_are_throttled(services, db, clock):
+    players, view = await squad(services, db, 4)
+    await services.bosses.start(view.id, players[0])
+    assert await services.bosses.process_due() == []  # the first round is not due yet
+    kinds = []
+    for _ in range(8):
+        clock.advance(services.ctx.balance.boss_round_seconds)
+        kinds += [u.kind for u in await services.bosses.process_due()]
+    assert "report" in kinds
+    assert len(kinds) <= 3  # 40 seconds of fight, a report every 15 seconds at most
+
+
+async def test_a_won_fight_pays_everybody_exactly_once(services, db, clock):
+    players, view = await squad(services, db, 5)
+    await services.bosses.start(view.id, players[0])
+    await edit_state(db, view.id, lambda s: s["boss"].update(hp=300, max_hp=300, atk=3))
+    updates = await advance_until_ended(services, clock)
+    final = updates[-1]
+    assert final.kind == "final" and final.view.outcome == "won" and final.view.status == "defeated"
+    assert len(final.view.payouts) == 5 and abs(sum(p.share for p in final.view.payouts) - 1) < 1e-9
+    assert final.view.payouts[0].chest == "magic_chest"
     async with db.read() as tx:
         rewards = await tx.scalar("SELECT COUNT(*) FROM transactions WHERE reason = 'boss_reward'")
-    assert rewards == 3
-    with pytest.raises(GameError, match="دیگر"):
-        await services.bosses.hit(view.id, await services.players.require(10))
-    assert c
+    assert rewards == 5
+    assert await services.bosses.process_due() == []
+    assert await services.bosses.active(CHAT) is None
 
 
-async def test_two_final_blows_at_once_pay_a_single_time(services, db, clock):
-    a = await hero(services, db, 10, "آرش", gold=5_000)
-    b = await hero(services, db, 11, "سارا")
-    c = await hero(services, db, 12, "رها")
-    view = await services.bosses.summon(a, CHAT)
-    await services.bosses.hit(view.id, await services.players.require(10))
-    await set_hp(db, view.id, 3)
-    results = await asyncio.gather(
-        services.bosses.hit(view.id, await services.players.require(11)),
-        services.bosses.hit(view.id, await services.players.require(12)),
-        return_exceptions=True,
-    )
-    assert sum(not isinstance(r, Exception) for r in results) == 1
+async def test_a_wiped_out_squad_still_gets_a_consolation(services, db, clock):
+    players, view = await squad(services, db, 4)
+    await services.bosses.start(view.id, players[0])
+    await edit_state(db, view.id, lambda s: s["boss"].update(hp=10**9, max_hp=10**9, atk=9_999))
+    final = (await advance_until_ended(services, clock))[-1]
+    assert final.view.outcome == "lost" and final.view.status == "expired"
+    assert final.view.payouts and all(p.chest is None for p in final.view.payouts)
+    assert all(p.gold >= 10 for p in final.view.payouts)
+
+
+async def test_a_boss_that_outlasts_the_time_limit_flees(services, db, clock):
+    players, view = await squad(services, db, 3)
+    await services.bosses.start(view.id, players[0])
+    await edit_state(db, view.id, lambda s: s["boss"].update(hp=10**9, max_hp=10**9, atk=1))
+    await edit_state(db, view.id, lambda s: [x.update(hp=10**6, max_hp=10**6) for x in s["heroes"]])  # only the clock can end it
+    clock.advance(services.ctx.balance.boss_fight_seconds + 1)
+    ended = [u for u in await services.bosses.process_due() if u.kind == "final"]
+    assert ended and ended[0].view.outcome == "fled"
+
+
+async def test_the_fight_survives_a_restart(services, db, clock, rng):
+    players, view = await squad(services, db, 4)
+    await services.bosses.start(view.id, players[0])
+    clock.advance(30)
+    await services.bosses.process_due()
+    reborn = Services.build(AppContext(db, services.ctx.settings, clock=clock, rng=rng))  # a fresh process
+    clock.advance(10)
+    await reborn.bosses.process_due()
+    live = await reborn.bosses.active(CHAT)
+    assert live is None or live.round >= 6  # it carried on from the stored state, not from zero
+
+
+async def test_two_processors_at_once_never_pay_twice(services, db, clock):
+    players, view = await squad(services, db, 4)
+    await services.bosses.start(view.id, players[0])
+    await edit_state(db, view.id, lambda s: s["boss"].update(hp=1, max_hp=1))
+    clock.advance(services.ctx.balance.boss_round_seconds)
+    await asyncio.gather(services.bosses.process_due(), services.bosses.process_due())
     async with db.read() as tx:
         rewards = await tx.scalar("SELECT COUNT(*) FROM transactions WHERE reason = 'boss_reward'")
-    assert rewards == 2  # the first fighter and the one who landed the final blow, each once
-    assert b and c
+    assert rewards == 4
 
 
-async def test_a_boss_nobody_finished_flees_with_a_small_consolation(services, db, clock):
-    a = await hero(services, db, 10, "آرش", gold=5_000)
-    view = await services.bosses.summon(a, CHAT)
-    await services.bosses.hit(view.id, await services.players.require(10))
-    gold_before = (await services.players.require(10)).gold
-    clock.advance(services.ctx.balance.boss_duration_seconds + 1)
-    fled = await services.bosses.expire_stale()
-    assert len(fled) == 1 and fled[0].status == "expired"
-    assert fled[0].payouts and fled[0].payouts[0].chest is None
-    assert (await services.players.require(10)).gold > gold_before
-    assert await services.bosses.expire_stale() == []  # nothing is paid twice
+# --- the engine ---------------------------------------------------------------------------------
+def make_hero(i, cls, level=5):
+    st = progression.base_stats("human", cls, level)
+    return Hero(i, f"h{i}", cls, st.hp, st.hp, st.atk, st.defense, st.magic, st.speed, st.luck)
+
+
+def test_every_class_deals_damage_and_hp_stays_in_bounds():
+    rng = random.Random(1)
+    for cls in CLASSES:
+        boss = Boss("b", 10**6, 10**6, 20, 6)
+        heroes = [make_hero(0, cls), make_hero(1, "warrior")]
+        for _ in range(30):
+            run_round(boss, heroes, rng)
+        assert heroes[0].damage > 0, cls
+        assert all(0 <= h.hp <= h.max_hp for h in heroes) and boss.hp >= 0
+
+
+def test_guardians_protect_allies():
+    rng = random.Random(2)
+    boss = Boss("b", 10**6, 10**6, 25, 6)
+    heroes = [make_hero(0, "guardian"), make_hero(1, "mage"), make_hero(2, "archer")]
+    texts = []
+    for _ in range(40):
+        texts += [t for _, t in run_round(boss, heroes, rng)]
+    assert heroes[0].absorbed > 0 and any("جلوی ضربه‌ی باس" in t for t in texts)
+
+
+def test_rare_events_happen():
+    rng = random.Random(3)
+    boss = Boss("b", 10**7, 10**7, 40, 6)
+    heroes = [make_hero(i, c) for i, c in enumerate(CLASSES)]
+    texts = []
+    for _ in range(150):
+        texts += [t for _, t in run_round(boss, heroes, rng)]
+        if is_over(boss, heroes):
+            break
+    joined = " ".join(texts)
+    from tests.test_ui_rules import bad_lines
+
+    assert not [line for text in texts for line in bad_lines(text)]  # one emoji per line in the report too
+    for marker in ("نقطه‌ی ضعف", "از پا افتاد", "ضربه‌ی کاری", "جاخالی"):
+        assert marker in joined, marker
+
+
+def fight(n, level, kind, seed):
+    rng = random.Random(seed)
+    classes = list(CLASSES)
+    heroes = [make_hero(i, classes[i % 5], level) for i in range(n)]
+    hp = boss_max_hp(kind, n, level)
+    boss = Boss(kind.name, hp, hp, boss_attack(kind, level), boss_defense(level))
+    while boss.round < 400:
+        run_round(boss, heroes, rng)
+        if outcome := is_over(boss, heroes):
+            return outcome == "won"
+    return False
+
+
+def test_balance_a_decent_squad_wins_and_a_big_one_almost_always():
+    for level, kind in [(5, BOSSES[0]), (10, BOSSES[1]), (20, BOSSES[2])]:
+        five = sum(fight(5, level, kind, s) for s in range(40)) / 40
+        ten = sum(fight(10, level, kind, s) for s in range(40)) / 40
+        assert five >= 0.5, (level, five)
+        assert ten >= 0.9, (level, ten)
 
 
 # --- through the bot ----------------------------------------------------------------------------
-async def test_summon_and_fight_with_buttons_in_a_group(h, services, db):
+async def test_full_fight_in_a_group_with_buttons(h, services, db, clock):
+    names = ["آرش", "سارا", "رها", "امیر"]
+    for i, name in enumerate(names):
+        await hero(services, db, 10 + i, name, gold=5_000, cls=list(CLASSES)[i % 5])
+    await h.say(10, "احضار باس", group=True)
+    assert "بیدار شده است" in h.session.last_text() and "(uid:10)" in h.session.last_text()
+    join = h.button_data("پیوستن")
+    start = h.button_data("شروع")
+
+    await h.click(10, start, group=True)  # one fighter is not enough
+    assert any("حداقل" in a.get("text", "") for a in h.session.callback_answers())
+    await h.click(11, join, group=True)
+    await h.click(11, join, group=True)  # a double tap is harmless
+    await h.click(12, join, group=True)
+    assert "سارا" in h.session.last_text() and "رها" in h.session.last_text()
+    await h.click(11, start, group=True)  # only the summoner may start
+    assert any("فقط احضارکننده" in a.get("text", "") for a in h.session.callback_answers())
+
+    await h.click(10, start, group=True)
+    assert "نبرد با" in h.session.last_text() and not h.session.sent("editMessageText")[-1].get("reply_markup")
+
+    boss_id = (await services.bosses.active(-500)).id
+    await edit_state(db, boss_id, lambda s: s["boss"].update(hp=200, max_hp=200, atk=3))
+    for _ in range(300):
+        clock.advance(services.ctx.balance.boss_round_seconds)
+        await boss_ui.apply_updates(h.bot, services, await services.bosses.process_due())
+        if await services.bosses.active(-500) is None:
+            break
+    assert "شکست خورد" in h.session.last_text() and "آسیب" in h.session.last_text()
+    assert "(uid:" in h.session.last_text()
+
+
+async def test_boss_word_shows_the_live_boss_and_admins_can_disable_it(h, services, db):
     await hero(services, db, 10, "آرش", gold=5_000)
-    await hero(services, db, 11, "سارا")
     await h.say(10, "باس", group=True)
-    assert "ظاهر شد" in h.session.last_text()
-    assert any("حمله سنگین" in t for t in h.labels())
-
-    hit = h.button_data("حمله")
-    await h.click(10, hit, group=True)
-    assert "آسیب" in h.session.last_text() and "آرش" in h.session.last_text()
-    await h.click(11, hit, group=True)
-    assert "سارا" in h.session.last_text()
-
-    h.session.reset()
-    await h.say(10, "باس", group=True)  # while alive, the same boss is shown again
-    assert "برترین ضربه‌ها" in h.session.last_text()
-    boss_id = (await services.bosses.active(CHAT)).id
-    await set_hp(db, boss_id, 1)
-    await h.click(10, hit, group=True)  # 10 is on cooldown ...
-    await h.click(11, h.button_data("سنگین"), group=True)  # ... 11 lands the final blow
-    assert "شکست خورد" in h.session.last_text()
-    assert h.session.sent("editMessageText")[-1].get("reply_markup") is None  # the fight is over: no buttons
-
-
-async def test_unregistered_players_cannot_hit_and_group_can_switch_bosses_off(h, services, db):
-    await hero(services, db, 10, "آرش", gold=5_000)
-    await h.say(10, "باس", group=True)
-    await h.click(77, h.button_data("حمله"), group=True)
-    assert any("قهرمان" in a.get("text", "") or "ماجراجوی ناشناس" in a.get("text", "") for a in h.session.callback_answers())
-
+    first = len(h.session.sent("sendMessage"))
+    await h.say(10, "باس", group=True)  # still recruiting: the same boss is brought back down
+    assert len(h.session.sent("sendMessage")) == first + 1 and any("پیوستن" in t for t in h.labels())
     h.session.chat_admins.add(99)
     await h.say(99, "غیرفعال باس", group=True)
     assert "غیرفعال شد" in h.session.last_text()
 
 
-async def test_panel_button_summons_in_groups_only(h, services, db):
+async def test_the_panel_button_summons_in_groups_only(h, services, db):
     await hero(services, db, 10, "آرش", gold=5_000)
     await h.say(10, "قلمرو", group=True)
     assert any("باس گروه" in t for t in h.labels())
     await h.tap(10, "باس گروه", group=True)
     assert "احضار" in h.session.last_text()
     await h.tap(10, "احضار", group=True)
-    assert any("ظاهر شد" in t for t in h.session.texts())
+    assert any("بیدار شده است" in t for t in h.session.texts())
     assert await services.bosses.active(CHAT) is not None
     await h.say(10, "قلمرو")
     assert not any("باس گروه" in t for t in h.labels())
-
-
-async def test_janitor_edits_the_message_of_a_boss_that_fled(h, services, db, clock):
-    await hero(services, db, 10, "آرش", gold=5_000)
-    await h.say(10, "باس", group=True)
-    clock.advance(services.ctx.balance.boss_duration_seconds + 5)
-    h.session.reset()
-    await boss_ui.announce_expired(h.bot, services)
-    assert "گریخت" in h.session.last_text()

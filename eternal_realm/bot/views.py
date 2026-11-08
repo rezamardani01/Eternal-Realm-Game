@@ -154,12 +154,14 @@ def help_pages(balance) -> dict[str, tuple[str, str]]:  # noqa: ANN001 - Balance
         )),
         "boss": ("🐉 باس گروهی", page(
             f"🐉 {bold('باس گروهی')}",
-            f"۱. در گروه بنویسید «باس». هزینه‌ی احضار {fa(balance.boss_summon_gold)} سکه است و "
+            f"۱. در گروه بنویسید «احضار باس» (یا «باس»). هزینه‌ی احضار {fa(balance.boss_summon_gold)} سکه است و "
             f"از سطح {fa(balance.boss_min_level)} می‌شود. هر گروه هر {cooldown} یک باس دارد.",
-            "۲. ربات یک پیام با جان باس می‌فرستد. هر عضو با دکمه‌ی «⚔️ حمله» یا «💥 حمله سنگین» ضربه می‌زند.",
-            f"۳. باس {duration(balance.boss_duration_seconds)} زمان دارد. جانش از ضربه‌های همه کم می‌شود؛ "
-            "پس بقیه را صدا بزنید!",
-            "۴. وقتی باس افتاد، همه‌ی ضربه‌زن‌ها پاداش می‌گیرند؛ هر که بیشتر زده باشد بیشتر می‌برد.",
+            f"۲. ربات یک پیام ثبت‌نام می‌فرستد. هر کس «⚔️ پیوستن به نبرد» را بزند وارد می‌شود "
+            f"(حداقل {fa(balance.boss_min_players)} و حداکثر {fa(balance.boss_max_players)} نفر).",
+            "۳. احضارکننده «🚀 شروع نبرد» را می‌زند. اگر زمان ثبت‌نام تمام شود و جنگجوی کافی باشد، خودکار شروع می‌شود.",
+            "۴. نبرد خودکار است: هر چند ثانیه همه‌ی جنگجویان بر اساس کلاسشان حمله می‌کنند و باس هم جواب می‌دهد. "
+            "ربات هر چند ثانیه گزارش نبرد را روی همان پیام عوض می‌کند.",
+            "۵. اگر باس بیفتد، پاداش به نسبت آسیب و محافظت هر نفر تقسیم می‌شود؛ هر که بیشتر زده صندوقچه‌ی بهتری می‌گیرد.",
         )),
         "gear": ("🎒 کوله‌پشتی", page(
             f"🎒 {bold('کوله‌پشتی و تجهیزات')}",
@@ -454,47 +456,74 @@ def sale_report(order, player, user, charge_id, when: int, totals, granted: str 
 MEDALS = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
 
 
-def boss_status(v, last: str | None = None) -> str:  # noqa: ANN001 - BossView
+def _clock(seconds: int) -> str:
+    minutes, sec = divmod(max(0, seconds), 60)
+    return fa(f"{minutes:02d}:{sec:02d}")
+
+
+def boss_recruiting(v, min_players: int, max_players: int) -> str:  # noqa: ANN001 - BossView
+    roster = "\n".join(f"{f.emoji} {f.name}" for f in v.fighters)
+    return "\n".join(
+        [
+            f"{v.type.emoji} {bold(v.type.name + ' بیدار شده است!')}",
+            "",
+            v.type.story,
+            "فرمانده، متحدان خود را فرا بخوانید!",
+            "",
+            f"👤 احضارکننده: {v.summoner_mention}",
+            f"👥 جنگجویان: {bold(fa(len(v.fighters)))} / {fa(max_players)} (حداقل {fa(min_players)})",
+            f"⏳ زمان ثبت‌نام: {_clock(v.seconds_left)}",
+            "❤️ جان باس با تعداد جنگجویان بیشتر می‌شود.",
+            "",
+            f"🛡️ {bold('در صف نبرد')}",
+            roster,
+            "",
+            "همه‌ی جنگجویان «پیوستن» را بزنند؛ احضارکننده نبرد را شروع می‌کند 👇",
+        ]
+    )
+
+
+def boss_fight(v) -> str:  # noqa: ANN001 - BossView
     percent = round(100 * v.hp / v.max_hp) if v.max_hp else 0
     lines = [
-        f"{v.type.emoji} {bold(v.type.name)} · سطح {fa(v.level)}",
-        f"❤️ جان: {fa(v.hp)} / {fa(v.max_hp)}",
+        f"⚔️ {bold('نبرد با ' + v.type.name)}",
+        "",
+        f"❤️ سلامتی باس: {fa(v.hp)} / {fa(v.max_hp)}",
         f"{bar(v.hp, v.max_hp, 10)}  {fa(percent)}٪",
-        f"⏳ زمان باقی‌مانده: {duration(v.seconds_left)}",
-        f"👥 {fa(v.participants)} نفر در نبرد",
+        f"👥 جنگجویان زنده: {fa(v.alive_count)} / {fa(len(v.fighters))} · دور {fa(v.round)}",
+        f"⏳ زمان باقی‌مانده: {_clock(v.seconds_left)}",
     ]
-    if v.top:
-        lines += ["", f"🏅 {bold('برترین ضربه‌ها')}"]
-        lines += [f"{MEDALS[i]} {name} — {fa(dmg)}" for i, (name, dmg, _) in enumerate(v.top)]
-    if last:
-        lines += ["", DIV, last]
-    lines += ["", "همه با هم ضربه بزنید تا باس بیفتد 👇"]
+    if v.report:
+        lines += ["", f"📜 {bold('گزارش نبرد')}", *v.report]
+    ranked = sorted(v.fighters, key=lambda f: -f.damage)[:3]
+    if ranked and ranked[0].damage:
+        lines += ["", f"🏅 {bold('بیشترین آسیب')}"]
+        lines += [f"{MEDALS[i]} {f.name} — {fa(f.damage)}" for i, f in enumerate(ranked)]
+    lines += ["", "🤖 نبرد خودکار است؛ فقط تماشا کنید و تشویق کنید!"]
     return "\n".join(lines)
 
 
-def boss_summoned(v, name: str) -> str:  # noqa: ANN001
-    return (
-        f"{v.type.emoji} {bold(v.type.name + ' ظاهر شد!')}\n"
-        f"فرمانده {name} باس را احضار کرد. همه به میدان بیایند!\n\n" + boss_status(v)
-    )
-
-
 def boss_final(v) -> str:  # noqa: ANN001 - BossView
-    defeated = v.status == "defeated"
-    head = (
-        f"🏆 {bold(v.type.name + ' شکست خورد!')}\nهمه با هم پیروز شدید."
-        if defeated
-        else f"⌛ {bold(v.type.name + ' گریخت')}\nزمان تمام شد؛ ولی تلاشتان بی‌پاداش نماند."
-    )
-    lines = [head, "", DIV]
+    if v.outcome == "cancelled":
+        return (
+            f"🌫️ {bold('احضار ناکام ماند')}\n\n"
+            f"{v.type.name} بدون نبرد به خواب برگشت؛ جنگجوی کافی نیامد.\n\n"
+            "💰 سکه‌ی احضار به احضارکننده برگشت."
+        )
+    heads = {
+        "won": f"🏆 {bold(v.type.name + ' شکست خورد!')}\n\nجنگجویان قلمرو پیروز شدند.",
+        "lost": f"💀 {bold('همه‌ی جنگجویان از پا افتادند')}\n\n{v.type.name} پیروز میدان شد؛ ولی تلاشتان بی‌پاداش نماند.",
+        "fled": f"⌛ {bold(v.type.name + ' گریخت')}\n\nزمان تمام شد و باس ناپدید شد؛ ولی تلاشتان بی‌پاداش نماند.",
+    }
+    lines = [heads.get(v.outcome or "fled", heads["fled"]), "", DIV]
     for i, p in enumerate(v.payouts):
         medal = MEDALS[i] if i < len(MEDALS) else "🔹"
         extra = {"magic_chest": " · 🎁 صندوقچه جادویی", "wooden_chest": " · 📦 صندوقچه چوبی"}.get(p.chest or "", "")
         up = f" · 🎉 سطح {fa(p.level_up)}" if p.level_up else ""
-        lines.append(f"{medal} {p.name} — {fa(p.damage)} ({fa(round(p.share * 100))}٪)")
+        lines.append(f"{medal} {p.mention} — {fa(p.damage)} آسیب ({fa(round(p.share * 100))}٪)")
         lines.append(f"   🪙 {fa(p.gold)} · ⭐ {fa(p.xp)}{extra}{up}")
     if not v.payouts:
-        lines.append("هیچ‌کس ضربه‌ای نزد.")
+        lines.append("هیچ‌کس در نبرد نبود.")
     return "\n".join(lines)
 
 

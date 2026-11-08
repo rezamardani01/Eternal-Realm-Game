@@ -48,11 +48,12 @@ class Balance:
     boss_summon_gold: int = 200
     boss_min_level: int = 3
     boss_cooldown_seconds: int = 7200
-    boss_duration_seconds: int = 1800
-    boss_hit_energy: int = 5
-    boss_heavy_energy: int = 12
-    boss_hit_cooldown: int = 20
-    boss_heavy_cooldown: int = 60
+    boss_min_players: int = 3
+    boss_max_players: int = 10
+    boss_recruit_seconds: int = 120
+    boss_round_seconds: int = 5
+    boss_report_seconds: int = 15
+    boss_fight_seconds: int = 600
     group_flood_window: int = 10
     group_flood_max: int = 25
 

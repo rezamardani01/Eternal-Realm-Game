@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from ...shared.text import bold
 from .. import boss as boss_ui
-from .. import views
 from .context import CommandContext
 from .registry import command
 
 
 @command(
-    "boss", ["باس", "احضار باس", "boss"], "احضار باس گروهی و زدنش با همه (از سطح ۳)",
+    "boss", ["احضار باس", "باس", "boss"], "احضار باس گروهی؛ همه می‌پیوندند و نبرد خودکار انجام می‌شود (از سطح ۳)",
     category="🐉 باس گروهی", private=False, toggleable=True,
 )
 async def boss(ctx: CommandContext) -> None:
@@ -21,8 +20,8 @@ async def boss(ctx: CommandContext) -> None:
         return
     view = await services.bosses.summon(ctx.me, ctx.chat_id)
     frames = [
-        f"🌑 {bold('آسمان تاریک شد...')}\nفرمانده {ctx.me.name} آیین احضار را آغاز کرد.",
+        f"🌑 {bold('آسمان تاریک شد...')}\nفرمانده {ctx.who(ctx.me)} آیین احضار را آغاز کرد.",
         f"⚡ {bold('زمین می‌لرزد!')}\nچیزی بزرگ از دل تاریکی می‌آید...",
     ]
-    sent = await ctx.play(frames, views.boss_summoned(view, ctx.me.name), boss_ui.buttons_for(services, view))
+    sent = await ctx.play(frames, boss_ui.text_for(services, view), boss_ui.buttons_for(view))
     await services.bosses.attach_message(view.id, sent.message_id)

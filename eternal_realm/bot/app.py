@@ -58,6 +58,7 @@ async def run(settings: Settings) -> None:
         background = [
             asyncio.create_task(duels.janitor(bot, services), name="janitor"),
             asyncio.create_task(maintenance.backup_loop(db), name="backup"),
+            asyncio.create_task(boss.processor(bot, services), name="boss-processor"),
         ]
         try:
             await dp.start_polling(bot, skip_updates=True)
