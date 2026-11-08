@@ -69,3 +69,27 @@ async def clan_invite(ctx: CommandContext) -> None:
         "می‌پذیرید؟ فقط خودتان می‌توانید دکمه را بزنید 👇",
         [[Button.inline("✅ پذیرفتن دعوت", ClanCb(action="join", id=mine.id, arg=target.platform_user_id), style="success")]],
     )
+
+
+@command(
+    "rename", ["تغییر نام", "rename"], "تغییر نام قهرمان با برگه: تغییر نام نام‌تازه", category="👤 قهرمان",
+    takes_args=True, points=0,
+)
+async def rename(ctx: CommandContext) -> None:
+    from ...shared.validators import clean_name
+
+    if not ctx.raw_args:
+        raise GameError("نام تازه را هم بنویسید. مثال: «تغییر نام شیر شمال»")
+    name = clean_name(ctx.raw_args)
+    view = await ctx.services.inventory.view(ctx.me.id)
+    if not any(i.id == "rename_ticket" and q > 0 for i, q in view.stacks):
+        raise GameError("برای تغییر نام «برگه‌ی تغییر نام» لازم است. از «خزانه‌ی ویژه» (پیام خصوصی ربات) تهیه کنید.")
+    await ctx.reply(
+        f"🏷️ {bold('تأیید تغییر نام')}\n\n"
+        f"نام فعلی: {ctx.me.name}\n\nنام تازه: {bold(name)}\n\n"
+        "یک برگه‌ی تغییر نام مصرف می‌شود. مطمئنید؟",
+        [[
+            keyboards.panel_button("✅ بله، عوض کن", "svcnamedo", ctx.me.platform_user_id, name),
+            keyboards.panel_button("❌ نه", "home", ctx.me.platform_user_id),
+        ]],
+    )

@@ -83,3 +83,45 @@ class CharacterService:
             after = await player_repo.get(tx, player.id)
             assert after is not None
             return after
+
+    # --- paid services: each one uses up a ticket ----------------------------------------------------
+    async def change_race(self, player: Player, race_id: str) -> Player:
+        from ..data.races import RACES
+
+        if race_id not in RACES:
+            raise GameError("این نژاد در قلمرو شناخته نمی‌شود.")
+        if race_id == player.race_id:
+            raise GameError("این همان نژاد فعلی شماست؛ یکی دیگر را انتخاب کنید.")
+        async with self.ctx.db.transaction() as tx:
+            await self.inventory.take(tx, player.id, "race_ticket", 1)
+            await tx.execute("UPDATE players SET race = ? WHERE id = ?", (race_id, player.id))
+            after = await player_repo.get(tx, player.id)
+            assert after is not None
+            return after
+
+    async def change_class(self, player: Player, class_id: str) -> Player:
+        if class_id not in CLASSES:
+            raise GameError("این کلاس در قلمرو شناخته نمی‌شود.")
+        if class_id == player.class_id:
+            raise GameError("این همان کلاس فعلی شماست؛ یکی دیگر را انتخاب کنید.")
+        async with self.ctx.db.transaction() as tx:
+            await self.inventory.take(tx, player.id, "class_ticket", 1)
+            await tx.execute("UPDATE players SET class = ? WHERE id = ?", (class_id, player.id))
+            if player.class2_id == class_id:  # the second class must differ from the first
+                await tx.execute("UPDATE players SET class2 = '' WHERE id = ?", (player.id,))
+            after = await player_repo.get(tx, player.id)
+            assert after is not None
+            return after
+
+    async def rename(self, player: Player, raw_name: str) -> Player:
+        from ...shared.validators import clean_name
+
+        name = clean_name(raw_name)
+        async with self.ctx.db.transaction() as tx:
+            if await player_repo.name_taken(tx, name):
+                raise GameError("قهرمان دیگری پیش‌تر این نام را برداشته است. یک نام تازه و یگانه بنویسید.")
+            await self.inventory.take(tx, player.id, "rename_ticket", 1)
+            await tx.execute("UPDATE players SET display_name = ? WHERE id = ?", (name, player.id))
+            after = await player_repo.get(tx, player.id)
+            assert after is not None
+            return after
