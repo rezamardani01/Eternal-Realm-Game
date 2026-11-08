@@ -1,8 +1,8 @@
 # secrets and runtime data
 config.toml
 .env
-data/
-backups/
+/data/
+/backups/
 
 # python
 .venv/
