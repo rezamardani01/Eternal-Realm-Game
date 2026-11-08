@@ -327,6 +327,23 @@ def ranking(board) -> str:  # noqa: ANN001 - Board
     return "\n".join(lines)
 
 
+def battle_history(records) -> str:  # noqa: ANN001 - list[BattleRecord]
+    from ..shared.jalali import describe
+
+    title = f"📜 {bold('تاریخچه‌ی نبردها')}"
+    if not records:
+        return title + "\n\nاین گروه هنوز با هیچ باسی نجنگیده است. بنویسید «باس» و اولین نبرد را بسازید!"
+    blocks = [title]
+    for r in records:
+        date, _, clock = describe(r.ended_at)
+        verdict = "🏆 پیروزی" if r.won else "💔 شکست"
+        blocks.append(
+            f"{r.boss_emoji} {bold(r.boss_name)}\n{verdict} · {fa(r.fighters)} جنگجو\n"
+            f"⭐ بیشترین آسیب: {r.top_name} ({fa(r.top_damage)})\n📅 {fa(date)} · {fa(clock)}"
+        )
+    return "\n\n".join(blocks)
+
+
 # --- chests ------------------------------------------------------------------------------------
 def chest_contents(item, odds) -> str:  # noqa: ANN001
     """What a chest can hold and with which chance (a block for the confirm and detail pages)."""

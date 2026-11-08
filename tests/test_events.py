@@ -168,3 +168,37 @@ async def test_greeting_and_commands(h, services, db, clock):
     assert h.session.sent()[-1]["reply_markup"]
     await h.say(1, "/event bogus", group=True)
     assert "نوع رویداد" in h.session.sent()[-1]["text"]
+
+
+async def _finished_boss(db, chat, summoner, hits, status, ended, kind="beast_fire"):
+    async with db.transaction() as tx:
+        boss_id = await tx.execute(
+            "INSERT INTO bosses (chat_id, boss_type, level, max_hp, hp, status, summoner_id, created_at, expires_at,"
+            " ended_at) VALUES (?, ?, 5, 100, 0, ?, ?, ?, ?, ?)",
+            (chat, kind, status, summoner, ended - 100, ended, ended),
+        )
+        for pid, damage in hits:
+            await tx.execute("INSERT INTO boss_hits (boss_id, player_id, damage) VALUES (?, ?, ?)", (boss_id, pid, damage))
+
+
+async def test_boss_boards_and_history(h, services, db, clock):
+    a, b = await hero(services, db, 1, "آرش"), await hero(services, db, 2, "سارا")
+    now = services.ctx.now()
+    await _finished_boss(db, CHAT, a.id, [(a.id, 500), (b.id, 900)], "defeated", now - 3_600)
+    await _finished_boss(db, CHAT, a.id, [(a.id, 100)], "expired", now - 1_800)
+    await _finished_boss(db, -9, a.id, [(a.id, 10_000)], "defeated", now - 30 * 86_400, kind="dragon_ice")
+
+    hunters = await services.rankings.boss_hunters(a)
+    assert [e.name for e in hunters.entries] == ["آرش", "سارا"] and hunters.my_position == 1
+    week = await services.rankings.hero_of_the_week(CHAT)
+    assert [(e.name, e.value) for e in week.entries] == [("سارا", 900), ("آرش", 600)]
+
+    history = await services.rankings.battle_history(CHAT)
+    assert [r.won for r in history] == [False, True] and history[1].top_name == "سارا"
+
+    await h.say(1, "رتبه", group=True)
+    for label in ("شکارچیان باس", "قهرمان هفته", "تاریخچه"):
+        await h.click(1, h.button_data(label), group=True)
+        assert "سارا" in h.session.sent("editMessageText")[-1]["text"] or label == "شکارچیان باس"
+    text = h.session.sent("editMessageText")[-1]["text"]
+    assert "تاریخچه‌ی نبردها" in text and "پیروزی" in text and "شکست" in text

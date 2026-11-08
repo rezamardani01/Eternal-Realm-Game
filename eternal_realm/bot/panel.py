@@ -840,17 +840,31 @@ async def listing_ask(c: Ctx) -> Screen:
 async def top(c: Ctx) -> Screen:
     board_id = c.a or ("group" if c.is_group else "level")
     ranking = c.services.rankings
-    if board_id == "group" and c.is_group:
-        board = await ranking.group_board(c.chat_id)
+    group_only = ("group", "hero", "history")
+    if board_id in group_only and not c.is_group:
+        board_id = "level"
+    if board_id == "history":
+        text = views.battle_history(await ranking.battle_history(c.chat_id))
     else:
-        board = await ranking.global_board("level" if board_id == "group" else board_id, c.player)
-    tabs = [c.btn("🏆 سطح", "top", "level"), c.btn("💰 ثروت", "top", "rich"), c.btn("⚔️ دوئل", "top", "wins")]
-    rows = [tabs]
+        if board_id == "group":
+            board = await ranking.group_board(c.chat_id)
+        elif board_id == "hero":
+            board = await ranking.hero_of_the_week(c.chat_id)
+        elif board_id == "bosses":
+            board = await ranking.boss_hunters(c.player)
+        else:
+            board = await ranking.global_board(board_id, c.player)
+        text = views.ranking(board)
+    rows = [
+        [c.btn("🏆 سطح", "top", "level"), c.btn("💰 ثروت", "top", "rich")],
+        [c.btn("⚔️ دوئل", "top", "wins"), c.btn("🐉 شکارچیان باس", "top", "bosses")],
+    ]
     if c.is_group:
-        rows.append([c.btn("🏰 این گروه", "top", "group")])
+        rows.append([c.btn("🏰 این گروه", "top", "group"), c.btn("🌟 قهرمان هفته", "top", "hero")])
+        rows.append([c.btn("📜 تاریخچه‌ی نبردها", "top", "history")])
     else:
         rows.append(c.back("home", "🔙 بازگشت"))
-    return Screen(views.ranking(board), rows)
+    return Screen(text, rows)
 
 
 CHEST_BLURB = {
@@ -863,18 +877,6 @@ PREMIUM_SECTIONS = {
     "crystals": ("💎", "خرید کریستال", "کریستال ارز کمیاب قلمرو است؛ با آن صندوقچه‌های جادویی و سلطنتی می‌خرید."),
     "bundles": ("🎁", "خرید بسته", "بسته‌های ویژه چند چیز را با هم و به‌صرفه‌تر می‌دهند."),
     "materials": ("⛓️", "خرید مواد", "سنگ آهن برای ارتقای تجهیزات؛ هر مرتبه‌ی آهنگری به آن نیاز دارد."),
-}
-
-
-CHEST_BLURB = {
-    "wooden_chest": "سکه، مواد و معجون",
-    "magic_chest": "سکه، کریستال و تجهیزات خوب",
-    "royal_chest": "گنج‌های بزرگ و تجهیزات افسانه‌ای",
-}
-PREMIUM_SECTIONS = {
-    "coins": ("🪙", "خرید سکه", "با سکه سلاح، زره و معجون می‌خرید و تجهیزاتتان را ارتقا می‌دهید."),
-    "crystals": ("💎", "خرید کریستال", "کریستال ارز کمیاب قلمرو است؛ با آن صندوقچه‌های جادویی و سلطنتی می‌خرید."),
-    "bundles": ("🎁", "خرید بسته", "بسته‌های ویژه چند چیز را با هم و به‌صرفه‌تر می‌دهند."),
 }
 
 
