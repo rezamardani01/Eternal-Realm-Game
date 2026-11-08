@@ -32,6 +32,11 @@ class DuelCb(CallbackData, prefix="d"):
     id: int
 
 
+class BetCb(CallbackData, prefix="bt"):
+    action: str
+    id: int
+
+
 class EventCb(CallbackData, prefix="e"):
     action: str
     id: int

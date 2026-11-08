@@ -15,6 +15,7 @@ from ...shared.errors import GameError
 from ..engine import combat
 from ..engine.combat import Action, Battle, Fighter
 from ..models import Player
+from .bets import BetOutcome, settle as settle_bet
 from .characters import CharacterService
 from .pets import PetService
 from .players import LevelUp, PlayerService
@@ -62,6 +63,8 @@ class DuelUpdate:
     payouts: dict[int, Payout] = field(default_factory=dict)
     #: the duel was closed because somebody ran out of time
     timed_out: bool = False
+    #: what happened to the stakes when this was a bet duel
+    bet: BetOutcome | None = None
 
 
 class DuelService:
@@ -183,7 +186,8 @@ class DuelService:
             raise GameError("این نبرد پیش‌تر پایان یافته است.")
         duel.status, duel.winner_id = "finished", winner_pid
         payouts = await self._pay(tx, duel, battle, now)
-        return DuelUpdate(duel, battle, lines, finished=True, payouts=payouts, timed_out=timed_out)
+        bet = await settle_bet(tx, self.ctx, duel.id, winner_pid, now)
+        return DuelUpdate(duel, battle, lines, finished=True, payouts=payouts, timed_out=timed_out, bet=bet)
 
     async def _rate(self, tx: Tx, battle: Battle) -> dict[int, tuple[int, int]]:
         """Update both ratings after a decisive duel and award clan-war points to the winner's clan."""

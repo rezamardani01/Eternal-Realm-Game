@@ -459,6 +459,25 @@ MIGRATIONS: list[str] = [
         opened_at  INTEGER
     );
     """,
+    # 34: bet duels (stakes are locked until the duel ends)
+    """
+    CREATE TABLE bet_duels (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id       INTEGER NOT NULL,
+        message_id    INTEGER,
+        challenger_id INTEGER NOT NULL REFERENCES players (id),
+        accepter_id   INTEGER REFERENCES players (id),
+        kind          TEXT    NOT NULL CHECK (kind IN ('gold', 'crystal', 'item')),
+        item_id       TEXT    NOT NULL DEFAULT '',
+        amount        INTEGER NOT NULL CHECK (amount > 0),
+        status        TEXT    NOT NULL CHECK (status IN ('open', 'active', 'done', 'cancelled', 'expired')),
+        duel_id       INTEGER,
+        created_at    INTEGER NOT NULL,
+        expires_at    INTEGER NOT NULL
+    );
+    CREATE INDEX idx_bet_duels_status ON bet_duels (status, expires_at);
+    CREATE INDEX idx_bet_duels_duel ON bet_duels (duel_id);
+    """,
 ]
 
 

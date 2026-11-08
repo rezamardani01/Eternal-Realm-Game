@@ -943,6 +943,50 @@ def welcome_back(player) -> str:  # noqa: ANN001 - Player
 
 
 # --- duels -------------------------------------------------------------------------------------
+def bet_waiting(bet, challenger, seconds: int) -> str:  # noqa: ANN001 - Bet, Player
+    from ..game.services.bets import FEE_PERCENT, prize_for
+
+    prize, fee = prize_for(bet.kind, bet.amount)
+    lines = [
+        f"🎰 {bold('دوئل شرطی')}",
+        "",
+        f"{challenger.char_class.emoji} {challenger.mention} · سطح {fa(challenger.level)}",
+        f"🏆 {fa(challenger.wins)} پیروزی · 💀 {fa(challenger.losses)} شکست",
+        "",
+        f"💰 شرط هر نفر: {bold(bet.label)}",
+        f"🏅 جایزه‌ی برنده: {bold(stake_prize(bet.kind, bet.item_id, prize))}",
+    ]
+    if fee:
+        lines.append(f"🏦 کارمزد قلمرو: {fa(FEE_PERCENT)}٪ از جایزه")
+    lines += [
+        f"⏳ مهلت: {duration(seconds)}",
+        "",
+        "هر کس شرط را قبول کند همان لحظه وارد دوئل می‌شود. باید همین مقدار را داشته باشد 👇",
+    ]
+    return "\n".join(lines)
+
+
+def stake_prize(kind: str, item_id: str, amount: int) -> str:
+    from ..game.services.bets import stake_label
+
+    return stake_label(kind, item_id, amount)
+
+
+def bet_lines(update) -> list[str]:  # noqa: ANN001 - DuelUpdate
+    """The «what happened to the stakes» block of a bet duel's result."""
+    outcome = update.bet
+    if outcome is None:
+        return []
+    if outcome.winner_id is None:
+        return ["", f"🎰 {bold('شرط دوئل')}", f"🤝 مساوی شد؛ شرط {stake_prize(outcome.kind, outcome.item_id, outcome.amount)} به هر دو برگشت."]
+    winner = next((f for f in update.battle.fighters if f.player_id == outcome.winner_id), None)
+    name = (winner.mention or winner.name) if winner else "برنده"
+    lines = ["", f"🎰 {bold('شرط دوئل')}", f"🏆 {name} جایزه را برد", f"💰 {bold(outcome.prize_label)}"]
+    if outcome.fee:
+        lines.append(f"🏦 کارمزد قلمرو: {fa(outcome.fee)}")
+    return lines
+
+
 def duel_invite(challenger, target, seconds: int) -> str:  # noqa: ANN001 - Player
     return "\n".join([
         f"⚔️ {bold('فراخوان دوئل')}",
@@ -1024,4 +1068,5 @@ def duel_result(update) -> str:  # noqa: ANN001 - DuelUpdate
         rewards.append((fighter.mention or fighter.name, gains))
     if rewards:
         out += ["", f"🎁 {bold('پاداش')}", "", *tidy_list(rewards, 2, ranked=False)]
+    out += bet_lines(update)
     return "\n".join(out)

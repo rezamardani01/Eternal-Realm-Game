@@ -8,6 +8,7 @@ from ..context import AppContext
 from ..game.services.activities import ActivityService
 from ..game.services.admin import AdminService
 from ..game.services.bosses import BossService
+from ..game.services.bets import BetService
 from ..game.services.cards import CardService
 from ..game.services.characters import CharacterService
 from ..game.services.chests import ChestService
@@ -69,6 +70,7 @@ class Services:
     effects: EffectService
     membership: MembershipService
     invites: InviteService
+    bets: BetService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -84,13 +86,14 @@ class Services:
         cards = CardService(ctx)
         offers = OfferService(ctx)
         bosses = BossService(ctx, players, inventory, characters, cards)
+        duels = DuelService(ctx, players, characters)
         return cls(
             ctx=ctx,
             players=players,
             inventory=inventory,
             activities=ActivityService(ctx, players, inventory),
             hunting=HuntService(ctx, players, inventory, characters, cards),
-            duels=DuelService(ctx, players, characters),
+            duels=duels,
             shop=ShopService(ctx, inventory),
             economy=EconomyService(ctx, inventory),
             market=MarketService(ctx, inventory),
@@ -114,6 +117,7 @@ class Services:
             effects=EffectService(ctx),
             membership=MembershipService(ctx),
             invites=InviteService(ctx, inventory),
+            bets=BetService(ctx, duels),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(

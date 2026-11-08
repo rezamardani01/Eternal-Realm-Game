@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 from ...shared.errors import GameError
-from .. import keyboards, views
+from .. import keyboards, panel, views
 from .context import CommandContext
 from .registry import command
+
+
+@command(
+    "bet_duel", ["مبارزه شرطی", "دوئل شرطی", "شرط بندی"], "دوئل شرطی: سر سکه، کریستال یا منابع شرط ببندید و منتظر یک حریف بمانید",
+    category="⚔️ مبارزه", private=False, toggleable=True,
+)
+async def bet_duel(ctx: CommandContext) -> None:
+    await panel.send(ctx.message, ctx.services, ctx.me, "bet", reply=True)
 
 
 @command(
