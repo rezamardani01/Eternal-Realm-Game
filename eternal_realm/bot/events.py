@@ -12,8 +12,8 @@ from baleropy.types import CallbackQuery, Message
 
 from ..game.services.events import EventAction, EventView
 from ..shared.text import bold
-from . import art, keyboards, views
 from . import boss as boss_ui
+from . import keyboards, views
 from .callbacks import EventCb
 from .services import Services
 
@@ -29,8 +29,6 @@ async def announce(bot: Bot, services: Services, action: EventAction) -> None:
     view = action.view
     try:
         if view.boss is not None:
-            t = view.boss.type
-            await art.send_chat(bot, view.chat_id, f"bosses/{t.id}", boss_ui.portrait_caption(view.boss))
             sent = await bot.send_message(
                 view.chat_id, boss_ui.text_for(services, view.boss), buttons=boss_ui.buttons_for(view.boss)
             )
@@ -38,15 +36,13 @@ async def announce(bot: Bot, services: Services, action: EventAction) -> None:
             return
         if action.what == "spawned":
             buttons = keyboards.event_buttons(view)
-            sent = await art.send_chat(bot, view.chat_id, f"events/{view.kind}", text_for(view), buttons)
-            if sent is None:
-                if buttons:
-                    sent = await bot.send_message(view.chat_id, text_for(view), buttons=buttons)
-                else:
-                    sent = await bot.send_message(view.chat_id, text_for(view))
+            if buttons:
+                sent = await bot.send_message(view.chat_id, text_for(view), buttons=buttons)
+            else:
+                sent = await bot.send_message(view.chat_id, text_for(view))
             await services.events.attach_message(view.id, sent.message_id)
         elif view.message_id is not None:
-            await art.edit_chat(bot, view.chat_id, view.message_id, f"events/{view.kind}", text_for(view))
+            await bot.edit_message_text(view.chat_id, view.message_id, text_for(view))
     except BaleAPIError:
         log.warning("could not post event %s in chat %s", view.kind, view.chat_id)
 
@@ -56,7 +52,10 @@ async def _show(query: CallbackQuery, view: EventView) -> None:
         return
     buttons = keyboards.event_buttons(view)
     with contextlib.suppress(BaleAPIError):
-        await art.edit_chat(query.message.bot, query.message.chat.id, query.message.message_id, f"events/{view.kind}", text_for(view), buttons)
+        if buttons:
+            await query.message.edit_text(text_for(view), buttons=buttons)
+        else:
+            await query.message.edit_text(text_for(view))
 
 
 @router.callback_query(EventCb.filter())

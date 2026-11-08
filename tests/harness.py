@@ -14,10 +14,6 @@ from eternal_realm.bot.callbacks import PanelCb
 from eternal_realm.bot.services import Services
 
 
-#: calls that put a panel on screen (a photo panel carries its text as the caption)
-SHOWN = ("sendMessage", "editMessageText", "sendPhoto", "editMessageCaption")
-
-
 class FakeSession(BaseSession):
     def __init__(self) -> None:
         super().__init__()
@@ -28,7 +24,7 @@ class FakeSession(BaseSession):
 
     async def _send(self, bot: Any, method: Any) -> tuple[int, bytes]:
         name = method.__api_method__
-        payload = json.loads(method.model_dump_json(exclude_none=True, by_alias=True, exclude={"photo"} if name == "sendPhoto" else None))
+        payload = json.loads(method.model_dump_json(exclude_none=True, by_alias=True))
         self.calls.append((name, payload))
         if name == "getMe":
             result: Any = {"id": 1, "is_bot": True, "first_name": "bot", "username": "er_bot"}
@@ -46,9 +42,6 @@ class FakeSession(BaseSession):
                 "chat": {"id": payload.get("chat_id", 0), "type": "private"},
                 "text": payload.get("text", ""),
             }
-            if name == "sendPhoto":
-                result["caption"] = payload.get("caption", "")
-                result["photo"] = [{"file_id": f"fid{self._next_id}", "file_unique_id": "u", "width": 320, "height": 320}]
         else:
             result = True
         return 200, json.dumps({"ok": True, "result": result}).encode()
@@ -64,20 +57,20 @@ class FakeSession(BaseSession):
         return [p for n, p in self.calls if n == method]
 
     def texts(self) -> list[str]:
-        return [p.get("text") or p.get("caption", "") for n, p in self.calls if n in SHOWN]
+        return [p.get("text", "") for n, p in self.calls if n in ("sendMessage", "editMessageText")]
 
     def last_text(self) -> str:
         return self.texts()[-1]
 
     def last_buttons(self) -> list[dict[str, Any]]:
         for name, payload in reversed(self.calls):
-            if name in SHOWN and "reply_markup" in payload:
+            if name in ("sendMessage", "editMessageText") and "reply_markup" in payload:
                 return [b for row in payload["reply_markup"]["inline_keyboard"] for b in row]
         return []
 
     def last_markup_rows(self) -> list[list[dict[str, Any]]]:
         for name, payload in reversed(self.calls):
-            if name in SHOWN and "reply_markup" in payload:
+            if name in ("sendMessage", "editMessageText") and "reply_markup" in payload:
                 return payload["reply_markup"]["inline_keyboard"]
         return []
 

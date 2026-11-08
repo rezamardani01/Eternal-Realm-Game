@@ -164,8 +164,8 @@ async def test_greeting_and_commands(h, services, db, clock):
     await h.say(2, "/event merchant", group=True)
     assert "مدیران" in h.session.sent()[-1]["text"]
     await h.say(1, "/event merchant", group=True)
-    assert "تاجر دوره‌گرد" in h.session.last_text()  # posted as a picture with a caption
-    assert h.session.last_buttons()
+    assert "تاجر دوره‌گرد" in h.session.sent()[-1]["text"]
+    assert h.session.sent()[-1]["reply_markup"]
     await h.say(1, "/event bogus", group=True)
     assert "نوع رویداد" in h.session.sent()[-1]["text"]
 

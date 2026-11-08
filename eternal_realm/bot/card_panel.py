@@ -84,7 +84,7 @@ async def card(c: Ctx) -> Screen:
         rows.append([c.btn(f"💰 فروش یک تکراری ({fa(dust_value(k))}🪙)", "csellq", k.id)])
         rows.append([c.btn("🏷️ فروش در بازار کارت", "cplist", k.id, str(dust_value(k) * 2))])
     rows.append(c.back("cset", "🔙 بازگشت", k.set_id))
-    return Screen("\n".join(lines), rows, art=f"cards/{k.id}")
+    return Screen("\n".join(lines), rows)
 
 
 @screen("csellq")
@@ -100,8 +100,7 @@ async def card_sell_ask(c: Ctx) -> Screen:
         f"دریافتی: {bold(fa(value))} سکه\n\nکیسه‌ی شما: {fa(c.player.gold)} ← {fa(c.player.gold + value)} سکه\n\n"
         "یک نسخه از آلبومتان می‌ماند. مطمئنید؟"
     )
-    return Screen(text, [[c.btn("✅ بله، بفروش", "csell", k.id, style="danger"), c.btn("↩️ نه", "card", k.id)]],
-                  art=f"cards/{k.id}")
+    return Screen(text, [[c.btn("✅ بله، بفروش", "csell", k.id, style="danger"), c.btn("↩️ نه", "card", k.id)]])
 
 
 @screen("csell")

@@ -56,7 +56,7 @@ async def pet(c: Ctx) -> Screen:
     else:
         lines += ["", "💎 این حیوان خانگی در «خزانه‌ی ویژه» (پیام خصوصی ربات) فروخته می‌شود."]
     rows.append(c.back("pets"))
-    return Screen("\n".join(lines), rows, art=f"pets/{p.id}")
+    return Screen("\n".join(lines), rows)
 
 
 @screen("petbuyq")
@@ -68,13 +68,12 @@ async def pet_buy_ask(c: Ctx) -> Screen:
             f"💸 {bold('موجودی کافی نیست')}\n\n{p.emoji} {p.name}\nبها: {fa(p.price_gold)} 🪙\n"
             f"موجودی شما: {fa(me.gold)} 🪙\nکمبود: {bold(fa(p.price_gold - me.gold))} 🪙"
         )
-        return Screen(text, [c.back("pet", "🔙 بازگشت", p.id)], art=f"pets/{p.id}")
+        return Screen(text, [c.back("pet", "🔙 بازگشت", p.id)])
     text = (
         f"🛍️ {bold('تأیید خرید حیوان خانگی')}\n\n{p.emoji} {p.name}\n\n"
         f"بها: {bold(fa(p.price_gold))} سکه\n\nکیسه‌ی شما: {fa(me.gold)} ← {fa(me.gold - p.price_gold)} سکه\n\nبخریم؟"
     )
-    return Screen(text, [[c.btn("✅ بله، بخر", "petbuy", p.id, style="success"), c.btn("↩️ نه", "pet", p.id)]],
-                  art=f"pets/{p.id}")
+    return Screen(text, [[c.btn("✅ بله، بخر", "petbuy", p.id, style="success"), c.btn("↩️ نه", "pet", p.id)]])
 
 
 @screen("petbuy")
@@ -100,14 +99,13 @@ async def pet_up_ask(c: Ctx) -> Screen:
             f"💸 {bold('کریستال کافی نیست')}\n\nارتقای {p.emoji} {p.name} به سطح {fa(level + 1)}\n"
             f"هزینه: {fa(cost)} 💎\nموجودی شما: {fa(me.crystal)} 💎\nکمبود: {bold(fa(cost - me.crystal))} 💎"
         )
-        return Screen(text, [c.back("pet", "🔙 بازگشت", p.id)], art=f"pets/{p.id}")
+        return Screen(text, [c.back("pet", "🔙 بازگشت", p.id)])
     text = (
         f"⬆️ {bold('تأیید ارتقای حیوان خانگی')}\n\n{p.emoji} {p.name}\nسطح {fa(level)} ← سطح {fa(level + 1)}\n\n"
         f"بعد از ارتقا:\n{gain}\n\nهزینه: {bold(fa(cost))} کریستال\n"
         f"کریستال شما: {fa(me.crystal)} ← {fa(me.crystal - cost)}\n\nارتقا بدهیم؟"
     )
-    return Screen(text, [[c.btn("✅ بله، ارتقا", "petup", p.id, style="success"), c.btn("↩️ نه", "pet", p.id)]],
-                  art=f"pets/{p.id}")
+    return Screen(text, [[c.btn("✅ بله، ارتقا", "petup", p.id, style="success"), c.btn("↩️ نه", "pet", p.id)]])
 
 
 @screen("petup")

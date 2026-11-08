@@ -77,10 +77,10 @@ async def test_glass_flow(h, services, db):
     await h.say(4, "حیوان همراه", group=True)
     await h.click(4, h.button_data("گربه"), group=True)
     await h.tap(4, "خرید", group=True)
-    assert "تأیید خرید" in h.session.last_text()
+    assert "تأیید خرید" in h.session.sent("editMessageText")[-1]["text"]
     await h.tap(4, "بله، بخر", group=True)
     assert await services.pets.owned((await services.players.require(4)).id) == {"cat": True}
-    assert "همین حالا همراه شماست" in h.session.last_text()
+    assert "همین حالا همراه شماست" in h.session.sent("editMessageText")[-1]["text"]
 
 
 async def test_upgrading_a_pet_costs_crystals_and_strengthens_it(services, db):

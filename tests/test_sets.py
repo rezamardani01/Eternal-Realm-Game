@@ -71,7 +71,7 @@ async def test_history_follows_a_traded_piece(h, services, db):
 
     await h.say(2, "تجهیزات", group=True)
     await h.panel(2, "piece", str(gid), group=True)
-    text = h.session.last_text()
+    text = h.session.sent("editMessageText")[-1]["text"]
     assert "تاریخچه" in text and "صاحب قبلی: آرش" in text
 
 
