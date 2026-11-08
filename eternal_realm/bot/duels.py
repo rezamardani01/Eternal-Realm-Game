@@ -30,7 +30,7 @@ ACTIONS = {
 
 def render(update: DuelUpdate, turn_seconds: int) -> tuple[str, keyboards.Rows | None]:
     if update.finished:
-        return views.duel_result(update), None
+        return views.duel_result(update), keyboards.duel_result(update)
     text = views.duel_status(update.battle, update.lines, turn_seconds)
     return text, keyboards.duel_actions(update.duel.id, update.battle.current)
 
@@ -53,6 +53,21 @@ async def on_duel_button(query: CallbackQuery, callback_data: DuelCb, services: 
         duel = await services.duels.decline(duel_id, player)
         who = "را نپذیرفت" if player.id == duel.target_id else "را پس گرفت"
         await message.edit_text(f"🏳️ فراخوان دوئل بی‌نتیجه ماند؛ فرمانده‌ی مقابل آن {who}. شاید در فرصتی دیگر!")
+    elif action == "info":
+        pass
+    elif action == "rematch":
+        duel = await services.duels.get(duel_id)
+        if duel is None or player.id not in (duel.challenger_id, duel.target_id):
+            raise GameError("فقط دو جنگجوی همین نبرد می‌توانند دوباره مبارزه را بخواهند.")
+        other = await services.players.get(duel.target_id if player.id == duel.challenger_id else duel.challenger_id)
+        if other is None:
+            raise GameError("حریف شما دیگر در قلمرو نیست.")
+        fresh = await services.duels.challenge(message.chat.id, player, other)
+        seconds = services.ctx.balance.duel_invite_seconds
+        sent = await message.answer(views.duel_invite(player, other, seconds), buttons=keyboards.duel_invite(fresh.id))
+        await services.duels.attach_message(fresh.id, sent.message_id)
+        await query.answer("⚔️ فراخوان تازه فرستاده شد!")
+        return
     elif action in ACTIONS:
         update = await services.duels.act(duel_id, player, ACTIONS[action])
         text, buttons = render(update, turn_seconds)
@@ -70,8 +85,12 @@ async def _announce(bot: Bot, services: Services, item: DuelUpdate | Duel) -> No
         text = views.duel_result(item)
     else:
         text = "⌛ فراخوان دوئل بی‌پاسخ ماند و در باد گم شد. هر وقت خواستید دوباره دعوت کنید!"
+    buttons = keyboards.duel_result(item) if isinstance(item, DuelUpdate) else None
     with contextlib.suppress(BaleAPIError):
-        await bot.edit_message_text(duel.chat_id, duel.message_id, text)
+        if buttons:
+            await bot.edit_message_text(duel.chat_id, duel.message_id, text, buttons=buttons)
+        else:
+            await bot.edit_message_text(duel.chat_id, duel.message_id, text)
 
 
 async def janitor(bot: Bot, services: Services, interval: float = 20.0) -> None:

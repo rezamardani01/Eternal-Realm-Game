@@ -100,6 +100,26 @@ def duel_invite(duel_id: int) -> Rows:
     ]
 
 
+def duel_result(update) -> Rows:  # noqa: ANN001 - DuelUpdate
+    """Glass chips under a finished duel: the verdict, what each fighter earned, and a rematch."""
+    battle, duel_id = update.battle, update.duel.id
+    rows: Rows = []
+    if battle.winner is None:
+        rows.append([Button.inline("🤝 مساوی", DuelCb(action="info", id=duel_id))])
+    else:
+        rows.append([Button.inline(f"🏆 برنده: {battle.fighters[battle.winner].name}", DuelCb(action="info", id=duel_id), style="success")])
+    for fighter in battle.fighters:
+        payout = update.payouts.get(fighter.player_id)
+        chips = [Button.inline(f"👤 {fighter.name}", DuelCb(action="info", id=duel_id))]
+        if payout is not None and payout.gold:
+            chips.append(Button.inline(f"🪙 +{fa(payout.gold)}", DuelCb(action="info", id=duel_id)))
+        if payout is not None and payout.xp:
+            chips.append(Button.inline(f"⭐ +{fa(payout.xp)}", DuelCb(action="info", id=duel_id)))
+        rows.append(chips)
+    rows.append([Button.inline("⚔️ مبارزه‌ی دوباره", DuelCb(action="rematch", id=duel_id), style="primary")])
+    return rows
+
+
 def duel_actions(duel_id: int, fighter: Fighter) -> Rows:
     wait = fighter.skill_ready_in - 1
     skill = f"{fighter.skill_emoji} {fighter.skill_name}" + (f" ({fa(wait)})" if wait > 0 else "")
