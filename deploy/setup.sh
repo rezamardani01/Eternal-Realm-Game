@@ -42,7 +42,9 @@ fi
 chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
 
 echo ">> Python environment"
-sudo -u "${APP_USER}" bash -c "cd ${APP_DIR} && ${PY} -m venv .venv && .venv/bin/pip install --quiet --upgrade pip && .venv/bin/pip install --quiet -r requirements.txt"
+# Slow or filtered networks: no pip self-upgrade, long timeouts, many retries. Set PIP_INDEX_URL to use a mirror.
+PIP_ARGS="--default-timeout=120 --retries 10 ${PIP_INDEX_URL:+-i ${PIP_INDEX_URL}}"
+sudo -u "${APP_USER}" bash -c "cd ${APP_DIR} && { [ -d .venv ] || ${PY} -m venv .venv; } && { .venv/bin/python -c 'import baleropy, aiosqlite' 2>/dev/null || .venv/bin/pip install ${PIP_ARGS} -r requirements.txt; }"
 
 if [ ! -f "${APP_DIR}/config.toml" ]; then
   echo ">> Bot settings (typed here, saved only on this server)"

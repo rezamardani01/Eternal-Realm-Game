@@ -16,7 +16,7 @@ git fetch --quiet origin main
 git reset --hard origin/main
 
 echo ">> dependencies"
-.venv/bin/pip install --quiet -r requirements.txt
+.venv/bin/pip install --quiet --default-timeout=120 --retries 10 -r requirements.txt
 
 echo ">> restart"
 sudo /bin/systemctl restart eternal-realm
