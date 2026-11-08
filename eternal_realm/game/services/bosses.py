@@ -14,6 +14,7 @@ from ...context import AppContext
 from ...db.database import Row, Tx
 from ...db.repos import bosses as repo
 from ...db.repos import clans as clan_repo
+from ...db.repos import inventory as inv_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError, NotRegistered
 from ...shared.jalali import describe
@@ -376,6 +377,7 @@ class BossService:
             from ...db.repos import season as season_repo
 
             await season_repo.add_points(tx, pid, "boss", now)
+            await inv_repo.add_bond(tx, pid, 3)
             if status == "defeated":
                 await season_repo.add_points(tx, pid, "boss_win", now)
             chest = trophy = None

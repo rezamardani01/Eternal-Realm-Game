@@ -9,7 +9,7 @@ from ...db.database import Tx
 from ...db.repos import inventory as repo
 from ...shared.errors import GameError
 from ...shared.text import fa
-from ..data.sets import set_bonus, set_of, worn_count
+from ..data.sets import bond_level, set_bonus, set_of, worn_count
 from ..data.items import ITEMS, SLOT_LABELS, STARTER_WEAPON, Item, Kind, get_item, upgraded_stats
 from ..data.stats import Stats
 from ..models import Player
@@ -25,6 +25,11 @@ class Piece:
     upgrade: int
     slot: str | None
     origin: str = ""
+    bond_uses: int = 0
+
+    @property
+    def bond(self) -> int:
+        return bond_level(self.bond_uses) if self.slot == "weapon" or self.item.slot == "weapon" else 0
 
     @property
     def stats(self) -> Stats:
@@ -73,7 +78,7 @@ class InventoryService:
             raise GameError("چنین تجهیزاتی در کوله‌پشتی شما پیدا نشد. «کوله‌پشتی» را بنویسید تا شماره‌ی درست را ببینید.")
         if row.listed:
             raise GameError("این تجهیزات روی تخته‌ی بازار برای فروش گذاشته شده است. اگر پشیمان شدید، اول آگهی را «لغو» کنید.")
-        return Piece(row.id, get_item(row.item_id), row.upgrade, row.slot, row.origin)
+        return Piece(row.id, get_item(row.item_id), row.upgrade, row.slot, row.origin, row.bond_uses)
 
     async def on_registered(self, tx: Tx, player: Player) -> None:
         """Starter kit: a class weapon (equipped) and two energy potions."""
@@ -87,7 +92,7 @@ class InventoryService:
     async def view(self, player_id: int) -> InventoryView:
         async with self.ctx.db.read() as tx:
             stacks = [(get_item(i), q) for i, q in await repo.stacks(tx, player_id) if i in ITEMS]
-            gear = [Piece(g.id, get_item(g.item_id), g.upgrade, g.slot, g.origin) for g in await repo.list_gear(tx, player_id)]
+            gear = [Piece(g.id, get_item(g.item_id), g.upgrade, g.slot, g.origin, g.bond_uses) for g in await repo.list_gear(tx, player_id)]
         return InventoryView(stacks, gear)
 
     async def equipped_stats(self, tx: Tx, player_id: int) -> Stats:
@@ -95,7 +100,10 @@ class InventoryService:
         worn: list[str] = []
         for row in await repo.list_gear(tx, player_id):
             if row.slot:
-                total = total + upgraded_stats(get_item(row.item_id), row.upgrade)
+                own = upgraded_stats(get_item(row.item_id), row.upgrade)
+                total = total + own
+                if row.slot == "weapon":
+                    total = total + own.scaled(0.05 * bond_level(row.bond_uses))
                 worn.append(row.item_id)
         return total + set_bonus(worn)
 

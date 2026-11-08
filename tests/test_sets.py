@@ -90,3 +90,36 @@ async def test_defeating_a_boss_can_drop_a_trophy_with_history(services, db, clo
     assert len(rows) == len(dropped)
     if dropped:
         assert "نخستین صاحب" in rows[0]["origin"]
+
+
+async def test_weapon_bond_grows_with_use_and_adds_stats(services, db):
+    from eternal_realm.db.repos import inventory as inv_repo
+    from eternal_realm.game.data.sets import BOND_STEPS, bond_level
+
+    assert [bond_level(n) for n in (0, 24, 25, 75, 150, 999)] == [0, 0, 1, 2, 3, 3]
+    p = await hero(services, db, 30, "آرش")
+    async with db.transaction() as tx:
+        gid = (await services.inventory.grant(tx, p.id, "steel_sword"))[0]
+    await services.inventory.equip(await services.players.require(30), gid)
+    async with db.transaction() as tx:
+        base = await services.inventory.equipped_stats(tx, p.id)
+        await inv_repo.add_bond(tx, p.id, BOND_STEPS[0])
+        bonded = await services.inventory.equipped_stats(tx, p.id)
+    assert bonded.atk > base.atk
+    async with db.transaction() as tx:
+        await inv_repo.add_bond(tx, p.id, 200)
+        piece = await services.inventory.piece(tx, p.id, gid)
+    assert piece.bond == 3 and piece.bond_uses == BOND_STEPS[0] + 200
+    shown = await services.inventory.view(p.id)
+    assert next(x for x in shown.gear if x.id == gid).bond == 3
+
+
+async def test_armor_never_bonds(services, db):
+    from eternal_realm.db.repos import inventory as inv_repo
+
+    p = await hero(services, db, 31, "سارا")
+    async with db.transaction() as tx:
+        gid = (await services.inventory.grant(tx, p.id, "chain_mail"))[0]
+        await inv_repo.add_bond(tx, p.id, 500)
+        piece = await services.inventory.piece(tx, p.id, gid)
+    assert piece.bond == 0

@@ -375,6 +375,10 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_card_listings_active ON card_listings (status, card_id, price);
     """,
+    # 24: a weapon grows closer to its wielder the more it is used
+    """
+    ALTER TABLE gear ADD COLUMN bond_uses INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

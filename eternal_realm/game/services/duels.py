@@ -9,6 +9,7 @@ from ...context import AppContext
 from ...db.database import Row, Tx
 from ...db.repos import duels as repo
 from ...db.repos import players as player_repo
+from ...db.repos import inventory as inv_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
 from ..engine import combat
@@ -228,6 +229,7 @@ class DuelService:
             from ...db.repos import season as season_repo
 
             await season_repo.add_points(tx, pid, "duel_win" if won else "duel", now)
+            await inv_repo.add_bond(tx, pid, 2)
             payouts[pid] = payout
         return payouts
 

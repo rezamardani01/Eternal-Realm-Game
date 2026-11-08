@@ -16,12 +16,13 @@ class GearRow:
     slot: str | None
     listed: bool = False
     origin: str = ""
+    bond_uses: int = 0
 
     @classmethod
     def from_row(cls, row: Row) -> GearRow:
         return cls(
             row["id"], row["player_id"], row["item_id"], row["upgrade"], row["slot"], bool(row["listed"]),
-            row["origin"],
+            row["origin"], row["bond_uses"],
         )
 
 
@@ -66,6 +67,13 @@ async def add_gear(tx: Tx, player_id: int, item_id: str, now: int, upgrade: int 
     return await tx.execute(
         "INSERT INTO gear (player_id, item_id, upgrade, created_at, origin) VALUES (?, ?, ?, ?, ?)",
         (player_id, item_id, upgrade, now, origin),
+    )
+
+
+async def add_bond(tx: Tx, player_id: int, uses: int = 1) -> None:
+    """The weapon in hand grows closer to its wielder."""
+    await tx.execute(
+        "UPDATE gear SET bond_uses = bond_uses + ? WHERE player_id = ? AND slot = 'weapon'", (uses, player_id)
     )
 
 

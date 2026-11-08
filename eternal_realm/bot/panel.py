@@ -373,6 +373,14 @@ async def _piece_screen(c: Ctx, gear_id: int, toast: str | None = None) -> Scree
     ]
     if p.slot:
         lines += ["", "✅ الان بر تن شماست"]
+    if p.item.slot == "weapon":
+        from ..game.data.sets import BOND_NAMES, BOND_STEPS
+
+        level = p.bond
+        nxt = f" · تا سطح بعد {fa(BOND_STEPS[level] - p.bond_uses)} نبرد" if level < len(BOND_STEPS) else " · به اوج رسیده"
+        lines += ["", f"🔗 پیوند با صاحب: {BOND_NAMES[level]} ({fa(level)}){nxt}"]
+        if level:
+            lines.append(f"هر نبرد سلاح را به شما نزدیک‌تر می‌کند؛ الان {fa(5 * level)}٪ توان سلاح بیشتر می‌دهد.")
     set_lines = await c.services.inventory.set_lines(c.player.id, p.item.id)
     if set_lines:
         lines += ["", *set_lines]
