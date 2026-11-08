@@ -1,0 +1,107 @@
+"""Random group events: posting what the bot invents, the buttons people tap and the loop that drives it."""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import logging
+
+from baleropy import Bot, F, Router
+from baleropy.exceptions import BaleAPIError
+from baleropy.types import CallbackQuery, Message
+
+from ..game.services.events import EventAction, EventView
+from ..shared.text import bold
+from . import boss as boss_ui
+from . import keyboards, views
+from .callbacks import EventCb
+from .services import Services
+
+log = logging.getLogger("eternal_realm.events")
+router = Router(name="events")
+
+
+def text_for(view: EventView) -> str:
+    return views.event_text(view)
+
+
+async def announce(bot: Bot, services: Services, action: EventAction) -> None:
+    view = action.view
+    try:
+        if view.boss is not None:
+            sent = await bot.send_message(
+                view.chat_id, boss_ui.text_for(services, view.boss), buttons=boss_ui.buttons_for(view.boss)
+            )
+            await services.bosses.attach_message(view.boss.id, sent.message_id)
+            return
+        if action.what == "spawned":
+            buttons = keyboards.event_buttons(view)
+            if buttons:
+                sent = await bot.send_message(view.chat_id, text_for(view), buttons=buttons)
+            else:
+                sent = await bot.send_message(view.chat_id, text_for(view))
+            await services.events.attach_message(view.id, sent.message_id)
+        elif view.message_id is not None:
+            await bot.edit_message_text(view.chat_id, view.message_id, text_for(view))
+    except BaleAPIError:
+        log.warning("could not post event %s in chat %s", view.kind, view.chat_id)
+
+
+async def _show(query: CallbackQuery, view: EventView) -> None:
+    if query.message is None:
+        return
+    buttons = keyboards.event_buttons(view)
+    with contextlib.suppress(BaleAPIError):
+        if buttons:
+            await query.message.edit_text(text_for(view), buttons=buttons)
+        else:
+            await query.message.edit_text(text_for(view))
+
+
+@router.callback_query(EventCb.filter())
+async def on_event_button(query: CallbackQuery, callback_data: EventCb, services: Services) -> None:
+    player = await services.players.require(query.from_user.id)
+    if callback_data.action == "open":
+        view, success = await services.events.try_open(callback_data.id, player)
+        await _show(query, view)
+        await query.answer("🎉 صندوقچه را گشودید!" if success else "🔑 رمز درست نبود؛ کمی بعد دوباره تلاش کنید.")
+    elif callback_data.action == "buy":
+        view, label = await services.events.buy(callback_data.id, player, callback_data.arg)
+        await _show(query, view)
+        await query.answer(f"🛒 {label} خریداری شد!")
+    else:
+        await query.answer()
+
+
+@router.message(F.new_chat_members)
+async def on_join(message: Message, services: Services) -> None:
+    """Greet newcomers: a known hero gets a fanfare, a stranger gets an invitation."""
+    if str(getattr(message.chat.type, "value", message.chat.type)) == "private":
+        return
+    group = await services.groups.touch(message.chat.id, message.chat.title)
+    if not group.enabled:
+        return
+    for user in message.new_chat_members or []:
+        if user.is_bot:
+            continue
+        player = await services.players.find(user.id)
+        if player is not None:
+            await message.answer(views.welcome_back(player))
+        elif services.bot_username:
+            await message.answer(
+                f"🌅 {bold('درود بر ماجراجوی تازه‌وارد!')}\n\n"
+                "این گروه قلمرویی پر از ماجراست. برای ساختن قهرمان خودتان دکمه‌ی زیر را بزنید 👇",
+                buttons=[keyboards.start_button(services.bot_username)],
+            )
+
+
+async def processor(bot: Bot, services: Services, interval: float = 30.0) -> None:
+    while True:
+        try:
+            for action in await services.events.tick():
+                await announce(bot, services, action)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("event processor failed")
+        await asyncio.sleep(interval)

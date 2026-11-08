@@ -282,7 +282,7 @@ async def note(c: Ctx) -> Screen:
 async def act(c: Ctx) -> Screen:
     services, p = c.services, c.player
     if c.a == "hunt":
-        hunted = await services.hunting.hunt(p.id)
+        hunted = await services.hunting.hunt(p.id, c.chat_id if c.is_group else None)
         for frame in views.hunt_frames(c.who(p), hunted):
             await c.show(frame)
         text = views.hunt_result(c.who(p), hunted)
@@ -292,7 +292,7 @@ async def act(c: Ctx) -> Screen:
         )
         return Screen(text, rows)
     else:
-        done = await services.activities.perform(p.id, c.a)
+        done = await services.activities.perform(p.id, c.a, c.chat_id if c.is_group else None)
         for frame in views.activity_frames(c.who(p), done.activity):
             await c.show(frame)
         text = views.activity_result(c.who(p), done)

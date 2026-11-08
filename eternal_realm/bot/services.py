@@ -12,6 +12,7 @@ from ..game.services.characters import CharacterService
 from ..game.services.chests import ChestService
 from ..game.services.duels import DuelService
 from ..game.services.economy import EconomyService
+from ..game.services.events import EventService
 from ..game.services.groups import GroupService
 from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
@@ -39,6 +40,7 @@ class Services:
     payments: PaymentService
     admin: AdminService
     bosses: BossService
+    events: EventService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -51,6 +53,7 @@ class Services:
         inventory = InventoryService(ctx, players)
         players.after_register.append(inventory.on_registered)
         characters = CharacterService(ctx, inventory)
+        bosses = BossService(ctx, players, inventory, characters)
         return cls(
             ctx=ctx,
             players=players,
@@ -65,7 +68,8 @@ class Services:
             chests=ChestService(ctx, inventory),
             payments=PaymentService(ctx, inventory),
             admin=AdminService(ctx, inventory),
-            bosses=BossService(ctx, players, inventory, characters),
+            bosses=bosses,
+            events=EventService(ctx, inventory, bosses),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(

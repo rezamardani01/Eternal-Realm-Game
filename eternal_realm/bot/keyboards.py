@@ -9,7 +9,7 @@ from ..game.data.classes import CLASSES
 from ..game.data.races import RACES
 from ..game.engine.combat import Fighter
 from ..shared.text import duration, fa
-from .callbacks import BossCb, ClassCb, DuelCb, PanelCb, RaceCb
+from .callbacks import BossCb, ClassCb, DuelCb, EventCb, PanelCb, RaceCb
 
 Rows = list[list[InlineKeyboardButton]]
 
@@ -69,6 +69,26 @@ def boss_buttons(boss_id: int) -> Rows:
             Button.inline("🚀 شروع نبرد", BossCb(action="start", id=boss_id), style="danger"),
         ]
     ]
+
+
+def event_buttons(view) -> Rows | None:  # noqa: ANN001 - EventView
+    if view.status != "active":
+        return None
+    if view.kind == "mystery_chest":
+        return [[Button.inline("🗝️ تلاش برای گشودن", EventCb(action="open", id=view.id), style="success")]]
+    if view.kind == "merchant":
+        from ..game.data.items import get_item
+
+        rows = []
+        for index, entry in enumerate(view.state["stock"]):
+            if entry["left"] > 0:
+                item = get_item(entry["item"])
+                rows.append([
+                    Button.inline(f"{item.label} · {fa(entry['price'])}🪙 · {fa(entry['left'])} عدد",
+                                  EventCb(action="buy", id=view.id, arg=index), style="success")
+                ])
+        return rows or None
+    return None
 
 
 def duel_invite(duel_id: int) -> Rows:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ...context import AppContext
+from ...db.repos import events as event_repo
 from ...db.repos import inventory as inv_repo
 from ...db.repos import players as player_repo
 from ...db.repos import wallet
@@ -43,6 +44,7 @@ class HuntResult:
     highlights: list[str]
     log: list[str]
     next_in: int = 0
+    double_xp: bool = False
 
 
 class HuntService:
@@ -62,7 +64,7 @@ class HuntService:
         pool = fair or [min(band, key=lambda m: _power(m.fighter(level)))]
         return self.ctx.rng.choices(pool, weights=[m.weight for m in pool], k=1)[0]
 
-    async def hunt(self, player_id: int) -> HuntResult:
+    async def hunt(self, player_id: int, chat_id: int | None = None) -> HuntResult:
         now, rng = self.ctx.now(), self.ctx.rng
         async with self.ctx.db.transaction() as tx:
             player = await player_repo.get(tx, player_id)
@@ -94,6 +96,9 @@ class HuntService:
                         items[drop.item_id] = rng.randint(*drop.qty)
             else:
                 xp = round(rng.randint(*monster.xp) * loot.xp_scale(player.level) * LOSS_XP_SHARE)
+            double = chat_id is not None and await event_repo.double_xp_active(tx, chat_id, now)
+            if double:
+                xp *= 2
             await wallet.apply(tx, player_id, gold=gold, reason="hunt", now=now)
             for item_id, qty in items.items():
                 await self.inventory.grant(tx, player_id, item_id, qty)
@@ -105,5 +110,5 @@ class HuntService:
             monster=monster, won=won, rounds=min(battle.round, battle.max_rounds),
             hero_hp=max(0, hero.hp), hero_max_hp=hero.max_hp, gold=gold, xp=xp,
             items=[(get_item(i).label, q, i) for i, q in items.items()], level_up=level_up,
-            player=self.players.with_energy(after), highlights=log[-3:], log=log, next_in=wait,
+            player=self.players.with_energy(after), highlights=log[-3:], log=log, next_in=wait, double_xp=double,
         )

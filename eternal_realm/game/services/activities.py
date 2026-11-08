@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ...context import AppContext
+from ...db.repos import events as event_repo
 from ...db.repos import inventory as inv_repo
 from ...db.repos import players as player_repo
 from ...db.repos import wallet
@@ -27,6 +28,7 @@ class ActivityResult:
     items: list[tuple[str, int, str]]
     #: seconds until this activity may be used again
     next_in: int = 0
+    double_xp: bool = False
 
 
 class ActivityService:
@@ -48,7 +50,7 @@ class ActivityService:
             await inv_repo.set_cooldown(tx, player_id, "rest", now + balance.rest_cooldown_seconds)
         return restored
 
-    async def perform(self, player_id: int, activity_id: str) -> ActivityResult:
+    async def perform(self, player_id: int, activity_id: str, chat_id: int | None = None) -> ActivityResult:
         activity = ACTIVITIES[activity_id]
         now = self.ctx.now()
         async with self.ctx.db.transaction() as tx:
@@ -69,6 +71,9 @@ class ActivityService:
             perk = player.race.perks.get(activity.id, 1.0)
             rolled = loot.roll(activity, player.level, luck, perk, self.ctx.rng)
 
+            double = chat_id is not None and await event_repo.double_xp_active(tx, chat_id, now)
+            if double:
+                rolled.xp *= 2
             await wallet.apply(
                 tx, player_id, gold=rolled.gold, crystal=rolled.crystal,
                 reason=f"activity:{activity.id}", now=now,
@@ -81,4 +86,4 @@ class ActivityService:
             after = await player_repo.get(tx, player_id)
             assert after is not None
         items = [(get_item(i).label, q, i) for i, q in rolled.items.items()]
-        return ActivityResult(activity, rolled, level_up, self.players.with_energy(after), items, wait)
+        return ActivityResult(activity, rolled, level_up, self.players.with_energy(after), items, wait, double)

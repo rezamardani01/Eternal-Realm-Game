@@ -6,12 +6,13 @@ from ..database import Row, Tx
 
 
 async def create(
-    tx: Tx, chat_id: int, boss_type: str, level: int, summoner_id: int, now: int, recruit_until: int
+    tx: Tx, chat_id: int, boss_type: str, level: int, summoner_id: int, now: int, recruit_until: int,
+    state: str = "{}",
 ) -> int:
     return await tx.execute(
         "INSERT INTO bosses (chat_id, boss_type, level, max_hp, hp, status, summoner_id, created_at, expires_at,"
-        " phase, recruit_until) VALUES (?, ?, ?, 1, 1, 'active', ?, ?, ?, 'recruiting', ?)",
-        (chat_id, boss_type, level, summoner_id, now, recruit_until, recruit_until),
+        " phase, recruit_until, state) VALUES (?, ?, ?, 1, 1, 'active', ?, ?, ?, 'recruiting', ?, ?)",
+        (chat_id, boss_type, level, summoner_id, now, recruit_until, recruit_until, state),
     )
 
 

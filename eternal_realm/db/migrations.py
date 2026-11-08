@@ -207,6 +207,22 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (player_id, key)
     );
     """,
+    # 11: events the bot starts in groups by itself
+    """
+    ALTER TABLE groups ADD COLUMN next_event_at INTEGER NOT NULL DEFAULT 0;
+
+    CREATE TABLE group_events (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id    INTEGER NOT NULL,
+        kind       TEXT    NOT NULL,
+        message_id INTEGER,
+        status     TEXT    NOT NULL CHECK (status IN ('active', 'done', 'expired')),
+        state      TEXT    NOT NULL DEFAULT '{}',
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+    );
+    CREATE INDEX idx_group_events_chat ON group_events (chat_id, status, kind);
+    """,
 ]
 
 

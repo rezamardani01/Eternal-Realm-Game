@@ -45,6 +45,8 @@ class Balance:
     command_gap_seconds: float = 1.0
     #: pause between the steps of «در حال شکار...»-style animations (0 turns them off)
     animation_seconds: float = 1.0
+    event_interval_seconds: int = 10800
+    event_min_active: int = 2
     #: waiting time after the 1st, 2nd, 3rd ... use of the same activity in one day (seconds; the last repeats)
     cooldown_ladder: str = "300,900,1800,3600,7200"
     boss_summon_gold: int = 200

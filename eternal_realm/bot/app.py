@@ -12,7 +12,7 @@ from baleropy.exceptions import BaleUnauthorized
 from ..config import ConfigError, Settings
 from ..context import AppContext
 from ..db.database import Database
-from . import boss, duels, maintenance, onboarding, panel, payments
+from . import boss, duels, events, maintenance, onboarding, panel, payments
 from .commands import REGISTRY
 from .commands import router as commands_router
 from .middlewares import ErrorMiddleware
@@ -37,7 +37,7 @@ def build_dispatcher(services: Services) -> Dispatcher:
     # order matters: FSM-bound onboarding first, free-text commands last
     _attach(
         dp, onboarding.router, panel.listing_router, panel.router, payments.router, duels.router, boss.router,
-        commands_router,
+        events.router, commands_router,
     )
     return dp
 
@@ -59,6 +59,7 @@ async def run(settings: Settings) -> None:
             asyncio.create_task(duels.janitor(bot, services), name="janitor"),
             asyncio.create_task(maintenance.backup_loop(db), name="backup"),
             asyncio.create_task(boss.processor(bot, services), name="boss-processor"),
+            asyncio.create_task(events.processor(bot, services), name="event-processor"),
         ]
         try:
             await dp.start_polling(bot, skip_updates=True)

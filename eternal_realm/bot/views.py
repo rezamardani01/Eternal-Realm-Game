@@ -250,6 +250,7 @@ def activity_result(name: str, result) -> str:  # noqa: ANN001 - ActivityResult
         "",
         DIV,
         f"⏰ {result.activity.title} بعدی: {duration(result.next_in)} دیگر",
+        *(["", "✨ ستاره‌ی تجربه فعال است؛ تجربه‌ی این کار دو برابر شد!"] if result.double_xp else []),
         "",
         "🎁 چیزهایی که پیدا کردید یا به دست آوردید 👇",
     ]
@@ -279,7 +280,10 @@ def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
             f"💔 {bold('این بار هیولا قوی‌تر بود')} و عقب‌نشینی کردید. چیزی از دست ندادید؛ "
             "قوی‌تر شوید و دوباره بیایید!"
         )
-    lines += ["", DIV, f"⏰ شکار بعدی: {duration(r.next_in)} دیگر", "", "🎁 چیزهایی که به دست آوردید 👇"]
+    lines += ["", DIV, f"⏰ شکار بعدی: {duration(r.next_in)} دیگر"]
+    if r.double_xp:
+        lines += ["", "✨ ستاره‌ی تجربه فعال است؛ تجربه‌ی این شکار دو برابر شد!"]
+    lines += ["", "🎁 چیزهایی که به دست آوردید 👇"]
     if r.level_up:
         lines += ["", level_up_text(r.level_up.new_level)]
     return "\n".join(lines)
@@ -519,7 +523,11 @@ def boss_recruiting(v, min_players: int, max_players: int) -> str:  # noqa: ANN0
             "فرمانده، متحدان خود را فرا بخوانید!",
             "",
             f"🔮 عنصر: {v.type.element.emoji} {v.type.element.noun} · نقطه‌ضعف: کلاس {CLASSES[v.type.weak_class].name}",
-            f"👤 احضارکننده: {v.summoner_mention}",
+            *(
+                ["🌑 باس مخفی خودش وارد گروه شد! هر جنگجو می‌تواند نبرد را شروع کند."]
+                if v.free
+                else [f"👤 احضارکننده: {v.summoner_mention}"]
+            ),
             f"👥 جنگجویان: {bold(fa(len(v.fighters)))} / {fa(max_players)} (حداقل {fa(min_players)})",
             f"⏳ زمان ثبت‌نام: {_clock(v.seconds_left)}",
             "❤️ جان باس با تعداد جنگجویان بیشتر می‌شود.",
@@ -574,6 +582,87 @@ def boss_final(v) -> str:  # noqa: ANN001 - BossView
     if not v.payouts:
         lines.append("هیچ‌کس در نبرد نبود.")
     return "\n".join(lines)
+
+
+# --- random group events --------------------------------------------------------------------------
+def event_text(view) -> str:  # noqa: ANN001 - EventView
+    from ..game.data.items import get_item
+
+    st = view.state
+    if view.kind == "mystery_chest":
+        if view.status == "done":
+            prize = get_item(st["prize"])
+            return (
+                f"🎉 {bold('صندوقچه گشوده شد!')}\n\n"
+                f"{st['mention']} رمز را کشف کرد و {prize.label} را برد.\n\n"
+                f"🔑 تلاش‌ها: {fa(st['attempts'])}"
+            )
+        if view.status == "expired":
+            return (
+                f"⌛ {bold('صندوقچه برای همیشه بسته ماند')}\n\n"
+                "کسی نتوانست رمزش را کشف کند و کاروان از دور خارج شد."
+            )
+        return (
+            f"🎁 {bold('صندوقچه‌ی اسرارآمیز پیدا شد!')}\n\n"
+            "یکی از کاروان‌های سلطنتی در نزدیکی این منطقه مورد حمله قرار گرفته است. "
+            "صندوقچه‌ای از آن‌ها به‌جا مانده که هنوز کسی موفق به گشودنش نشده است.\n\n"
+            "اعضای گروه برای کشف رمز صندوقچه فرصت محدودی دارند!\n\n"
+            f"🔑 تلاش‌ها تا الان: {fa(st['attempts'])}\n"
+            f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}\n\n"
+            "هر تلاش، شانس گشودن را بیشتر می‌کند 👇"
+        )
+    if view.kind == "merchant":
+        lines = [f"🧳 {bold('تاجر دوره‌گرد رسید!')}", ""]
+        if view.status == "active":
+            lines += ["کاروانش را در این منطقه پهن کرده و کالاهای محدودش را ارزان می‌فروشد.", ""]
+        else:
+            lines += ["تاجر کاروانش را جمع کرد و رفت. شاید دفعه‌ی بعد!", ""]
+        for entry in st["stock"]:
+            item = get_item(entry["item"])
+            left = f"{fa(entry['left'])} عدد مانده" if entry["left"] > 0 else "تمام شد"
+            lines += [f"• {item.label} — {fa(entry['price'])} 🪙", f"   {left}", ""]
+        if view.status == "active":
+            lines.append(f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}")
+            lines.append("هر کس زودتر بزند، می‌خرد 👇")
+        return "\n".join(lines)
+    if view.kind == "double_xp":
+        if view.status == "active":
+            return (
+                f"✨ {bold('ستاره‌ی تجربه در آسمان!')}\n\n"
+                f"تا {duration(view.seconds_left)} دیگر، همه‌ی ماجراجویی‌ها و شکارهای این گروه "
+                f"{bold('دو برابر')} تجربه می‌دهند.\n\nهمین حالا به میدان بروید!"
+            )
+        return f"🌙 {bold('ستاره‌ی تجربه محو شد')}\n\nتجربه‌ی دوبرابر تمام شد."
+    return f"{view.kind}"
+
+
+def events_overview(views_, double_xp: bool) -> str:  # noqa: ANN001
+    lines = [f"🎲 {bold('رویدادهای گروه')}", ""]
+    if views_:
+        for v in views_:
+            label = {"mystery_chest": "🎁 صندوقچه‌ی اسرارآمیز", "merchant": "🧳 تاجر دوره‌گرد",
+                     "double_xp": "✨ تجربه‌ی دوبرابر"}.get(v.kind, v.kind)
+            lines.append(f"• {label} — {duration(v.seconds_left)} مانده")
+        lines.append("")
+    else:
+        lines += ["الان رویدادی در جریان نیست.", ""]
+    lines += [
+        "ربات گاهی خودش در گروه‌های فعال اتفاق می‌اندازد: صندوقچه‌ی اسرارآمیز، تاجر دوره‌گرد، "
+        "ستاره‌ی تجربه و باس مخفی.",
+        "",
+        "مدیران گروه با «غیرفعال رویدادها» می‌توانند آن‌ها را خاموش کنند.",
+    ]
+    return "\n".join(lines)
+
+
+def welcome_back(player) -> str:  # noqa: ANN001 - Player
+    return (
+        f"🛡️ {bold('ورود یک قهرمان')}\n\n"
+        f"{player.mention} با نام‌آوری وارد گروه شد!\n"
+        f"{player.race.emoji} {player.race.name} · {player.char_class.emoji} {player.char_class.name} · "
+        f"سطح {fa(player.level)}\n"
+        f"🏆 {fa(player.wins)} پیروزی در دوئل"
+    )
 
 
 # --- duels -------------------------------------------------------------------------------------

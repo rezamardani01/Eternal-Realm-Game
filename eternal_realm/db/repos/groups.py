@@ -7,9 +7,9 @@ from ..database import Row, Tx
 
 async def touch(tx: Tx, chat_id: int, title: str, now: int) -> None:
     await tx.execute(
-        "INSERT INTO groups (chat_id, title, created_at, last_seen) VALUES (?, ?, ?, ?)"
+        "INSERT INTO groups (chat_id, title, created_at, last_seen, next_event_at) VALUES (?, ?, ?, ?, ?)"
         " ON CONFLICT (chat_id) DO UPDATE SET title = excluded.title, last_seen = excluded.last_seen",
-        (chat_id, title, now, now),
+        (chat_id, title, now, now, now + 2700),  # a first surprise about 45 minutes after we meet a group
     )
 
 

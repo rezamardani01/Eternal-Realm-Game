@@ -80,6 +80,7 @@ class BossView:
     payouts: list[Payout] = field(default_factory=list)
     #: how a finished fight ended: won | lost | fled | cancelled
     outcome: str | None = None
+    free: bool = False
 
     @property
     def seconds_left(self) -> int:
@@ -129,7 +130,7 @@ class BossService:
                 )
                 for r in roster
             ],
-            report=state.get("recent", []), payouts=payouts or [], outcome=outcome,
+            report=state.get("recent", []), payouts=payouts or [], outcome=outcome, free=bool(state.get("free")),
         )
 
     async def active(self, chat_id: int) -> BossView | None:
@@ -140,6 +141,31 @@ class BossService:
     async def attach_message(self, boss_id: int, message_id: int) -> None:
         async with self.ctx.db.transaction() as tx:
             await repo.set_message(tx, boss_id, message_id)
+
+    async def summon_event(self, chat_id: int) -> BossView:
+        """A hidden boss that the bot itself brings into a group: free, and anyone may start it."""
+        from ...db.repos import events as event_repo
+        from ...db.repos import players as player_repo
+
+        b, now = self.ctx.balance, self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            if await repo.active_in_chat(tx, chat_id) is not None or await event_repo.active_in_chat(tx, chat_id, now):
+                raise GameError("busy")
+            last = await repo.last_created(tx, chat_id)
+            if last and last + b.boss_cooldown_seconds > now:
+                raise GameError("cooldown")
+            pid = await event_repo.most_recent_member(tx, chat_id)
+            lead = await player_repo.get(tx, pid) if pid else None
+            if lead is None or lead.level < b.boss_min_level:
+                raise GameError("nobody strong enough")
+            kind = pick_boss(lead.level, self.ctx.rng)
+            boss_id = await repo.create(
+                tx, chat_id, kind.id, lead.level, lead.id, now, now + b.boss_recruit_seconds, json.dumps({"free": True})
+            )
+            await self._enlist(tx, boss_id, lead)
+            row = await repo.get(tx, boss_id)
+            assert row is not None
+            return await self._view(tx, row)
 
     # --- summon and sign-up ---------------------------------------------------------------------
     async def summon(self, player: Player, chat_id: int) -> BossView:
@@ -188,7 +214,8 @@ class BossService:
             row = await repo.get(tx, boss_id)
             if row is None or row["status"] != "active":
                 raise GameError("🐉 این نبرد تمام شده است.")
-            if row["summoner_id"] != player.id:
+            free = json.loads(row["state"] or "{}").get("free", False)
+            if row["summoner_id"] != player.id and not (free and await self._is_fighter(tx, row["id"], player.id)):
                 raise GameError("🚀 فقط احضارکننده‌ی باس می‌تواند نبرد را شروع کند.")
             if row["phase"] != "recruiting":
                 raise GameError("⚔️ نبرد همین الان در جریان است!")
@@ -230,6 +257,9 @@ class BossService:
         assert fresh is not None
         return await self._view(tx, fresh)
 
+    async def _is_fighter(self, tx: Tx, boss_id: int, player_id: int) -> bool:
+        return any(r["player_id"] == player_id for r in await repo.fighters(tx, boss_id))
+
     async def players_get(self, tx: Tx, player_id: int) -> Player:
         from ...db.repos import players as player_repo
 
@@ -263,10 +293,11 @@ class BossService:
             if len(roster) >= self.ctx.balance.boss_min_players:
                 return BossUpdate(await self._begin(tx, row, now), "started")
             await repo.close(tx, row["id"], "expired", now)
-            await wallet.apply(
-                tx, row["summoner_id"], gold=self.ctx.balance.boss_summon_gold, reason="boss_refund", now=now,
-                ref=f"boss:{row['id']}:refund",
-            )
+            if not json.loads(row["state"] or "{}").get("free"):  # event bosses cost nothing, so nothing to refund
+                await wallet.apply(
+                    tx, row["summoner_id"], gold=self.ctx.balance.boss_summon_gold, reason="boss_refund", now=now,
+                    ref=f"boss:{row['id']}:refund",
+                )
             fresh = await repo.get(tx, row["id"])
             assert fresh is not None
             return BossUpdate(await self._view(tx, fresh, outcome="cancelled"), "cancelled")
