@@ -13,7 +13,7 @@ from ..config import ConfigError, Settings
 from ..context import AppContext
 from ..db.database import Database
 from . import boss, clan_panel, group_dungeon, membership, duels, events, maintenance, onboarding, panel, payments, quest_panel  # noqa: F401
-from . import ascend_panel, altar_panel, card_panel, contest_panel, craft_panel, dungeon_panel, mission_panel, offers, path_panel, pet_panel, transfer_panel, vip_panel  # noqa: F401
+from . import admin_panel, ascend_panel, altar_panel, card_panel, contest_panel, craft_panel, dungeon_panel, mission_panel, offers, path_panel, pet_panel, transfer_panel, vip_panel  # noqa: F401
 from .commands import REGISTRY
 from .commands import router as commands_router
 from .membership import MembershipMiddleware
@@ -40,7 +40,7 @@ def build_dispatcher(services: Services) -> Dispatcher:
     REGISTRY.configure(services.ctx.settings.command_overrides)
     # order matters: FSM-bound onboarding first, free-text commands last
     _attach(
-        dp, onboarding.router, panel.listing_router, panel.router, payments.router, duels.router, boss.router,
+        dp, onboarding.router, panel.listing_router, admin_panel.router, panel.router, payments.router, duels.router, boss.router,
         membership.router, group_dungeon.router,
         events.router, clan_panel.router, commands_router,
     )
@@ -68,19 +68,9 @@ async def run(settings: Settings) -> None:
             asyncio.create_task(offers.processor(bot, services), name="offer-processor"),
             asyncio.create_task(path_panel.processor(bot, services), name="path-notifier"),
         ]
-        web_runner = None
-        if settings.web_enabled:
-            from ..web.server import start_web
-
-            web_runner = await start_web(
-                services, services.web_auth, bot, settings.web_host, settings.web_port,
-                secure_cookie=settings.web_url.startswith("https://"),
-            )
         try:
             await dp.start_polling(bot, skip_updates=True)
         finally:
-            if web_runner is not None:
-                await web_runner.cleanup()
             for task in background:
                 task.cancel()
             for task in background:

@@ -39,7 +39,7 @@ def _name_and_number(ctx: CommandContext) -> tuple[str, int]:
     return " ".join(ctx.args[:-1]), number
 
 
-@command("admin_panel", ["admin", "پنل مدیریت"], "پنل مدیریت", **_OPTIONS)
+@command("admin_panel", ["admin"], "راهنمای دستورهای مدیریتی (متنی)", **_OPTIONS)
 async def admin_panel(ctx: CommandContext) -> None:
     if _is_admin(ctx):
         await ctx.reply(HELP)

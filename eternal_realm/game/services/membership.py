@@ -1,6 +1,6 @@
 """Forced channel membership: which channels a player must have joined before playing.
 
-The list lives in the database (``app_settings``) so the web panel can change it without a restart.
+The list lives in the database (``app_settings``) so the admin panel can change it without a restart.
 """
 
 from __future__ import annotations
@@ -108,7 +108,7 @@ class MembershipService:
             del self._ok[key]
 
     async def probe(self, bot, chat: str) -> dict[str, str]:  # noqa: ANN001
-        """For the web panel: can the bot see this channel, and is it an admin there?"""
+        """For the admin panel: can the bot see this channel, and is it an admin there?"""
         if not _CHAT.match(chat):
             raise GameError("شناسه‌ی کانال درست نیست.")
         try:

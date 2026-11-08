@@ -116,7 +116,7 @@ class AdminService:
         async with self.ctx.db.transaction() as tx:
             await self._log(tx, admin_id, action, detail)
 
-    # --- grants and removals by player id (used by the owner's reply commands and the web panel) -----------
+    # --- grants and removals by player id (used by the owner's reply commands and the admin panel) -----------
     async def _by_id(self, tx, player_id: int) -> Player:  # noqa: ANN001
         player = await player_repo.get(tx, player_id)
         if player is None:
