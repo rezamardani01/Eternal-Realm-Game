@@ -51,14 +51,21 @@ async def test_sorting_cheapest_most_expensive_and_rarest(h, services, db):
     await h.panel(11, "market")
     assert len(listing_labels(h)) == 4
 
+    await h.tap(11, "فیلتر")
     await h.tap(11, "ارزان‌ترین")
+    assert any("✅ ارزان‌ترین" in t for t in h.labels())  # the tick moved
+    await h.tap(11, "نمایش آگهی‌ها")
     prices = [t.split("—")[-1] for t in listing_labels(h)]
     assert "خنجر" in listing_labels(h)[0] and "۳۰۰" in prices[0]
 
+    await h.tap(11, "فیلتر")
     await h.tap(11, "گران‌ترین")
+    await h.tap(11, "نمایش آگهی‌ها")
     assert "شمشیر فولادی" in listing_labels(h)[0]
 
+    await h.tap(11, "فیلتر")
     await h.tap(11, "کمیاب‌ترین")
+    await h.tap(11, "نمایش آگهی‌ها")
     assert "شمشیر فولادی" in listing_labels(h)[0]  # rarity 3 beats the common items
 
 
@@ -66,12 +73,17 @@ async def test_category_and_sort_work_together_and_survive_paging(h, services, d
     await seed_market(services, db)
     await reg(services, 11, "سارا")
     await h.panel(11, "market")
+    assert len(h.labels()) < 14  # only two filter buttons, not a wall of keys
+    await h.tap(11, "دسته")
     await h.tap(11, "سلاح و زره")
+    await h.tap(11, "نمایش آگهی‌ها")
+    await h.tap(11, "فیلتر")
     await h.tap(11, "ارزان‌ترین")
+    await h.tap(11, "نمایش آگهی‌ها")
     labels = listing_labels(h)
     assert len(labels) == 3 and "سنگ آهن" not in " ".join(labels)
-    assert any(t.startswith("•") and "سلاح و زره" in t for t in h.labels())
-    assert any(t.startswith("•") and "ارزان‌ترین" in t for t in h.labels())
+    assert any("دسته: سلاح و زره" in t for t in h.labels())
+    assert any("فیلتر: ارزان‌ترین" in t for t in h.labels())
 
 
 async def test_everyone_sees_the_same_market_from_any_group(h, services, db):

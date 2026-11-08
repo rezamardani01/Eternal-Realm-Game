@@ -752,9 +752,10 @@ async def market(c: Ctx) -> Screen:
         text = f"{head}\n\nآگهی بازیکنان از همه‌ی گروه‌ها؛ یکی را انتخاب کنید 👇"
     else:
         text = f"{head}\n\nدر این دسته آگهی فعالی نیست. شما می‌توانید اولین فروشنده باشید!"
-    tabs = [c.btn(("• " if k == tab else "") + label, "market", 0, f"{k}.{sort}") for k, (label, _) in MARKET_TABS.items()]
-    sorts = [c.btn(("• " if k == sort else "") + label, "market", 0, f"{tab}.{k}") for k, label in MARKET_SORTS.items()]
-    rows = keyboards.grid(tabs, 3) + keyboards.grid(sorts, 2)
+    rows = [[
+        c.btn(f"📂 دسته: {MARKET_TABS[tab][0].split(' ', 1)[1]}", "mcat", 0, f"{tab}.{sort}"),
+        c.btn(f"🔎 فیلتر: {MARKET_SORTS[sort].split(' ', 1)[1]}", "mfilter", 0, f"{tab}.{sort}"),
+    ]]
     rows += [
         [c.btn(f"{lst.label} {lst.item.rarity_label.split(' ')[0]} — {fa(lst.price)}🪙", "listing", lst.id)]
         for lst in found
@@ -764,6 +765,37 @@ async def market(c: Ctx) -> Screen:
     rows.append([c.btn("🏷️ فروش کالای من", "msell", style="success"), c.btn("📋 آگهی‌های من", "mine")])
     rows.append(c.back("home"))
     return Screen(text, rows)
+
+
+async def _tick_screen(c: Ctx, title: str, blurb: str, options: dict[str, str], current: str, action: str) -> Screen:
+    """A list of options with a tick on the chosen one; tapping one applies it and stays here."""
+    tab, sort = _tab_sort(c)
+    rows = []
+    for key, label in options.items():
+        mark = "✅ " if key == current else "⬜ "
+        value = f"{key}.{sort}" if action == "mcat" else f"{tab}.{key}"
+        rows.append([c.btn(mark + label.split(" ", 1)[1], action, 0, value)])
+    rows.append([c.btn("🏪 نمایش آگهی‌ها", "market", 0, f"{tab}.{sort}", style="primary")])
+    return Screen(f"{title}\n\n{blurb}", rows)
+
+
+@screen("mcat")
+async def market_category(c: Ctx) -> Screen:
+    tab, _ = _tab_sort(c)
+    labels = {k: label for k, (label, _) in MARKET_TABS.items()}
+    return await _tick_screen(
+        c, f"📂 {bold('دسته‌ی کالا')}", "نوع کالاهایی را که می‌خواهید ببینید تیک بزنید، بعد «نمایش آگهی‌ها».",
+        labels, tab, "mcat",
+    )
+
+
+@screen("mfilter")
+async def market_filter(c: Ctx) -> Screen:
+    _, sort = _tab_sort(c)
+    return await _tick_screen(
+        c, f"🔎 {bold('فیلتر و ترتیب')}", "ترتیب نمایش آگهی‌ها را تیک بزنید، بعد «نمایش آگهی‌ها».",
+        dict(MARKET_SORTS), sort, "mfilter",
+    )
 
 
 @screen("msell")
