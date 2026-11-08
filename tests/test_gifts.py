@@ -61,7 +61,7 @@ async def test_only_the_owner_can_gift_and_no_reply_means_himself(h, services):
     assert (await services.players.require(1)).gold == mine + 100
     await h.say(1, "اهدا سکه abc", group=True, reply_to=h.message_of(3))
     assert "مقدار را درست بنویسید" in h.session.last_text()
-    await h.say(1, "اهدا حیوان اژدها", group=True, reply_to=h.message_of(3))
+    await h.say(1, "اهدا حیوان غول", group=True, reply_to=h.message_of(3))
     assert "نام حیوان" in h.session.last_text()
 
 
@@ -77,6 +77,6 @@ async def test_admin_service_can_also_take_things_back(services):
     assert await admin.grant_pet(1, p.id, "cat", False)
     assert await services.pets.owned(p.id) == {"fox": True}  # the remaining pet becomes active
     with pytest.raises(GameError):
-        await admin.grant_pet(1, p.id, "dragon")
+        await admin.grant_pet(1, p.id, "yeti")
     with pytest.raises(GameError):
         await admin.set_vip(1, p.id, 10**6)

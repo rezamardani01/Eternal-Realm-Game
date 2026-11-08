@@ -110,3 +110,28 @@ async def test_the_owner_command_list(h, services, db):
     await h.say(1, "دستورات مالک", group=True)
     text = h.session.last_text()
     assert "اهدا مسیر قهرمانی" in text and "احضار دوره گرد" in text and "اهدا سنگ آهن 399" in text
+
+
+async def test_owner_gifts_a_pet_just_by_its_name(h, services, db):
+    await hero(services, db, 1, "ارباب")
+    target = await hero(services, db, 2, "آرش")
+    await h.say(1, "اهدا ققنوس", group=True, reply_to=h.message_of(2))
+    assert await services.pets.owned(target.id) == {"phoenix": True}
+    assert "ققنوس" in h.session.last_text()
+    await h.say(1, "اهدا عقاب", group=True, reply_to=h.message_of(2))
+    assert "eagle" in await services.pets.owned(target.id)
+    await h.say(1, "اهدا ققنوس", group=True, reply_to=h.message_of(2))
+    assert "از قبل" in h.session.last_text()
+    await h.say(1, "اهدا اژدهای کوچک", group=True)  # no reply: for himself
+    assert "dragon" in await services.pets.owned((await services.players.require(1)).id)
+
+
+async def test_only_players_can_transfer_to_each_other(services, db):
+    owner = await hero(services, db, 1, "ارباب", gold=5_000)
+    a = await hero(services, db, 2, "آرش", gold=5_000)
+    b = await hero(services, db, 3, "سارا", gold=5_000)
+    with pytest.raises(GameError, match="فقط بین بازیکنان"):
+        await services.economy.transfer(a, owner, 500)
+    with pytest.raises(GameError, match="فقط بین بازیکنان"):
+        await services.economy.transfer(owner, a, 500)
+    assert await services.economy.transfer(a, b, 500) >= 0

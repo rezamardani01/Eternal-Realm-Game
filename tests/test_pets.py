@@ -137,3 +137,18 @@ def test_a_pet_announces_its_strike_in_the_duel_log():
     assert joined and "آسیب" in joined[0]
     assert not any("همراه سارا" in x for x in seen)  # the other fighter has no pet
     assert combat.Battle.from_dict(battle.to_dict()).fighters[0].pet_name == "گربه‌ی چابک"
+
+
+def test_stronger_pets_cost_more_and_the_legendary_ones_are_sold_for_real_money_only():
+    gold_pets = [p for p in PETS if p.price_gold]
+    premium = [p for p in PETS if p.pack_id]
+    assert len(PETS) >= 12 and len(gold_pets) >= 6 and len(premium) >= 6
+    assert all(p.rarity <= 4 for p in gold_pets)  # the everyday ones can be bought with coins
+    assert all(p.rarity >= 5 for p in PETS if p.rarity >= 5 and not p.price_gold)
+    assert all(not p.price_gold and p.pack_id for p in PETS if p.rarity >= 5)  # legendary: real money only
+    def power(p):
+        b = p.bonus
+        return b.atk + b.magic + b.defense + b.speed + b.luck + b.hp / 10
+    strongest_gold = max(power(p) for p in gold_pets)
+    assert max(power(p) for p in premium) > strongest_gold  # paid pets are stronger than anything coins buy
+    assert max(power(p) for p in PETS if p.rarity == 6) > max(power(p) for p in PETS if p.rarity == 5) * 0.9
