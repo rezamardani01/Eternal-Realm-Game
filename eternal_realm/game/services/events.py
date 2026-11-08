@@ -34,12 +34,12 @@ BASE_WEIGHTS = {
 #: busy groups get the big team events more often
 CROWD_KINDS = ("invasion", "egg", "hidden_boss")
 LIFETIME = {
-    "mystery_chest": 300, "merchant": 600, "double_xp": 1800, "hidden_chest": 900, "invasion": 900, "meteor": 600,
-    "gold_rain": 480, "spring": 600, "wheel": 600, "egg": 720,
+    "mystery_chest": 300, "merchant": 600, "double_xp": 1800, "hidden_chest": 900, "invasion": 180, "meteor": 600,
+    "gold_rain": 480, "spring": 600, "wheel": 600, "egg": 180,
 }
 RAIN_DROPS, RAIN_PER_PLAYER, RAIN_GAP = 20, 4, 10
 SPRING_VISITORS = 12
-WARM_GAP = 6
+WARM_GAP = 4
 WHEEL_PRIZES = (
     ("gold", 40), ("xp", 25), ("crystal", 15), ("potion", 12), ("wooden_chest", 6), ("magic_chest", 2),
 )
@@ -55,7 +55,7 @@ def weight_of(kind: str, active_members: int) -> float:
     return BASE_WEIGHTS[kind] * boost
 TRY_GAP = 20
 SEARCH_GAP = 20
-DEFEND_GAP = 25
+DEFEND_GAP = 12
 COLLECT_GAP = 15
 CHEST_ODDS = (("wooden_chest", 70), ("magic_chest", 27), ("royal_chest", 3))
 #: (item, price in gold) the travelling merchant may carry
@@ -157,7 +157,7 @@ class EventService:
                 state = {"spins": {}, "names": {}}
             elif kind == "egg":
                 members = max(2, await repo.active_members(tx, chat_id, now - 86400))
-                state = {"need": min(150, max(25, 8 * members)), "warm": 0, "hits": {}, "names": {}, "at": {}}
+                state = {"need": min(60, max(12, 3 * members)), "warm": 0, "hits": {}, "names": {}, "at": {}}
             elif kind == "merchant":
                 picks = rng.sample(MERCHANT_STOCK, 3)
                 state = {"stock": [{"item": i, "price": round(p * rng.uniform(0.6, 0.85)), "left": rng.randint(2, 3)}
@@ -181,7 +181,8 @@ class EventService:
         )
         members, level = max(2, int(row["n"] or 0)), max(1.0, float(row["lvl"] or 1))
         army, cry = rng.choice(ARMIES)
-        hp = round(max(1_500, 700 * members) * (1 + level / 25))
+        # only a handful of people tap at once, so the army is sized for at most 8 fighters: it must fall within 3 minutes
+        hp = round((400 + 220 * min(members, 8)) * (1 + level / 40))
         return {"army": army, "cry": cry, "hp": hp, "max_hp": hp, "hits": {}, "names": {}, "at": {}, "level": round(level)}
 
     # --- hidden chest: find the place the clue points at -----------------------------------------

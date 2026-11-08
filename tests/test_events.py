@@ -242,7 +242,7 @@ async def test_invasion_is_beaten_together_and_pays_by_share(services, db, clock
                 break
         if final:
             break
-        clock.advance(26)
+        clock.advance(13)
     assert final and view.status == "done" and view.state["payouts"]
     assert (await services.players.require(1)).gold > before
     assert "قلمرو نجات یافت" in events_ui.text_for(view)
@@ -393,7 +393,7 @@ async def test_dragon_egg_hatches_together_and_pays_everybody(services, db, cloc
     await active_group(services, db, [a, b])
     view = await services.events.spawn(CHAT, "egg")
     need = view.state["need"]
-    assert need >= 25 and "تخم اژدها" in events_ui.text_for(view)
+    assert need >= 12 and "تخم اژدها" in events_ui.text_for(view)
     gold = [(await services.players.require(u)).gold for u in (1, 2)]
     hatched = False
     for _ in range(need * 3):
@@ -423,3 +423,24 @@ async def test_owner_can_summon_the_new_events_and_players_can_tap_them(h, servi
     wheel = next(v for v in await services.events.active(CHAT) if v.kind == "wheel")
     await h.click(1, f"e:spin:{wheel.id}:0", group=True)
     assert any("🎡" in x.get("text", "") for x in h.session.callback_answers())
+
+
+async def test_an_invasion_can_be_beaten_within_three_minutes_by_a_few_players(services, db, clock):
+    from eternal_realm.game.services.events import DEFEND_GAP, LIFETIME
+
+    assert LIFETIME["invasion"] <= 180 and LIFETIME["egg"] <= 180
+    players = [await hero(services, db, 20 + i, f"p{i}", level=10) for i in range(3)]
+    await active_group(services, db, players + [await hero(services, db, 40 + i, f"q{i}", level=10) for i in range(15)])
+    view = await services.events.spawn(CHAT, "invasion")
+    started = clock()
+    final = False
+    while not final and clock() - started < LIFETIME["invasion"] - DEFEND_GAP:
+        for p in players:
+            try:
+                view, _, final = await services.events.defend(view.id, p)
+            except GameError:
+                continue
+            if final:
+                break
+        clock.advance(DEFEND_GAP + 1)
+    assert final and view.status == "done"  # three tappers are enough, however big the group is
