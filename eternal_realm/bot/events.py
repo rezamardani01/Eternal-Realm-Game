@@ -125,20 +125,29 @@ async def alert_hunters(bot: Bot, services: Services, view) -> int:  # noqa: ANN
 MIN_GROUP_MEMBERS = 25
 
 
-async def _small_group_notice(message: Message) -> None:
+async def _leave_small_group(message: Message, services: Services) -> bool:
+    """Tell a group under 25 members the game needs more people, then leave it. The owner's own adds are kept."""
+    adder = message.from_user
+    if adder is not None and adder.id == services.ctx.settings.owner_id:
+        return False
     try:
         count = int(await message.bot.get_chat_members_count(message.chat.id))
     except (BaleAPIError, TypeError, ValueError):
         return  # unknown size: say nothing rather than something wrong
     if count >= MIN_GROUP_MEMBERS:
-        return
+        return False
     with contextlib.suppress(BaleAPIError):
         await message.answer(headline(
             f"👋 {bold('سلام! به قلمرو جاودان خوش آمدید')}\n\n"
-            f"برای اینکه بازی در گروه جذاب و پررقابت باشد، گروه باید دست‌کم {fa(MIN_GROUP_MEMBERS)} عضو داشته باشد "
+            f"برای استفاده از این بازی در گروه، گروه باید حداقل {fa(MIN_GROUP_MEMBERS)} عضو داشته باشد "
             f"(الان {fa(count)} نفر است).\n\n"
-            "با دعوت دوستانتان گروه را بزرگ‌تر کنید؛ هر چه بازیکن بیشتر باشد، باس‌ها، تهاجم‌ها و رویدادها هیجان‌انگیزترند 🏰"
+            "من الان گروه را ترک می‌کنم؛ وقتی گروه به ۲۵ عضو رسید دوباره مرا اضافه کنید تا ماجراجویی شروع شود 🏰"
         ))
+    with contextlib.suppress(BaleAPIError):
+        await message.bot.leave_chat(message.chat.id)
+    with contextlib.suppress(GameError):
+        await services.admin.set_group_enabled(services.ctx.settings.owner_id, message.chat.id, False)
+    return True
 
 
 @router.message(F.new_chat_members)
@@ -148,7 +157,8 @@ async def on_join(message: Message, services: Services) -> None:
         return
     group = await services.groups.touch(message.chat.id, message.chat.title)
     if any(u.is_bot and u.username and u.username == services.bot_username for u in message.new_chat_members or []):
-        await _small_group_notice(message)  # the bot itself was just added
+        if await _leave_small_group(message, services):  # the bot itself was just added
+            return
     if not group.enabled:
         return
     for user in message.new_chat_members or []:
