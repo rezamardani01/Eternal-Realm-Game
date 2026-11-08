@@ -15,6 +15,7 @@ BOARDS: dict[str, tuple[str, str, str, str]] = {
     "level": ("🏆 تالار بزرگان (بالاترین سطح)", "level DESC, xp DESC", "level", "سطح"),
     "rich": ("💰 تالار ثروتمندان", "gold DESC, level DESC", "gold", "🪙"),
     "wins": ("⚔️ تالار قهرمانان دوئل", "wins DESC, level DESC", "wins", "پیروزی"),
+    "rating": ("🏅 لیگ مبارزان", "rating DESC, level DESC", "rating", "امتیاز"),
 }
 
 
@@ -66,8 +67,9 @@ class RankingService:
             if me is not None:
                 position = 1 + int(
                     await tx.scalar(
-                        f"SELECT COUNT(*) FROM players WHERE banned = 0 AND {column} > ?",  # noqa: S608
-                        (getattr(me, column),),
+                        f"SELECT COUNT(*) FROM players WHERE banned = 0 AND {column} >"  # noqa: S608
+                        f" (SELECT {column} FROM players WHERE id = ?)",
+                        (me.id,),
                         0,
                     )
                 )

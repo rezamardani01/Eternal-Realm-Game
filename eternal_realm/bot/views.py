@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from ..game.data.bosses import behavior_of
 from ..game.data.classes import CLASSES
+from ..game.data.leagues import league_of
 from ..game.data.races import RACES, Race
 from ..game.data.stats import Stats
 from ..game.models import Player
@@ -758,6 +759,10 @@ def duel_result(update) -> str:  # noqa: ANN001 - DuelUpdate
         if payout.xp:
             gains.append(f"{fa(payout.xp)} تجربه")
         line = f"{fighter.mention or fighter.name}: " + (" و ".join(gains) if gains else "سقف پاداش امروز پر است")
+        if payout.rating:
+            league = league_of(payout.rating)
+            sign = "+" if payout.rating_delta >= 0 else "-"
+            line += f"\n{league.emoji} لیگ {league.name} · {fa(payout.rating)} امتیاز ({sign}{fa(abs(payout.rating_delta))})"
         if payout.level_up:
             line += f"\n🎉 رسید به سطح {fa(payout.level_up.new_level)}"
         blocks.append(line)

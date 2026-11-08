@@ -9,7 +9,7 @@ from baleropy.types import CallbackQuery
 
 from ..game.services.clans import DONATION_STEPS, ROLES, ClanView, role_power
 from ..shared.errors import GameError
-from ..shared.text import bold, fa
+from ..shared.text import bold, duration, fa
 from . import keyboards
 from .callbacks import ClanCb
 from .panel import PER_PAGE, Ctx, Screen, _int, _nav, _page, screen
@@ -59,7 +59,7 @@ async def clan(c: Ctx) -> Screen:
         return Screen(text, rows)
     rows = [
         [c.btn("👥 اعضا", "clanmembers", "0", style="primary"), c.btn("💰 کمک به خزانه", "clandonate")],
-        [c.btn("🏆 برترین خاندان‌ها", "clantop")],
+        [c.btn("🏆 برترین خاندان‌ها", "clantop"), c.btn("⚔️ جنگ خاندان‌ها", "clanwar")],
     ]
     if role_power(mine.my_role or "member") >= 2:
         rows.append([c.btn("⚙️ مدیریت خاندان", "clanset")])
@@ -303,6 +303,42 @@ async def clan_top(c: Ctx) -> Screen:
         place = medals[i] if i < 3 else f"{fa(i + 1)}."
         lines += [f"{place} {v.name} · سطح {fa(v.level)} · قدرت {fa(v.power)} · {fa(v.size)} عضو", ""]
     return Screen("\n".join(lines).strip(), [c.back("clan")])
+
+
+# --- the weekly clan war -------------------------------------------------------------------------------
+@screen("clanwar")
+async def clan_war(c: Ctx) -> Screen:
+    view = await c.services.clans.war(c.player)
+    medals = ["🥇", "🥈", "🥉"]
+    lines = [
+        f"⚔️ {bold('جنگ خاندان‌ها')}",
+        "",
+        "هر هفته خاندان‌ها با هم رقابت می‌کنند. امتیاز از برد دوئل (۱۰ امتیاز) و از باس‌های گروهی "
+        "(بر اساس سهم هر عضو) به خاندانتان می‌رسد.",
+        "",
+        f"⏳ تا پایان این هفته: {duration(view.seconds_left)}",
+        "",
+    ]
+    if not view.week_rows:
+        lines.append("این هفته هنوز کسی امتیاز نگرفته. اولین باشید!")
+    for i, row in enumerate(view.week_rows):
+        place = medals[i] if i < 3 else f"{fa(i + 1)}."
+        you = " ← خاندان شما" if row.mine else ""
+        lines += [f"{place} {row.name} — {fa(row.points)} امتیاز{you}", ""]
+    rows = []
+    if view.prize:
+        lines += [f"🎁 خاندان شما هفته‌ی پیش جایگاه {fa(view.last_place)} را گرفت! جایزه‌ی شما {fa(view.prize)} سکه است."]
+        rows.append([c.btn(f"🎁 دریافت {fa(view.prize)} سکه", "clanprize", style="success")])
+    rows.append(c.back("clan"))
+    return Screen("\n".join(lines).strip(), rows)
+
+
+@screen("clanprize")
+async def clan_prize(c: Ctx) -> Screen:
+    gold = await c.services.clans.claim_war(c.player)
+    shown = await clan_war(c)
+    shown.toast, shown.alert = f"🎁 {fa(gold)} سکه به کیفتان رسید!", True
+    return shown
 
 
 # --- invitations by button -----------------------------------------------------------------------------

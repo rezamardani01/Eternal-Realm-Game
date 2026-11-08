@@ -136,6 +136,11 @@ def duel_result(update) -> Rows:  # noqa: ANN001 - DuelUpdate
             chips.append(Button.inline(f"🪙 +{fa(payout.gold)}", DuelCb(action="info", id=duel_id)))
         if payout is not None and payout.xp:
             chips.append(Button.inline(f"⭐ +{fa(payout.xp)}", DuelCb(action="info", id=duel_id)))
+        if payout is not None and payout.rating:
+            from ..game.data.leagues import league_of
+
+            league = league_of(payout.rating)
+            chips.append(Button.inline(f"{league.emoji} {fa(payout.rating)}", DuelCb(action="info", id=duel_id)))
         rows.append(chips)
     rows.append([Button.inline("⚔️ مبارزه‌ی دوباره", DuelCb(action="rematch", id=duel_id), style="primary")])
     return rows

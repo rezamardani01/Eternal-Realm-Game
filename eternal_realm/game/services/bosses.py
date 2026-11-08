@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass, field
 from ...context import AppContext
 from ...db.database import Row, Tx
 from ...db.repos import bosses as repo
+from ...db.repos import clans as clan_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError, NotRegistered
 from ...shared.text import duration, fa
@@ -365,6 +366,7 @@ class BossService:
             xp = round((60 + 10 * row["level"]) * (0.5 + share) * factor)
             await wallet.apply(tx, pid, gold=gold, reason="boss_reward", now=now, ref=f"boss:{row['id']}:{pid}")
             level_up = await self.players.grant_xp(tx, pid, xp)
+            await clan_repo.add_war_points(tx, pid, round((10 + 60 * share) * factor), now)
             chest = None
             if status == "defeated":
                 chest = "magic_chest" if index == 0 else "wooden_chest" if share >= 0.10 else None

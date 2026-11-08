@@ -72,6 +72,7 @@ async def donate(tx: Tx, clan_id: int, player_id: int, amount: int) -> None:
 
 async def delete(tx: Tx, clan_id: int) -> None:
     await tx.execute("DELETE FROM clan_members WHERE clan_id = ?", (clan_id,))
+    await tx.execute("DELETE FROM clan_war WHERE clan_id = ?", (clan_id,))
     await tx.execute("DELETE FROM clans WHERE id = ?", (clan_id,))
 
 
@@ -80,4 +81,31 @@ async def listing(tx: Tx, limit: int, offset: int) -> list[Row]:
         "SELECT c.* FROM clans c ORDER BY (SELECT COALESCE(SUM(p.level), 0) FROM clan_members m"
         " JOIN players p ON p.id = m.player_id WHERE m.clan_id = c.id) DESC, c.donated DESC, c.id LIMIT ? OFFSET ?",
         (limit, offset),
+    )
+
+
+WEEK = 7 * 86400
+
+
+def week_of(now: int) -> int:
+    """Clan-war week number (weeks start on Saturday, Tehran time)."""
+    return (now + 12600 + 2 * 86400) // WEEK
+
+
+async def add_war_points(tx: Tx, player_id: int, points: int, now: int) -> None:
+    member = await membership(tx, player_id)
+    if member is None or points <= 0:
+        return
+    await tx.execute(
+        "INSERT INTO clan_war (week, clan_id, points) VALUES (?, ?, ?)"
+        " ON CONFLICT (week, clan_id) DO UPDATE SET points = points + excluded.points",
+        (week_of(now), member["clan_id"], points),
+    )
+
+
+async def war_board(tx: Tx, week: int, limit: int) -> list[Row]:
+    return await tx.fetchall(
+        "SELECT w.clan_id, w.points, c.name FROM clan_war w JOIN clans c ON c.id = w.clan_id"
+        " WHERE w.week = ? ORDER BY w.points DESC, w.clan_id LIMIT ?",
+        (week, limit),
     )

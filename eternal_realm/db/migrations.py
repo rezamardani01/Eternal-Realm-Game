@@ -244,6 +244,17 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_clan_members_clan ON clan_members (clan_id);
     """,
+    # 13: ranked duel rating and the weekly clan war
+    """
+    ALTER TABLE players ADD COLUMN rating INTEGER NOT NULL DEFAULT 1000;
+
+    CREATE TABLE clan_war (
+        week    INTEGER NOT NULL,
+        clan_id INTEGER NOT NULL REFERENCES clans (id),
+        points  INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (week, clan_id)
+    );
+    """,
 ]
 
 

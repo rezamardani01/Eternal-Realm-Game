@@ -46,6 +46,8 @@ class Payout:
     gold: int = 0
     xp: int = 0
     level_up: LevelUp | None = None
+    rating: int = 0
+    rating_delta: int = 0
 
 
 @dataclass
@@ -170,11 +172,34 @@ class DuelService:
         payouts = await self._pay(tx, duel, battle, now)
         return DuelUpdate(duel, battle, lines, finished=True, payouts=payouts, timed_out=timed_out)
 
+    async def _rate(self, tx: Tx, battle: Battle) -> dict[int, tuple[int, int]]:
+        """Update both ratings after a decisive duel and award clan-war points to the winner's clan."""
+        from ...db.repos import clans as clan_repo
+        from ..data.leagues import new_ratings
+
+        if battle.winner is None:
+            return {}
+        win, lose = battle.fighters[battle.winner], battle.fighters[1 - battle.winner]
+        if win.player_id is None or lose.player_id is None:
+            return {}
+        before = {}
+        for pid in (win.player_id, lose.player_id):
+            before[pid] = int(await tx.scalar("SELECT rating FROM players WHERE id = ?", (pid,), 1000))
+        won_rating, lost_rating = new_ratings(before[win.player_id], before[lose.player_id])
+        await tx.execute("UPDATE players SET rating = ? WHERE id = ?", (won_rating, win.player_id))
+        await tx.execute("UPDATE players SET rating = ? WHERE id = ?", (lost_rating, lose.player_id))
+        await clan_repo.add_war_points(tx, win.player_id, 10, self.ctx.now())
+        return {
+            win.player_id: (won_rating, won_rating - before[win.player_id]),
+            lose.player_id: (lost_rating, lost_rating - before[lose.player_id]),
+        }
+
     async def _pay(self, tx: Tx, duel: Duel, battle: Battle, now: int) -> dict[int, Payout]:
         """Record results and pay once. ``repo.finish`` already guarantees a single caller."""
         b = self.ctx.balance
         payouts: dict[int, Payout] = {}
         day_start = now - DAY
+        ratings = await self._rate(tx, battle)
         for index, fighter in enumerate(battle.fighters):
             pid = fighter.player_id
             assert pid is not None
@@ -183,6 +208,8 @@ class DuelService:
             if battle.winner is not None:
                 await player_repo.record_result(tx, pid, won=won)
             payout = Payout()
+            if pid in ratings:
+                payout.rating, payout.rating_delta = ratings[pid]
             # the finished duel itself is already counted, hence the strict limit
             if await repo.finished_count_since(tx, pid, day_start) <= b.duel_daily_reward_cap:
                 opponent = battle.fighters[1 - index].player_id

@@ -9,6 +9,7 @@ from ...db.database import Row, Tx
 from ...db.repos import clans as repo
 from ...db.repos import players as player_repo
 from ...db.repos import wallet
+from ...db.repos.wallet import DuplicateOperation
 from ...shared.errors import GameError
 from ...shared.text import fa, normalize
 from ..models import Player
@@ -66,6 +67,25 @@ def clean_clan_name(raw: str) -> str:
     if any(ch in name for ch in "[]()*_`\n"):
         raise GameError("در نام خاندان نشانه‌های ویژه نگذارید؛ فقط حرف، عدد و فاصله.")
     return name
+
+
+WAR_PRIZES = (800, 500, 300)
+
+
+@dataclass
+class WarStanding:
+    name: str
+    points: int
+    mine: bool
+
+
+@dataclass
+class WarView:
+    week_rows: list[WarStanding]
+    seconds_left: int
+    #: gold the player's clan won last week and the player can still collect (0 = nothing)
+    prize: int = 0
+    last_place: int = 0
 
 
 class ClanService:
@@ -243,3 +263,42 @@ class ClanService:
             fresh = await repo.get(tx, clan["id"])
             assert fresh is not None
             return await self._view(tx, fresh, member["role"])
+
+    async def war(self, player: Player) -> WarView:
+        now = self.ctx.now()
+        week = repo.week_of(now)
+        async with self.ctx.db.read() as tx:
+            member = await repo.membership(tx, player.id)
+            mine = member["clan_id"] if member else None
+            rows = await repo.war_board(tx, week, 10)
+            last = await repo.war_board(tx, week - 1, 3)
+        standings = [WarStanding(r["name"], r["points"], r["clan_id"] == mine) for r in rows]
+        left = (week + 1) * repo.WEEK - (now + 12600 + 2 * 86400)
+        prize = place = 0
+        if member is not None and member["joined_at"] < week * repo.WEEK - 12600 - 2 * 86400:
+            for index, r in enumerate(last):
+                if r["clan_id"] == mine:
+                    place, prize = index + 1, WAR_PRIZES[index]
+        view = WarView(standings, left, prize, place)
+        if prize:
+            async with self.ctx.db.read() as tx:
+                done = await tx.fetchone("SELECT 1 FROM transactions WHERE ref = ?", (f"clanwar:{week - 1}:{player.id}",))
+            if done:
+                view.prize = 0
+        return view
+
+
+    async def claim_war(self, player: Player) -> int:
+        view = await self.war(player)
+        if not view.prize:
+            raise GameError("جایزه‌ای برای گرفتن نیست. خاندان شما هفته‌ی پیش در سه‌ی اول نبود، یا جایزه را گرفته‌اید.")
+        week = repo.week_of(self.ctx.now())
+        try:
+            async with self.ctx.db.transaction() as tx:
+                await wallet.apply(
+                    tx, player.id, gold=view.prize, reason="clan_war_prize", now=self.ctx.now(),
+                    ref=f"clanwar:{week - 1}:{player.id}",
+                )
+        except DuplicateOperation as exc:
+            raise GameError("این جایزه را قبلاً گرفته‌اید.") from exc
+        return view.prize

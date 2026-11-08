@@ -858,7 +858,8 @@ async def top(c: Ctx) -> Screen:
         text = views.ranking(board, mentions=c.is_group)
     rows = [
         [c.btn("🏆 سطح", "top", "level"), c.btn("💰 ثروت", "top", "rich")],
-        [c.btn("⚔️ دوئل", "top", "wins"), c.btn("🐉 شکارچیان باس", "top", "bosses")],
+        [c.btn("⚔️ دوئل", "top", "wins"), c.btn("🏅 لیگ", "top", "rating")],
+        [c.btn("🐉 شکارچیان باس", "top", "bosses")],
     ]
     if c.is_group:
         rows.append([c.btn("🏰 این گروه", "top", "group"), c.btn("🌟 قهرمان هفته", "top", "hero")])
