@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from ..game.data.cards import PACK_ODDS, PACK_PRICE, PACK_SIZE, RARITY_NAMES, cards_in, dust_value, get_card, get_set
 from ..shared.text import bold, fa
-from .panel import Ctx, Screen, screen
+from .panel import Ctx, Screen, _int, screen
 
 
 @screen("album")
@@ -24,6 +26,7 @@ async def album(c: Ctx) -> Screen:
         "کارت‌ها قدرت رزمی ندارند؛ فقط برای شکوه و جمع‌آوری‌اند.",
     ]
     rows.append([c.btn(f"🛍️ بسته‌ی کارت ({fa(PACK_PRICE)}🪙)", "cpackq", style="success")])
+    rows.append([c.btn("🏪 بازار کارت", "cmarket", "0", "0"), c.btn("📋 آگهی‌های کارت من", "cmine")])
     rows.append(c.back("home"))
     return Screen("\n".join(lines), rows)
 
@@ -64,6 +67,7 @@ async def card(c: Ctx) -> Screen:
     if qty > 1:
         lines.append(f"♻️ کارت تکراری را می‌توانید به بازارچه بفروشید: {fa(dust_value(k))} سکه")
         rows.append([c.btn(f"💰 فروش یک تکراری ({fa(dust_value(k))}🪙)", "csellq", k.id)])
+        rows.append([c.btn("🏷️ فروش در بازار کارت", "cplist", k.id, str(dust_value(k) * 2))])
     rows.append(c.back("cset", "🔙 بازگشت", k.set_id))
     return Screen("\n".join(lines), rows)
 
@@ -134,3 +138,148 @@ async def pack_open(c: Ctx) -> Screen:
         lines += [f"{k.emoji} {k.name}" + (" · تازه!" if new else " · تکراری"), f"   {RARITY_NAMES[k.rarity]}", ""]
     rows = [[c.btn("🛍️ بسته‌ی دیگر", "cpackq"), c.btn("🃏 آلبوم", "album")]]
     return Screen("\n".join(lines).strip(), rows)
+
+
+# --- the card market ---------------------------------------------------------------------------------------
+@screen("cmarket")
+async def card_market(c: Ctx) -> Screen:
+    page, rarity = max(0, _int(c.a or "0")), _int(c.b or "0")
+    found, nxt = await c.services.cards.market_page(rarity, page, 6)
+    label = "همه" if rarity == 0 else RARITY_NAMES[rarity].split(" ", 1)[1]
+    rows = [[c.btn(f"🔎 فیلتر کمیابی: {label}", "cfilter", "0", rarity)]]
+    if not found:
+        rows.append([c.btn("🚫 هیچ کارتی برای خرید وجود ندارد", "cmarket", "0", rarity)])
+    for lst in found:
+        rows.append([c.btn(f"{lst.card.emoji} {lst.card.name} — {fa(lst.price)}🪙", "cmlist", lst.id)])
+    nav = ([c.btn("‹ قبلی", "cmarket", page - 1, rarity)] if page else []) + (
+        [c.btn("بعدی ›", "cmarket", page + 1, rarity)] if nxt else []
+    )
+    if nav:
+        rows.append(nav)
+    rows.append([c.btn("📋 آگهی‌های من", "cmine")])
+    rows.append(c.back("album"))
+    text = (
+        f"🏪 {bold('بازار کارت')}\n\n"
+        "کارت‌های تکراری بازیکنان، از ارزان به گران. خرید و فروش فقط با سکه است.\n\n"
+        f"کارمزد فروش: {fa(5)}٪"
+    )
+    return Screen(text, rows)
+
+
+@screen("cfilter")
+async def card_filter(c: Ctx) -> Screen:
+    current = _int(c.b or "0")
+    rows = []
+    for key, label in {0: "🧺 همه", **{r: n for r, n in RARITY_NAMES.items()}}.items():
+        mark = "✅ " if key == current else "⬜ "
+        rows.append([c.btn(mark + label.split(" ", 1)[1], "cfilter", "0", key)])
+    rows.append([c.btn("🏪 نمایش کارت‌ها", "cmarket", "0", current, style="primary")])
+    return Screen(f"🔎 {bold('فیلتر کمیابی')}\n\nکمیابی دلخواه را تیک بزنید، بعد «نمایش کارت‌ها».", rows)
+
+
+@screen("cmlist")
+async def card_listing(c: Ctx) -> Screen:
+    lst = await c.services.cards.listing(_int(c.a))
+    if lst is None:
+        shown = await card_market(replace(c, a="0", b="0"))
+        shown.toast = "این آگهی دیگر نیست"
+        return shown
+    lines = [
+        f"{lst.card.emoji} {bold(lst.card.name)}",
+        RARITY_NAMES[lst.card.rarity],
+        "",
+        lst.card.story,
+        "",
+        f"💰 بها: {bold(fa(lst.price))} سکه",
+        f"👤 فروشنده: {lst.seller}",
+    ]
+    own = lst.seller_id == c.player.id
+    rows = [[c.btn("↩️ لغو آگهی", "cmcancel", lst.id, style="danger")]] if own else [
+        [c.btn(f"🛍️ خرید با {fa(lst.price)}🪙", "cmbuyq", lst.id, style="success")]
+    ]
+    rows.append(c.back("cmarket", "🔙 بازگشت", "0"))
+    return Screen("\n".join(lines), rows)
+
+
+@screen("cmbuyq")
+async def card_buy_ask(c: Ctx) -> Screen:
+    lst = await c.services.cards.listing(_int(c.a))
+    if lst is None:
+        return Screen(None, toast="این آگهی دیگر نیست", alert=True)
+    p = await c.refresh()
+    if p.gold < lst.price:
+        text = (
+            f"💸 {bold('موجودی کافی نیست')}\n\n{lst.card.emoji} {lst.card.name}\nبها: {fa(lst.price)} 🪙\n"
+            f"موجودی شما: {fa(p.gold)} 🪙\nکمبود: {bold(fa(lst.price - p.gold))} 🪙"
+        )
+        return Screen(text, [c.back("cmlist", "🔙 بازگشت", lst.id)])
+    text = (
+        f"🛍️ {bold('تأیید خرید کارت')}\n\n{lst.card.emoji} {lst.card.name}\n{RARITY_NAMES[lst.card.rarity]}\n\n"
+        f"بها: {bold(fa(lst.price))} سکه\nفروشنده: {lst.seller}\n\n"
+        f"کیسه‌ی شما: {fa(p.gold)} ← {fa(p.gold - lst.price)} سکه\n\nبخریم؟"
+    )
+    return Screen(text, [[c.btn("✅ بله، بخر", "cmbuy", lst.id, style="success"), c.btn("↩️ نه", "cmlist", lst.id)]])
+
+
+@screen("cmbuy")
+async def card_buy(c: Ctx) -> Screen:
+    lst = await c.services.cards.buy_card(c.player, _int(c.a))
+    shown = await card_market(replace(c, a="0", b="0"))
+    shown.toast, shown.alert = f"🃏 {lst.card.name} به آلبوم شما اضافه شد!", True
+    return shown
+
+
+@screen("cmine")
+async def card_mine(c: Ctx) -> Screen:
+    mine = await c.services.cards.my_listings(c.player.id)
+    rows = [[c.btn(f"{x.card.emoji} {x.card.name} — {fa(x.price)}🪙", "cmlist", x.id)] for x in mine]
+    rows.append(c.back("cmarket", "🔙 بازگشت", "0"))
+    return Screen(f"📋 {bold('آگهی‌های کارت من')}\n\n" + ("یکی را بزنید تا لغو کنید 👇" if mine else "آگهی فعالی ندارید."), rows)
+
+
+@screen("cmcancel")
+async def card_cancel(c: Ctx) -> Screen:
+    lst = await c.services.cards.cancel_listing(c.player, _int(c.a))
+    shown = await card_mine(c)
+    shown.toast = f"↩️ {lst.card.name} به آلبوم برگشت"
+    return shown
+
+
+@screen("cplist")
+async def card_price(c: Ctx) -> Screen:
+    k = get_card(c.a)
+    price = max(50, min(5_000_000, _int(c.b or "100")))
+
+    def step(delta: int):  # noqa: ANN202
+        return c.btn(f"{'+' if delta > 0 else '-'}{fa(abs(delta))}", "cplist", k.id, max(50, min(5_000_000, price + delta)))
+
+    rows = [
+        [step(-1000), step(-100), step(100), step(1000)],
+        [step(-10_000), step(10_000)],
+        [c.btn(f"✅ تأیید قیمت ({fa(price)})", "cplistq", k.id, price, style="success")],
+        c.back("card", "🔙 بازگشت", k.id),
+    ]
+    text = (
+        f"🏷️ {bold('قیمت فروش کارت')}\n\n{k.emoji} {k.name}\n\n"
+        f"قیمت انتخابی: {bold(fa(price))} سکه\n\n"
+        "با دکمه‌ها قیمت را کم و زیاد کنید، بعد دکمه‌ی سبز را بزنید 👇"
+    )
+    return Screen(text, rows)
+
+
+@screen("cplistq")
+async def card_list_ask(c: Ctx) -> Screen:
+    k, price = get_card(c.a), _int(c.b)
+    fee = price * 5 // 100
+    text = (
+        f"🏷️ {bold('تأیید آگهی کارت')}\n\n{k.emoji} {k.name}\n\nقیمت: {bold(fa(price))} سکه\n\n"
+        f"کارمزد بازار: {fa(fee)} سکه\nدریافتی شما پس از فروش: {bold(fa(price - fee))} سکه\n\nثبت شود؟"
+    )
+    return Screen(text, [[c.btn("✅ ثبت آگهی", "cplistdo", k.id, price, style="success"), c.btn("❌ انصراف", "card", k.id)]])
+
+
+@screen("cplistdo")
+async def card_list_do(c: Ctx) -> Screen:
+    lst = await c.services.cards.list_card(c.player, c.a, _int(c.b))
+    text = f"🏷️ {bold('آگهی کارت نصب شد')}\n\n{lst.card.emoji} {lst.card.name} — {fa(lst.price)} سکه\n\nهمه‌ی بازیکنان در بازار کارت می‌بینندش."
+    return Screen(text, [[c.btn("🏪 بازار کارت", "cmarket", "0", "0"), c.btn("🃏 آلبوم", "album")]])

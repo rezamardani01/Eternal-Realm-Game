@@ -362,6 +362,19 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (player_id, day, slot)
     );
     """,
+    # 23: cards for sale between players
+    """
+    CREATE TABLE card_listings (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        seller_id  INTEGER NOT NULL REFERENCES players (id),
+        card_id    TEXT    NOT NULL,
+        price      INTEGER NOT NULL CHECK (price > 0),
+        status     TEXT    NOT NULL CHECK (status IN ('active', 'sold', 'cancelled')),
+        buyer_id   INTEGER,
+        created_at INTEGER NOT NULL
+    );
+    CREATE INDEX idx_card_listings_active ON card_listings (status, card_id, price);
+    """,
 ]
 
 
