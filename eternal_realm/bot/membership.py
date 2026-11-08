@@ -68,7 +68,8 @@ class MembershipMiddleware(BaseMiddleware):
             await event.answer("🔒 اول باید در کانال عضو شوید. /start را بزنید.", show_alert=True)
             return None
         now = time.monotonic()
-        if event.chat.id != user.id and now - self._noticed.get(user.id, 0) < NOTICE_GAP:
+        last = self._noticed.get(user.id)
+        if event.chat.id != user.id and last is not None and now - last < NOTICE_GAP:
             return None  # do not flood a group with notices
         self._noticed[user.id] = now
         if len(self._noticed) > 5000:

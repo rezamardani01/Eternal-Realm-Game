@@ -95,3 +95,17 @@ async def test_owner_and_members_pass_and_errors_fail_open(h, services):
             raise RuntimeError("bale is down")
 
     assert await services.membership.missing(Broken(), 99) == []  # fail open: never lock players out
+
+
+async def test_the_first_notice_is_sent_even_right_after_a_machine_boot(h, services, monkeypatch):
+    import time
+
+    from eternal_realm.bot import membership as gate
+
+    monkeypatch.setattr(gate.time, "monotonic", lambda: 5.0)  # a fresh CI runner or server: uptime of 5 seconds
+    await hero(services, 9, "تازه")
+    await services.membership.save(True, [{"chat": "@mychannel"}])
+    h.session.non_members.add(9)
+    await h.say(9, "ماهیگیری", group=True)
+    assert "عضویت در کانال لازم است" in h.session.last_text()
+    assert time.monotonic() > 0
