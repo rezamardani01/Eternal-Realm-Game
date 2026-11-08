@@ -17,6 +17,27 @@ from ..game.models import Player
 from ..shared.text import bar, bold, duration, emphasize, fa
 
 LINE = "━━━━━━━━━━━━"
+MEDAL_ICONS = ("🥇", "🥈", "🥉")
+
+
+def tidy_list(entries: list[tuple[str, list[str]]], limit: int = 8, ranked: bool = True) -> list[str]:
+    """A name on one line and what they got on the next, with a blank line between people:
+
+        🥇 [آرش]
+        🪙 ۷۱۵ · 💎 ۲ · 🎁 صندوقچه جادویی
+    """
+    lines: list[str] = []
+    for index, (name, gains) in enumerate(entries[:limit]):
+        icon = MEDAL_ICONS[index] if ranked and index < len(MEDAL_ICONS) else "🔹"
+        lines.append(f"{icon} {name}")
+        if gains:
+            lines.append(" · ".join(gains))
+        lines.append("")
+    if len(entries) > limit:
+        lines.append(f"و {fa(len(entries) - limit)} نفر دیگر")
+    elif lines:
+        lines.pop()  # no blank line after the last person
+    return lines
 DIV = "┈┈┈┈┈┈┈┈┈┈"
 
 
@@ -343,13 +364,21 @@ def upgrade_result(result) -> str:  # noqa: ANN001 - UpgradeResult
 def ranking(board, mentions: bool = False) -> str:  # noqa: ANN001 - Board
     if not board.entries:
         return f"{board.title}\n{LINE}\nهنوز کسی در این تالار نیست. اولین شما باشید!"
-    medals = ["🥇", "🥈", "🥉"]
-    lines = [board.title, LINE]
-    for index, entry in enumerate(board.entries):
-        place = medals[index] if index < 3 else f"{fa(index + 1)}."
-        lines.append(f"{place} {entry.mention if mentions else entry.name} {entry.badge} · سطح {fa(entry.level)} · {fa(entry.value)} {board.unit}")
+    lines = [board.title, LINE, ""]
+    top = [
+        (f"{entry.mention if mentions else entry.name} {entry.badge}".strip(),
+         [f"⭐ سطح {fa(entry.level)}", f"🔥 {fa(entry.value)} {board.unit}"])
+        for entry in board.entries[:3]
+    ]
+    lines += tidy_list(top)
+    rest = board.entries[3:]
+    if rest:
+        lines += [""] + [
+            f"{fa(index + 4)}. {entry.mention if mentions else entry.name} · سطح {fa(entry.level)} · {fa(entry.value)} {board.unit}"
+            for index, entry in enumerate(rest)
+        ]
     if board.my_position:
-        lines += [LINE, f"📍 جایگاه شما: {bold(fa(board.my_position))}"]
+        lines += ["", f"📍 جایگاه شما: {bold(fa(board.my_position))}"]
     return "\n".join(lines)
 
 
@@ -643,16 +672,17 @@ def boss_final(v) -> str:  # noqa: ANN001 - BossView
     if not v.payouts:
         lines.append("هیچ‌کس در نبرد نبود.")
     else:
-        lines.append(f"🏅 {bold('سهم جنگجویان')}")
-    for i, p in enumerate(v.payouts):
-        medal = MEDALS[i] if i < len(MEDALS) else "🔹"
-        lines.append(f"{medal} {p.mention} — {fa(p.damage)} آسیب ({fa(round(p.share * 100))}٪)")
-        if p.level_up:
-            lines.append(f"      🎉 رسید به سطح {fa(p.level_up)}")
-        if p.trophy:
-            lines.append(f"      🏆 غنیمت: {get_item(p.trophy).label}")
-        if p.card:
-            lines.append(f"      🃏 کارت تازه: {p.card}")
+        entries = []
+        for p in v.payouts:
+            gains = [f"⚔️ {fa(p.damage)} آسیب ({fa(round(p.share * 100))}٪)"]
+            if p.level_up:
+                gains.append(f"🎉 سطح {fa(p.level_up)}")
+            if p.trophy:
+                gains.append(f"🏆 {get_item(p.trophy).name}")
+            if p.card:
+                gains.append(f"🃏 {p.card}")
+            entries.append((p.mention, gains))
+        lines += [f"🏅 {bold('سهم جنگجویان')}", "", *tidy_list(entries, 10)]
     lines.append("")
     if v.outcome in ("lost", "fled"):
         lines += ["🔥 تا ۲۴ ساعت می‌توانید همین باس را دوباره احضار کنید؛ خشمگین‌تر برمی‌گردد و پاداش ۱٫۵ برابر دارد.", ""]
@@ -695,8 +725,8 @@ def event_text(view) -> str:  # noqa: ANN001 - EventView
             lines += ["تاجر کاروانش را جمع کرد و رفت. شاید دفعه‌ی بعد!", ""]
         for entry in st["stock"]:
             item = get_item(entry["item"])
-            left = f"{fa(entry['left'])} عدد مانده" if entry["left"] > 0 else "تمام شد"
-            lines += [f"• {item.label} — {fa(entry['price'])} 🪙", f"   {left}", ""]
+            left = f"📦 {fa(entry['left'])} عدد مانده" if entry["left"] > 0 else "❌ تمام شد"
+            lines += [f"🛒 {item.label}", f"🪙 {fa(entry['price'])} · {left}", ""]
         if view.status == "active":
             lines.append(f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}")
             lines.append("هر کس زودتر بزند، می‌خرد 👇")
@@ -739,7 +769,7 @@ def _rain_text(view) -> str:  # noqa: ANN001 - EventView
     lines.append(f"🪙 مشت‌های مانده: {fa(st['left'])}")
     if st["taken"]:
         top = sorted(st["gold"].items(), key=lambda kv: -kv[1])[:5]
-        lines += ["", bold("🏅 پرسودترین‌ها")] + [f"• {st['names'][pid]} — {fa(g)} سکه" for pid, g in top]
+        lines += ["", f"🏅 {bold('پرسودترین‌ها')}", *tidy_list([(st["names"][pid], [f"🪙 {fa(g)} سکه"]) for pid, g in top], 5)]
     if view.status == "active":
         lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "👇 زود باشید"]
     return "\n".join(lines)
@@ -757,7 +787,7 @@ def _spring_text(view) -> str:  # noqa: ANN001 - EventView
     else:
         lines = [f"🌙 {bold('چشمه خشک شد')}", ""]
     if st["names"]:
-        lines += ["", bold("نوشندگان")] + [f"• {name}" for name in st["names"].values()]
+        lines += ["", f"💧 {bold('نوشندگان')}", *[f"🔹 {name}" for name in st["names"].values()]]
     if view.status == "active":
         lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "👇 بنوشید"]
     return "\n".join(lines)
@@ -774,7 +804,7 @@ def _wheel_text(view) -> str:  # noqa: ANN001 - EventView
     else:
         lines = [f"🎪 {bold('چرخ شانس رفت')}", "", "کاروان بازیگران چرخش را جمع کرد."]
     if st["spins"]:
-        lines += ["", bold("🎯 چرخانندگان")] + [f"• {st['names'][pid]} → {text}" for pid, text in list(st["spins"].items())[-8:]]
+        lines += ["", f"🎯 {bold('چرخانندگان')}", *tidy_list([(st["names"][pid], [f"🎡 {text}"]) for pid, text in list(st["spins"].items())[-6:]], 6, ranked=False)]
     if view.status == "active":
         lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "👇 شانستان را بسنجید"]
     return "\n".join(lines)
@@ -784,10 +814,11 @@ def _egg_text(view) -> str:  # noqa: ANN001 - EventView
     st = view.state
     if view.status == "done":
         lines = [f"🐲 {bold('تخم اژدها شکست!')}", "", "جوجه‌اژدها با خوشحالی به همه‌ی گرم‌کننده‌ها نگاه می‌کند."]
+        entries = []
         for p in st.get("payouts", []):
-            extra = f" + {get_item(p['chest']).label}" if p["chest"] else ""
-            lines.append(f"• {p['mention']}: {fa(p['gold'])} سکه · ۲ کریستال{extra}")
-        return "\n".join(lines)
+            gains = [f"🪙 {fa(p['gold'])} سکه", "💎 ۲ کریستال"] + ([f"🎁 {get_item(p['chest']).name}"] if p["chest"] else [])
+            entries.append((p["mention"], gains))
+        return "\n".join(lines + ["", *tidy_list(entries)])
     if view.status == "expired":
         return f"🧊 {bold('تخم اژدها سرد شد')}\n\nگرمای کافی نبود و تخم دوباره به خواب رفت."
     percent = round(100 * st["warm"] / st["need"]) if st["need"] else 0
@@ -798,7 +829,7 @@ def _egg_text(view) -> str:  # noqa: ANN001 - EventView
     ]
     if st["hits"]:
         top = sorted(st["hits"].items(), key=lambda kv: -kv[1])[:5]
-        lines += ["", bold("🏅 گرم‌کننده‌های برتر")] + [f"• {st['names'][pid]} — {fa(n)}" for pid, n in top]
+        lines += ["", f"🏅 {bold('گرم‌کننده‌های برتر')}", *tidy_list([(st["names"][pid], [f"🔥 {fa(n)} بار گرم کرد"]) for pid, n in top], 5)]
     lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "👇 همه با هم گرمش کنید"]
     return "\n".join(lines)
 
@@ -847,15 +878,15 @@ def _invasion_text(view) -> str:  # noqa: ANN001 - EventView
     lines.append(f"❤️ جان لشکر: {bar(st['hp'], st['max_hp'], 10)} {fa(percent)}٪")
     if st["hits"]:
         top = sorted(st["hits"].items(), key=lambda kv: -kv[1])[:5]
-        lines += ["", bold("🏅 برترین مدافعان")]
-        lines += [f"{MEDALS[i] if i < len(MEDALS) else '🔹'} {st['names'][pid]} — {fa(dmg)}" for i, (pid, dmg) in enumerate(top)]
+        lines += ["", f"🏅 {bold('برترین مدافعان')}", *tidy_list([(st["names"][pid], [f"⚔️ {fa(dmg)} آسیب"]) for pid, dmg in top], 5)]
     if view.status == "active":
         lines += ["", f"⏳ مهلت: {_clock(view.seconds_left)}", "هر کس می‌تواند هر چند ثانیه یک بار ضربه بزند؛ هرچه بیشتر بزنید سهم بیشتری می‌برید 👇"]
     elif st.get("payouts"):
-        lines += ["", bold("🎁 پاداش مدافعان")]
+        entries = []
         for p in st["payouts"]:
-            extra = f" + {get_item(p['chest']).label}" if p["chest"] else ""
-            lines.append(f"• {p['mention']}: {fa(p['gold'])} سکه · {fa(p['xp'])} تجربه{extra}")
+            gains = [f"🪙 {fa(p['gold'])} سکه", f"⭐ {fa(p['xp'])} تجربه"] + ([f"🎁 {get_item(p['chest']).name}"] if p["chest"] else [])
+            entries.append((p["mention"], gains))
+        lines += ["", f"🎁 {bold('پاداش مدافعان')}", *tidy_list(entries)]
     return "\n".join(lines)
 
 
@@ -873,7 +904,7 @@ def _meteor_text(view) -> str:  # noqa: ANN001 - EventView
     lines.append(f"💎 تکه‌های مانده: {fa(st['left'])}")
     if st["taken"]:
         top = sorted(st["taken"].items(), key=lambda kv: -kv[1])[:6]
-        lines += ["", bold("⛏️ برداشت‌کنندگان")] + [f"• {st['names'][pid]} — {fa(n)} تکه" for pid, n in top]
+        lines += ["", f"⛏️ {bold('برداشت‌کنندگان')}", *tidy_list([(st["names"][pid], [f"💎 {fa(n)} تکه"]) for pid, n in top], 6, ranked=False)]
     if view.status == "active":
         lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "زود باشید 👇"]
     return "\n".join(lines)
@@ -979,16 +1010,18 @@ def duel_result(update) -> str:  # noqa: ANN001 - DuelUpdate
             continue
         gains = []
         if payout.gold:
-            gains.append(f"🪙 {fa(payout.gold)}")
+            gains.append(f"🪙 {fa(payout.gold)} سکه")
         if payout.xp:
-            gains.append(f"⭐ {fa(payout.xp)}")
-        rewards.append(f"👤 {fighter.mention or fighter.name}: " + (" · ".join(gains) if gains else "سقف پاداش امروز پر است"))
+            gains.append(f"⭐ {fa(payout.xp)} تجربه")
+        if not gains:
+            gains.append("⏳ سقف پاداش امروز پر است")
         if payout.rating:
             league = league_of(payout.rating)
             sign = "+" if payout.rating_delta >= 0 else "-"
-            rewards.append(f"     {league.emoji} لیگ {league.name} · {fa(payout.rating)} امتیاز ({sign}{fa(abs(payout.rating_delta))})")
+            gains.append(f"{league.emoji} {league.name} · {fa(payout.rating)} ({sign}{fa(abs(payout.rating_delta))})")
         if payout.level_up:
-            rewards.append(f"     🎉 رسید به سطح {fa(payout.level_up.new_level)}")
+            gains.append(f"🎉 سطح {fa(payout.level_up.new_level)}")
+        rewards.append((fighter.mention or fighter.name, gains))
     if rewards:
-        out += ["", f"🎁 {bold('پاداش')}", *rewards]
+        out += ["", f"🎁 {bold('پاداش')}", "", *tidy_list(rewards, 2, ranked=False)]
     return "\n".join(out)

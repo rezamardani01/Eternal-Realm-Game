@@ -11,6 +11,7 @@ from baleropy.types import CallbackQuery
 from ..game.services.group_dungeon import MAX_PLAYERS, MIN_PLAYERS, LobbyView, RunResult
 from ..shared.text import bold, duration, fa, headline
 from .callbacks import DgCb
+from .views import tidy_list
 from .services import Services
 
 router = Router(name="group-dungeon")
@@ -48,15 +49,14 @@ def result_text(r: RunResult) -> str:
     if notable:
         blocks.append("\n".join(notable))
     ranking = []
-    for i, p in enumerate(r.payouts):
-        medal = MEDALS[i] if i < 3 else "🔹"
-        entry = f"{medal} {p.mention} — {fa(p.damage)} آسیب ({fa(round(p.share * 100))}٪)"
+    for p in r.payouts:
+        gains = [f"⚔️ {fa(p.damage)} آسیب ({fa(round(p.share * 100))}٪)"]
         if p.level_up:
-            entry += f"\n🎉 رسید به سطح {fa(p.level_up)}"
+            gains.append(f"🎉 سطح {fa(p.level_up)}")
         if p.chest:
-            entry += "\n🎁 صندوقچه‌ی جادویی"
-        ranking.append(entry)
-    blocks.append(f"🏅 {bold('سهم هر جنگجو')}\n" + "\n".join(ranking))
+            gains.append("🎁 صندوقچه‌ی جادویی")
+        ranking.append((p.mention, gains))
+    blocks.append("\n".join([f"🏅 {bold('سهم هر جنگجو')}", "", *tidy_list(ranking, 10)]))
     blocks.append("🪙 پاداش هر نفر در دکمه‌های زیر 👇")
     return headline("\n\n".join(blocks))
 
