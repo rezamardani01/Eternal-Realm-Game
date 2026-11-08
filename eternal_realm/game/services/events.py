@@ -21,8 +21,8 @@ from .bosses import BossService, BossView
 from .inventory import InventoryService
 
 KINDS = ("mystery_chest", "merchant", "double_xp", "hidden_boss")
-WEIGHTS = (35, 25, 20, 20)
-LIFETIME = {"mystery_chest": 180, "merchant": 600, "double_xp": 1800}
+WEIGHTS = (45, 20, 20, 15)
+LIFETIME = {"mystery_chest": 300, "merchant": 600, "double_xp": 1800}
 TRY_GAP = 20
 CHEST_ODDS = (("wooden_chest", 70), ("magic_chest", 27), ("royal_chest", 3))
 #: (item, price in gold) the travelling merchant may carry
