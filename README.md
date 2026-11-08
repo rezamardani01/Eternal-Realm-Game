@@ -138,3 +138,5 @@ pytest
 معجون‌سازی، مناطق جهان. ساختار برای افزودن آن‌ها آماده است (داده‌محور + سرویس مستقل).
 
 > Pushes to `main` are tested by GitHub Actions; the server checks every minute and deploys green commits (see `deploy/`).
+
+<!-- deploy check 08:35 -->
