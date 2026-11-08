@@ -7,6 +7,7 @@ owner's own hero without a reply. Anyone else who writes them is ignored. «دس
 from __future__ import annotations
 
 from ...game.data.items import ITEMS
+from ...game.data.pets import PETS
 from ...game.services.events import EventAction
 from ...shared.errors import GameError
 from ...shared.text import bold, fa, to_int
@@ -28,7 +29,7 @@ OWNER_COMMANDS = """\
 • اهدا مسیر قهرمانی — بلیط طلایی این فصل
 • اهدا اشتراک 30 — ۳۰ روز VIP
 • اهدا سکه 3000 · اهدا کریستال 200
-• اهدا حیوان عقاب — حیوان خانگی با نام
+• اهدا ققنوس · اهدا حیوان عقاب — حیوان خانگی با نام
 • اهدا سنگ آهن 399 — هر آیتم با نام و تعداد
 • اهدا سطح 40 — تعیین سطح
 • اهدا انرژی — پر کردن انرژی
@@ -46,6 +47,19 @@ OWNER_COMMANDS = """\
 🛠️ پنل مدیریت — پنل شیشه‌ای: آمار، بازیکنان، گروه‌ها، خاندان‌ها، فروش، پیام همگانی، عضویت اجباری
 
 📋 دستورات مالک — همین فهرست"""
+
+
+def _find_pet(words: list[str]):  # noqa: ANN202
+    wanted = " ".join(words).strip().replace("‌", " ")
+    if not wanted:
+        return None
+    for pet in PETS:
+        if pet.id == wanted.lower() or pet.name.replace("‌", " ") == wanted:
+            return pet
+    for pet in PETS:
+        if wanted in pet.name.replace("‌", " "):
+            return pet
+    return None
 
 
 def _find_item(words: list[str]):  # noqa: ANN202
@@ -67,9 +81,16 @@ async def gift_item(ctx: CommandContext) -> None:
     qty = 1
     if args and (n := to_int(args[-1])) is not None:
         qty, args = n, args[:-1]
+    pet = _find_pet(args) if qty == 1 else None  # «اهدا ققنوس»: a companion pet by its name
+    if pet is not None:
+        target = await _target(ctx)
+        if not await ctx.services.admin.grant_pet(ctx.user.id, target.id, pet.id, True):
+            raise GameError(f"{target.name} این حیوان خانگی را از قبل دارد.")
+        await _announce(ctx, target, f"{pet.emoji} حیوان خانگی {pet.name}", "از «حیوان خانگی» همراه خودش کنید.")
+        return
     item = _find_item(args)
     if item is None:
-        raise GameError("آیتمی با این نام پیدا نشد. مثال: «اهدا سنگ آهن 399» یا «اهدا صندوقچه جادویی 2»")
+        raise GameError("چیزی با این نام پیدا نشد. مثال: «اهدا سنگ آهن 399»، «اهدا صندوقچه جادویی 2» یا «اهدا ققنوس»")
     target = await _target(ctx)
     await ctx.services.admin.give_item_id(ctx.user.id, target.id, item, qty)
     await _announce(ctx, target, f"{item.label} ×{fa(qty)}")

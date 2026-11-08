@@ -47,24 +47,6 @@ async def test_rapid_double_tap_on_a_claim_pays_once(h, services, db):
     assert gold == before + reward_for("free", 1).gold
 
 
-async def test_two_buyers_racing_for_one_card_only_one_wins(h, services, db):
-    seller = await hero(services, db, 2, "فروشنده")
-    buyers = [await hero(services, db, 10 + i, f"خریدار{i}", gold=5_000) for i in range(3)]
-    async with db.transaction() as tx:
-        for _ in range(2):
-            await services.cards.grant(tx, seller.id, "hero_mage")
-    lst = await services.cards.list_card(seller, "hero_mage", 500)
-    results = await asyncio.gather(
-        *(services.cards.buy_card(b, lst.id) for b in buyers), return_exceptions=True
-    )
-    assert sum(not isinstance(r, Exception) for r in results) == 1
-    start = buyers[0].gold
-    gold_now = [(await services.players.require(b.platform_user_id)).gold for b in buyers]
-    assert sorted(gold_now) == [start - 500, start, start]  # only the winner paid
-    owners = [b for b in buyers if (await services.cards.owned(b.id)).get("hero_mage")]
-    assert len(owners) == 1
-
-
 async def test_parallel_transfers_cannot_overdraw_a_wallet(services, db):
     a, b = await hero(services, db, 20, "آرش", gold=1_000), await hero(services, db, 21, "سارا")
     me = await services.players.require(20)

@@ -32,6 +32,9 @@ class EconomyService:
         self.inventory = inventory
 
     def _check_pair(self, sender: Player, receiver: Player) -> None:
+        settings = self.ctx.settings
+        if settings.is_admin(sender.platform_user_id) or settings.is_admin(receiver.platform_user_id):
+            raise GameError("انتقال فقط بین بازیکنان است؛ مدیران از دستورهای «اهدا» استفاده می‌کنند.")
         if sender.id == receiver.id:
             raise GameError("فرمانده، سکه را از یک جیب خودتان به جیب دیگرِ خودتان که نمی‌شود فرستاد! 😄")
         if receiver.banned:

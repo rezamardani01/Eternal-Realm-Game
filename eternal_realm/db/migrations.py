@@ -436,6 +436,13 @@ MIGRATIONS: list[str] = [
         value TEXT NOT NULL
     );
     """,
+    # 32: the card market is gone: cards on sale go back to their owners
+    """
+    INSERT INTO player_cards (player_id, card_id, qty, first_at)
+    SELECT seller_id, card_id, 1, CAST(strftime('%s', 'now') AS INTEGER) FROM card_listings WHERE status = 'active'
+    ON CONFLICT (player_id, card_id) DO UPDATE SET qty = qty + 1;
+    UPDATE card_listings SET status = 'cancelled' WHERE status = 'active';
+    """,
 ]
 
 

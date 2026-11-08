@@ -100,59 +100,26 @@ async def test_glass_flow(h, services, db):
     assert get_card("hero_warrior").name
 
 
-async def test_card_market_trades_only_duplicates_and_charges_a_fee(services, db):
-    seller, buyer = await hero(services, db, 20, "فروشنده"), await hero(services, db, 21, "خریدار")
-    async with db.transaction() as tx:
-        await services.cards.grant(tx, seller.id, "hero_mage")
-    with pytest.raises(GameError, match="تکراری"):
-        await services.cards.list_card(seller, "hero_mage", 500)  # the last copy stays in the album
-    async with db.transaction() as tx:
-        await services.cards.grant(tx, seller.id, "hero_mage")
-    with pytest.raises(GameError, match="قیمت"):
-        await services.cards.list_card(seller, "hero_mage", 1)
-    lst = await services.cards.list_card(seller, "hero_mage", 1000)
-    assert (await services.cards.owned(seller.id))["hero_mage"] == 1
-    found, more = await services.cards.market_page(0, 0, 6)
-    assert [x.id for x in found] == [lst.id] and not more
-    assert (await services.cards.market_page(5, 0, 6))[0] == []  # rarity filter
-    with pytest.raises(GameError, match="خودتان"):
-        await services.cards.buy_card(seller, lst.id)
-    gold = (await services.players.require(20)).gold, (await services.players.require(21)).gold
-    await services.cards.buy_card(buyer, lst.id)
-    assert (await services.players.require(21)).gold == gold[1] - 1000
-    assert (await services.players.require(20)).gold == gold[0] + 950
-    assert (await services.cards.owned(buyer.id))["hero_mage"] == 1
-    with pytest.raises(GameError, match="دیگر"):
-        await services.cards.buy_card(buyer, lst.id)
-
-
-async def test_cancelling_a_card_listing_returns_the_card(services, db):
-    seller = await hero(services, db, 22, "آرش")
-    async with db.transaction() as tx:
-        for _ in range(2):
-            await services.cards.grant(tx, seller.id, "hero_rogue")
-    lst = await services.cards.list_card(seller, "hero_rogue", 300)
-    await services.cards.cancel_listing(seller, lst.id)
-    assert (await services.cards.owned(seller.id))["hero_rogue"] == 2
-    with pytest.raises(GameError):
-        await services.cards.cancel_listing(seller, lst.id)
-
-
-async def test_card_market_glass_flow(h, services, db):
-    seller, buyer = await hero(services, db, 23, "سارا"), await hero(services, db, 24, "رها")
-    async with db.transaction() as tx:
-        for _ in range(2):
-            await services.cards.grant(tx, seller.id, "hero_archer")
-    await services.cards.list_card(seller, "hero_archer", 400)
-    await h.say(24, "آلبوم", group=True)
-    assert not any("بازار کارت" in t for t in h.labels())  # the card market lives in the bazaar
+async def test_the_bazaar_has_no_card_market(h, services, db):
+    await hero(services, db, 24, "رها")
     await h.say(24, "بازار", group=True)
-    await h.tap(24, "بازار کارت", group=True)
-    await h.click(24, h.button_data("۴۰۰"), group=True)
-    await h.tap(24, "خرید با", group=True)
-    assert "تأیید خرید کارت" in h.session.sent("editMessageText")[-1]["text"]
-    await h.tap(24, "بله، بخر", group=True)
-    assert (await services.cards.owned(buyer.id)).get("hero_archer") == 1
+    assert not any("کارت" in t for t in h.labels())
+    assert not hasattr(services.cards, "list_card") and not hasattr(services.cards, "market_page")
+
+
+async def test_cards_on_sale_when_the_market_closed_go_back_to_their_owners(services, db):
+    from eternal_realm.db import migrations
+
+    seller = await hero(services, db, 1, "آرش")
+    async with db.transaction() as tx:
+        await tx.execute("INSERT INTO card_listings (seller_id, card_id, price, status, created_at) VALUES (?, 'hero_mage', 500, 'active', 1)", (seller.id,))
+        await tx.execute("INSERT INTO card_listings (seller_id, card_id, price, status, created_at) VALUES (?, 'hero_mage', 600, 'active', 2)", (seller.id,))
+    script = migrations.MIGRATIONS[31]
+    async with db.transaction() as tx:
+        for statement in migrations._statements(script):
+            await tx.execute(statement)
+        assert await tx.scalar("SELECT qty FROM player_cards WHERE player_id = ? AND card_id = 'hero_mage'", (seller.id,), 0) == 2
+        assert await tx.scalar("SELECT COUNT(*) FROM card_listings WHERE status = 'active'", (), 0) == 0
 
 
 async def test_cards_have_a_value_and_duplicates_can_be_gifted(h, services, db):

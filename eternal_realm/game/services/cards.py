@@ -33,21 +33,6 @@ class PackResult:
     price: int
 
 
-FEE_PERCENT = 5
-MIN_PRICE, MAX_PRICE = 50, 5_000_000
-
-
-@dataclass
-class CardListing:
-    id: int
-    seller_id: int
-    seller: str
-    card: Card
-    price: int
-
-
-def _listing(row) -> CardListing:  # noqa: ANN001
-    return CardListing(row["id"], row["seller_id"], row["seller"], get_card(row["card_id"]), row["price"])
 
 
 class CardService:
@@ -156,98 +141,6 @@ class CardService:
             )
             await wallet.apply(tx, player.id, gold=dust_value(card), reason="card_dust", now=self.ctx.now())
         return dust_value(card)
-
-    async def market_page(self, rarity: int, page: int, per: int) -> tuple[list[CardListing], bool]:
-        where, args = "l.status = 'active'", []
-        ids = [c.id for c in CARDS if rarity == 0 or c.rarity == rarity]
-        where += " AND l.card_id IN (" + ",".join("?" * len(ids)) + ")"
-        args += ids
-        async with self.ctx.db.read() as tx:
-            rows = await tx.fetchall(
-                "SELECT l.*, p.display_name AS seller FROM card_listings l JOIN players p ON p.id = l.seller_id"  # noqa: S608
-                f" WHERE {where} ORDER BY l.price, l.id LIMIT ? OFFSET ?",
-                (*args, per + 1, page * per),
-            )
-        return [_listing(r) for r in rows[:per]], len(rows) > per
-
-
-    async def my_listings(self, player_id: int) -> list[CardListing]:
-        async with self.ctx.db.read() as tx:
-            rows = await tx.fetchall(
-                "SELECT l.*, p.display_name AS seller FROM card_listings l JOIN players p ON p.id = l.seller_id"
-                " WHERE l.seller_id = ? AND l.status = 'active' ORDER BY l.id DESC",
-                (player_id,),
-            )
-        return [_listing(r) for r in rows]
-
-
-    async def listing(self, listing_id: int) -> CardListing | None:
-        async with self.ctx.db.read() as tx:
-            row = await tx.fetchone(
-                "SELECT l.*, p.display_name AS seller FROM card_listings l JOIN players p ON p.id = l.seller_id"
-                " WHERE l.id = ? AND l.status = 'active'",
-                (listing_id,),
-            )
-        return _listing(row) if row else None
-
-
-    async def list_card(self, player: Player, card_id: str, price: int) -> CardListing:
-        card = get_card(card_id)
-        if not MIN_PRICE <= price <= MAX_PRICE:
-            raise GameError(f"قیمت کارت باید بین {fa(MIN_PRICE)} تا {fa(MAX_PRICE)} سکه باشد.")
-        async with self.ctx.db.transaction() as tx:
-            row = await tx.fetchone(
-                "SELECT qty FROM player_cards WHERE player_id = ? AND card_id = ?", (player.id, card_id)
-            )
-            if row is None or row["qty"] < 2:
-                raise GameError("فقط کارت‌های تکراری را می‌شود برای فروش گذاشت؛ یک نسخه همیشه در آلبومتان می‌ماند.")
-            await tx.execute(
-                "UPDATE player_cards SET qty = qty - 1 WHERE player_id = ? AND card_id = ?", (player.id, card_id)
-            )
-            listing_id = await tx.execute(
-                "INSERT INTO card_listings (seller_id, card_id, price, status, created_at) VALUES (?, ?, ?, 'active', ?)",
-                (player.id, card_id, price, self.ctx.now()),
-            )
-        return CardListing(listing_id, player.id, player.name, card, price)
-
-
-    async def buy_card(self, buyer: Player, listing_id: int) -> CardListing:
-        now = self.ctx.now()
-        async with self.ctx.db.transaction() as tx:
-            row = await tx.fetchone(
-                "SELECT l.*, p.display_name AS seller FROM card_listings l JOIN players p ON p.id = l.seller_id"
-                " WHERE l.id = ?",
-                (listing_id,),
-            )
-            if row is None or row["status"] != "active":
-                raise GameError("این کارت دیگر برای فروش نیست؛ شاید کسی زودتر خریده یا فروشنده پس گرفته است.")
-            if row["seller_id"] == buyer.id:
-                raise GameError("این کارت خودتان است! برای پس‌گرفتنش از «آگهی‌های من» استفاده کنید.")
-            await tx.execute(
-                "UPDATE card_listings SET status = 'sold', buyer_id = ? WHERE id = ? AND status = 'active'",
-                (buyer.id, listing_id),
-            )
-            if tx.rowcount != 1:  # somebody else got there first: the status flip is the gate
-                raise GameError("این کارت دیگر برای فروش نیست؛ شاید کسی زودتر خریده یا فروشنده پس گرفته است.")
-            fee = row["price"] * FEE_PERCENT // 100
-            await wallet.apply(tx, buyer.id, gold=-row["price"], reason="card_buy", now=now)
-            await wallet.apply(tx, row["seller_id"], gold=row["price"] - fee, reason="card_sale", now=now)
-            await self.grant(tx, buyer.id, row["card_id"])
-        return _listing(row)
-
-
-    async def cancel_listing(self, player: Player, listing_id: int) -> CardListing:
-        async with self.ctx.db.transaction() as tx:
-            row = await tx.fetchone(
-                "SELECT l.*, p.display_name AS seller FROM card_listings l JOIN players p ON p.id = l.seller_id"
-                " WHERE l.id = ?",
-                (listing_id,),
-            )
-            if row is None or row["status"] != "active" or row["seller_id"] != player.id:
-                raise GameError("این آگهی را نمی‌شود لغو کرد.")
-            await tx.execute("UPDATE card_listings SET status = 'cancelled' WHERE id = ?", (listing_id,))
-            await self.grant(tx, player.id, row["card_id"])
-        return _listing(row)
 
 
 __all__ = ["CardService", "PackResult", "SetProgress", "fa"]

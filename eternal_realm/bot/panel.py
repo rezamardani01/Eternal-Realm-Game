@@ -816,7 +816,6 @@ async def market(c: Ctx) -> Screen:
     if nav := _nav(c, "market", page, page > 0, nxt, f"{tab}.{sort}"):
         rows.append(nav)
     rows.append([c.btn("🏷️ فروش کالای من", "msell", style="success"), c.btn("📋 آگهی‌های من", "mine")])
-    rows.append([c.btn("🃏 بازار کارت", "cmarket", "0", "0")])
     rows.append(c.back("home"))
     return Screen(text, rows)
 

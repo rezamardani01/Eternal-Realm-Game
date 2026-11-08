@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
-import time
 from typing import Any
 
 from baleropy import Button, F, Router
@@ -43,26 +41,6 @@ def _is_private(chat: Any) -> bool:
 class MembershipMiddleware(BaseMiddleware):
     """Blocks the private chat with the bot (messages and buttons) for people who have not joined the channels."""
 
-    def __init__(self) -> None:
-        self._warned_at: float | None = None
-
-    async def _warn_admins(self, bot: Any, services: Services) -> None:
-        """When Bale refuses the membership check the owner is told why (at most once an hour)."""
-        problems = services.membership.problems
-        now = time.monotonic()
-        if not problems or (self._warned_at is not None and now - self._warned_at < 3600):
-            return
-        self._warned_at = now
-        lines = "\n".join(f"📣 {chat}" for chat in problems)
-        text = headline(
-            f"⚠️ {bold('عضویت اجباری کار نمی‌کند')}\n\n"
-            "ربات نتوانست عضویت را در این کانال‌ها بررسی کند:\n"
-            f"{lines}\n\n"
-            "ربات را در هر کانال «ادمین» کنید و شناسه‌ی کانال را بررسی کنید؛ تا آن موقع بازیکنان وارد بازی نمی‌شوند.\n"
-            "در «پنل مدیریت ← عضویت اجباری» وضعیت هر کانال را می‌بینید."
-        )
-        with contextlib.suppress(BaleAPIError):
-            await bot.send_message(services.ctx.settings.owner_id, text)
     async def __call__(self, handler: Any, event: Any, data: dict[str, Any]) -> Any:
         services: Services | None = data.get("services")
         bot = data.get("bot")
@@ -82,7 +60,6 @@ class MembershipMiddleware(BaseMiddleware):
         if not gated:
             return await handler(event, data)
         missing = await services.membership.missing(bot, user.id)
-        await self._warn_admins(bot, services)
         if not missing:
             return await handler(event, data)
         if isinstance(event, CallbackQuery):

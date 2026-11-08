@@ -98,16 +98,14 @@ async def test_owner_and_members_pass_and_errors_fail_open(h, services):
     assert await services.membership.missing(Broken(), 99) == []  # fail open: never lock players out
 
 
-async def test_when_bale_refuses_the_check_nobody_passes_and_the_owner_is_told(h, services):
+async def test_when_bale_refuses_the_check_nobody_passes_and_nobody_is_pestered(h, services):
     await services.membership.save(True, [{"chat": "@mychannel", "title": "کانال ما"}])
     h.session.check_error = "Forbidden: bot is not a member of the channel chat"
     await h.say(5, "/start")  # the bot cannot verify anything: the gate must not silently open
     assert "عضویت در کانال لازم است" in h.session.last_text()
     assert "@mychannel" in services.membership.problems
-    warnings = [p for p in h.session.sent("sendMessage") if p["chat_id"] == 1 and "عضویت اجباری کار نمی‌کند" in p["text"]]
-    assert len(warnings) == 1
     await h.say(6, "/start")
-    assert len([p for p in h.session.sent("sendMessage") if p["chat_id"] == 1 and "کار نمی‌کند" in p["text"]]) == 1  # once an hour
+    assert not [p for p in h.session.sent("sendMessage") if p["chat_id"] == 1]  # the owner is never messaged about it
     h.session.check_error = None  # the manager made the bot an admin
     services.membership.forget(5)
     h.session.non_members.discard(5)
