@@ -254,6 +254,9 @@ async def test_listing_and_buying_through_the_panel(h, services, db):
     await h.tap(11, "بله، بخر")
     assert any(g.item.id == "leather_cap" for g in (await services.inventory.view(2)).gear)
     assert (await services.players.require(11)).gold == services.ctx.balance.start_gold + 5_000 - 1_200
+    # after the purchase we are back on the first page of the list, with a success note and no stray «previous» button
+    assert "خرید موفق" in h.session.last_text() and "🏪" in h.session.last_text()
+    assert not any("قبلی" in label for label in h.labels())
 
 
 async def test_cancelling_a_listing_returns_the_item(h, services, db):

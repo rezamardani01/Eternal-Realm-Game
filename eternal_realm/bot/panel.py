@@ -10,7 +10,7 @@ from __future__ import annotations
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from baleropy import Button, F, Router
 from baleropy.exceptions import BaleAPIError, SkipHandler
@@ -643,7 +643,7 @@ async def chest_buy(c: Ctx) -> Screen:
 @screen("shop")
 async def shop(c: Ctx) -> Screen:
     p = await c.refresh()
-    text = f"🛒 {bold('بازارچه')}\n«بفرمایید فرمانده!»\n\n🪙 سکه‌ی شما: {fa(p.gold)}"
+    text = f"🛒 {bold('فروشگاه')}\n«بفرمایید فرمانده!»\n\n🪙 سکه‌ی شما: {fa(p.gold)}"
     rows = [
         [c.btn("⚔️ سلاح و زره", "shopcat", "gear"), c.btn("🧪 معجون‌ها", "shopcat", "pot")],
         [c.btn("🎁 صندوقچه‌ها", "chestshop"), c.btn("💰 فروش آیتم‌ها", "items")],
@@ -777,6 +777,11 @@ def _tab_sort(c: Ctx) -> tuple[str, str]:
     return (tab if tab in MARKET_TABS else "all"), (sort if sort in MARKET_SORTS else "new")
 
 
+async def _market_first_page(c: Ctx) -> Screen:
+    """The market list from its first page; ``c.a`` of the caller is a listing id, not a page."""
+    return await market(replace(c, a="0", b=""))
+
+
 @screen("market")
 async def market(c: Ctx) -> Screen:
     page = _int(c.a or "0", "صفحه")
@@ -881,7 +886,7 @@ async def mine(c: Ctx) -> Screen:
 async def listing(c: Ctx) -> Screen:
     lst = await c.services.market.get(_int(c.a))
     if lst is None:
-        shown = await market(c)
+        shown = await _market_first_page(c)
         shown.toast = "این آگهی دیگر روی تخته نیست"
         return shown
     own = lst.seller_id == c.player.id
@@ -907,7 +912,7 @@ async def listing(c: Ctx) -> Screen:
 async def market_buy_ask(c: Ctx) -> Screen:
     lst = await c.services.market.get(_int(c.a))
     if lst is None:
-        shown = await market(c)
+        shown = await _market_first_page(c)
         shown.toast = "این آگهی دیگر روی تخته نیست"
         return shown
     what = f"{lst.label}" + (f" ×{fa(lst.qty)}" if lst.qty > 1 else "") + f"\nفروشنده: {lst.seller_name}"
@@ -917,8 +922,10 @@ async def market_buy_ask(c: Ctx) -> Screen:
 @screen("mbuy")
 async def market_buy(c: Ctx) -> Screen:
     bought = await c.services.market.buy(c.player, _int(c.a))
-    shown = await market(c)
-    shown.toast, shown.alert = f"🛍️ معامله مبارک! {bought.item.name} از آن شماست", True
+    shown = await _market_first_page(c)
+    done = f"✅ {bold('خرید موفق')}\n{bought.item.label} از آن شماست. آگهی‌های دیگر را ببینید 👇"
+    shown.text = f"{done}\n\n{shown.text}"
+    shown.toast = f"🛍️ معامله مبارک! {bought.item.name} از آن شماست"
     return shown
 
 
