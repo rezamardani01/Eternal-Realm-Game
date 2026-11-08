@@ -468,3 +468,28 @@ async def test_transfer_text_is_split_into_calm_blocks(h, services, db):
     await h.say(10, "انتقال 500", group=True, reply_to=h.message_of(11))
     text = h.session.last_text()
     assert text.count("\n\n") >= 2 and "[سارا](uid:11)" in text
+
+
+async def test_private_menu_shows_community_links_only_when_configured(h, services, db):
+    from dataclasses import replace
+
+    await reg(services)
+    await h.say(10, "/start")
+    assert not any("گروه ما" in t or "کانال ما" in t for t in h.labels())
+    services.ctx.settings = replace(
+        services.ctx.settings, group_url="https://ble.ir/join/abc", channel_url="https://ble.ir/mychannel"
+    )
+    await h.panel(10, "home")
+    rows = h.session.last_markup_rows()
+    assert [b["text"] for b in rows[-1]] == ["👥 گروه ما", "📣 کانال ما"]
+    assert rows[-1][0]["url"] == "https://ble.ir/join/abc"
+    await h.say(10, "قلمرو", group=True)
+    assert not any("گروه ما" in t for t in h.labels())  # groups keep their own menu
+
+
+def test_unsafe_links_are_ignored():
+    from eternal_realm.config import parse_settings
+
+    base = {"bot": {"token": "t", "owner_id": 1}}
+    assert parse_settings({**base, "links": {"group": "javascript:alert(1)", "channel": "http://x.y"}}).group_url == ""
+    assert parse_settings({**base, "links": {"group": "https://ble.ir/g"}}).group_url == "https://ble.ir/g"

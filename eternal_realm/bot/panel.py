@@ -145,6 +145,15 @@ async def home(c: Ctx) -> Screen:
     ]
     if c.is_group:
         rows.insert(-1, [c.btn("🐉 باس گروه", "boss")])
+    else:
+        settings = c.services.ctx.settings
+        links = []
+        if settings.group_url:
+            links.append(Button.url("👥 گروه ما", settings.group_url))
+        if settings.channel_url:
+            links.append(Button.url("📣 کانال ما", settings.channel_url))
+        if links:
+            rows.append(links)
     return Screen(text, rows)
 
 

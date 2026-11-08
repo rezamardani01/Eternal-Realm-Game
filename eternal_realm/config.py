@@ -83,6 +83,9 @@ class Settings:
     provider_token: str = "WALLET-TEST-1111111111111111"
     balance: Balance = field(default_factory=Balance)
     command_overrides: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: community links shown as buttons in the private main menu (empty = button hidden)
+    group_url: str = ""
+    channel_url: str = ""
 
     def is_admin(self, user_id: int) -> bool:
         return user_id == self.owner_id or user_id in self.admin_ids
@@ -102,6 +105,12 @@ def _build_balance(raw: dict[str, Any]) -> Balance:
             raise ConfigError(f"[balance] مقدار {key} نامعتبر است")
         kwargs[key] = type(default)(value)
     return Balance(**kwargs)
+
+
+def _link(raw: object) -> str:
+    """A community link must be a plain https address; anything else is ignored."""
+    text = str(raw or "").strip()
+    return text if text.startswith("https://") and " " not in text else ""
 
 
 def parse_settings(data: dict[str, Any]) -> Settings:
@@ -127,6 +136,8 @@ def parse_settings(data: dict[str, Any]) -> Settings:
         provider_token=str(payments.get("provider_token", "WALLET-TEST-1111111111111111")),
         balance=_build_balance(data.get("balance", {})),
         command_overrides=overrides,
+        group_url=_link(data.get("links", {}).get("group", "")),
+        channel_url=_link(data.get("links", {}).get("channel", "")),
     )
 
 
