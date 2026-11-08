@@ -454,3 +454,26 @@ async def test_every_summoning_has_a_hidden_strength_tier_that_changes_the_odds(
     started = await services.bosses.start(view.id, players[0])
     assert started.tier == "legend"
     assert "افسانه‌ای" in boss_ui.text_for(services, started)  # revealed once the fight begins
+
+
+async def test_a_legendary_boss_beats_a_small_squad(services, db, clock):
+    players, view = await squad(services, db, 3)
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE bosses SET state = ? WHERE id = ?", (json.dumps({"tier": "legend"}), view.id))
+    await services.bosses.start(view.id, players[0])
+    updates = await advance_until_ended(services, clock)
+    final = [u for u in updates if u.kind == "final"][-1]
+    assert final.view.outcome in ("lost", "fled")  # bosses can and do win
+
+
+def test_long_fights_get_harder_and_the_dreaded_blow_exists():
+    rng = random.Random(2)
+    boss = Boss("باس", 10**9, 10**9, 50, 10)
+    heroes = [Hero(i, f"h{i}", "warrior", 10**6, 10**6, 20, 20, 5, 10, 5) for i in range(4)]
+    start_atk, texts = boss.atk, []
+    for _ in range(300):
+        texts += [t for _, t in run_round(boss, heroes, rng)]
+        for h in heroes:
+            h.hp, h.alive = h.max_hp, True
+    assert boss.atk > start_atk * 1.3  # the boss kept growing angrier as the fight dragged on
+    assert any("حمله‌ی نابودگر" in t for t in texts) and any("خشمگین‌تر شد" in t for t in texts)

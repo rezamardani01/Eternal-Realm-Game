@@ -211,6 +211,11 @@ def _chaos(boss: Boss, heroes: list[Hero], rng: random.Random) -> list[Event]:
         victim = rng.choice(alive)
         victim.stunned = True
         events.append((NOTABLE, f"💫 {boss.name} نعره‌ای زد و {victim.name} را گیج کرد"))
+    alive_all = [h for h in heroes if h.alive]
+    if alive_all and rng.random() < 0.04:  # the dreaded blow: everybody standing is hit hard
+        events.append((MAJOR, f"💥 {boss.name} حمله‌ی نابودگر زد و همه‌ی جنگجویان را کوبید!"))
+        for target in alive_all:
+            events += _hit_hero(boss, target, 0.7, rng, "ضربه‌ی نابودگر به")
     if boss.surges > 0 and boss.hp < boss.max_hp * 0.8 and rng.random() < 0.06:
         boss.surges -= 1
         mended = min(boss.max_hp - boss.hp, round(boss.max_hp * 0.04))
@@ -234,6 +239,9 @@ def run_round(boss: Boss, heroes: list[Hero], rng: random.Random) -> list[Event]
     if boss.hp > 0:
         events += _chaos(boss, heroes, rng)
         events += _boss_turn(boss, heroes, rng)
+        if boss.round >= 25 and boss.round % 10 == 5:  # a long fight wears the squad down: the boss keeps getting angrier
+            boss.atk = round(boss.atk * 1.06)
+            events.append((NOTABLE, f"⏫ {boss.name} با گذشت زمان خشمگین‌تر شد و قوی‌تر می‌زند"))
     if boss.weak > 0:
         boss.weak -= 1
     if boss.pinned > 0:

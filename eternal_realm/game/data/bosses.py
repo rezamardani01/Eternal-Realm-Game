@@ -123,11 +123,11 @@ class Tier:
 
 
 TIERS: tuple[Tier, ...] = (
-    Tier("weak", "🟢", "ضعیف", 8, 0.95, 0.95, 0.8),
-    Tier("normal", "🔵", "معمولی", 26, 1.15, 1.08, 1.0),
-    Tier("strong", "🟣", "قدرتمند", 30, 1.4, 1.2, 1.3),
-    Tier("enraged", "🟠", "خشمگین", 22, 1.75, 1.35, 1.7),
-    Tier("legend", "🔴", "افسانه‌ای", 14, 2.1, 1.5, 2.4),
+    Tier("weak", "🟢", "ضعیف", 6, 1.0, 1.0, 0.8),
+    Tier("normal", "🔵", "معمولی", 20, 1.2, 1.1, 1.0),
+    Tier("strong", "🟣", "قدرتمند", 32, 1.45, 1.22, 1.3),
+    Tier("enraged", "🟠", "خشمگین", 26, 1.75, 1.35, 1.7),
+    Tier("legend", "🔴", "افسانه‌ای", 16, 2.1, 1.5, 2.4),
 )
 _TIER_BY_ID = {t.id: t for t in TIERS}
 #: the squad strength (stats compared with a plain character of the same level) that the tiers were balanced for
@@ -148,7 +148,7 @@ def squad_scaling(power: float, fighters: int) -> tuple[float, float]:
     ``power`` is the squad's strength relative to a plain character; more fighters make the boss hit a bit harder.
     """
     rel = max(0.5, min(2.5, power / REFERENCE_POWER))
-    return rel**1.1, rel**0.9 * (1 + 0.06 * max(0, fighters - 3))
+    return rel**1.1, rel**0.9 * (1 + 0.10 * max(0, fighters - 3))
 
 
 def pick_boss(level: int, rng: random.Random) -> BossType:
