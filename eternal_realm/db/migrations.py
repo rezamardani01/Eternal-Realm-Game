@@ -223,6 +223,27 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_group_events_chat ON group_events (chat_id, status, kind);
     """,
+    # 12: clans with roles and a shared treasury
+    """
+    CREATE TABLE clans (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+        leader_id  INTEGER NOT NULL REFERENCES players (id),
+        open       INTEGER NOT NULL DEFAULT 1,
+        treasury   INTEGER NOT NULL DEFAULT 0,
+        donated    INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE clan_members (
+        player_id INTEGER PRIMARY KEY REFERENCES players (id),
+        clan_id   INTEGER NOT NULL REFERENCES clans (id),
+        role      TEXT    NOT NULL CHECK (role IN ('leader', 'deputy', 'elder', 'member')),
+        donated   INTEGER NOT NULL DEFAULT 0,
+        joined_at INTEGER NOT NULL
+    );
+    CREATE INDEX idx_clan_members_clan ON clan_members (clan_id);
+    """,
 ]
 
 

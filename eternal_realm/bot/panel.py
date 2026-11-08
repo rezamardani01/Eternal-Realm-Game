@@ -131,6 +131,7 @@ async def home(c: Ctx) -> Screen:
         [c.btn("🗺️ ماجراجویی", "adv", style="primary"), c.btn("👤 شخصیت من", "profile")],
         [c.btn("🎒 کوله‌پشتی", "inv"), c.btn("🛒 فروشگاه", "shop")],
         [c.btn("🏪 بازار", "market"), c.btn("🏆 تالار", "top")],
+        [c.btn("🏯 خاندان", "clan")],
         [c.btn("💎 خزانه‌ی ویژه", "premium"), c.btn("🎁 جایزه روزانه", "daily")],
         [c.btn("😴 استراحت", "rest"), c.btn("❓ راهنما", "help")],
     ]

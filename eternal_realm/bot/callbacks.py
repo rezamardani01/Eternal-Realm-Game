@@ -38,6 +38,12 @@ class EventCb(CallbackData, prefix="e"):
     arg: int = 0
 
 
+class ClanCb(CallbackData, prefix="c"):
+    action: str
+    id: int
+    arg: int = 0
+
+
 class BuyCb(CallbackData, prefix="buy"):
     kind: str
     id: str

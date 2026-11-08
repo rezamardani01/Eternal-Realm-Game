@@ -10,6 +10,7 @@ from ..game.services.admin import AdminService
 from ..game.services.bosses import BossService
 from ..game.services.characters import CharacterService
 from ..game.services.chests import ChestService
+from ..game.services.clans import ClanService
 from ..game.services.duels import DuelService
 from ..game.services.economy import EconomyService
 from ..game.services.events import EventService
@@ -41,6 +42,7 @@ class Services:
     admin: AdminService
     bosses: BossService
     events: EventService
+    clans: ClanService
     characters: CharacterService
     groups: GroupService
     throttle: Throttle
@@ -70,6 +72,7 @@ class Services:
             admin=AdminService(ctx, inventory),
             bosses=bosses,
             events=EventService(ctx, inventory, bosses),
+            clans=ClanService(ctx),
             characters=characters,
             groups=GroupService(ctx),
             throttle=Throttle(
