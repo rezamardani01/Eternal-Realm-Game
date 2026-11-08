@@ -166,3 +166,31 @@ class AdminService:
             await wallet.apply(tx, player.id, gold=gold, crystal=crystal, reason="admin", now=self.ctx.now())
             await self._log(tx, admin_id, "give_currency", f"{player.name} gold={gold} crystal={crystal}")
             return player
+
+    async def set_title(self, admin_id: int, player_id: int, title: str) -> None:
+        title = title.strip()[:40]
+        async with self.ctx.db.transaction() as tx:
+            player = await self._by_id(tx, player_id)
+            await tx.execute("UPDATE players SET title = ? WHERE id = ?", (title, player.id))
+            await self._log(tx, admin_id, "set_title", f"{player.name} -> {title or '(none)'}")
+
+    async def refill_energy(self, admin_id: int, player_id: int) -> None:
+        async with self.ctx.db.transaction() as tx:
+            player = await self._by_id(tx, player_id)
+            await player_repo.set_energy(tx, player.id, progression.max_energy(player.level, self.ctx.balance), self.ctx.now())
+            await self._log(tx, admin_id, "refill_energy", player.name)
+
+    async def reset_cooldowns(self, admin_id: int, player_id: int) -> None:
+        async with self.ctx.db.transaction() as tx:
+            player = await self._by_id(tx, player_id)
+            await tx.execute("DELETE FROM cooldowns WHERE player_id = ?", (player.id,))
+            await tx.execute("DELETE FROM activity_usage WHERE player_id = ?", (player.id,))
+            await self._log(tx, admin_id, "reset_cooldowns", player.name)
+
+    async def set_group_enabled(self, admin_id: int, chat_id: int, enabled: bool) -> None:
+        async with self.ctx.db.transaction() as tx:
+            row = await tx.fetchone("SELECT title FROM groups WHERE chat_id = ?", (chat_id,))
+            if row is None:
+                raise GameError("گروه پیدا نشد.")
+            await group_repo.set_enabled(tx, chat_id, enabled)
+            await self._log(tx, admin_id, "group_on" if enabled else "group_off", row["title"] or str(chat_id))

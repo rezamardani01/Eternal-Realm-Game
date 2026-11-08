@@ -15,8 +15,13 @@ class FakeBot:
     def __init__(self):
         self.sent = []
 
-    async def send_message(self, chat_id, text):
+    async def send_message(self, chat_id, text, **kwargs):
         self.sent.append((chat_id, text))
+
+        class Sent:
+            message_id = 77
+
+        return Sent()
 
 
 @pytest.fixture
@@ -210,3 +215,74 @@ async def test_bot_sends_a_login_link_only_to_admins_in_private(services, db):
     assert services.web_auth.peek(token)
     await h.say(1, "پنل وب", group=True)  # never in a group
     assert len(h.session.sent("sendMessage")) == 1
+
+
+async def test_panel_controls_for_vip_ticket_pet_title_and_shortcuts(client, auth, services, db):
+    p = await hero(services, db, 30, "کیان")
+    csrf = await sign_in(client, auth)
+    h = {"X-CSRF-Token": csrf}
+    base = f"/api/players/{p.id}"
+    assert (await client.post(f"{base}/vip", json={"days": 30}, headers=h)).status == 200
+    assert (await services.players.require(30)).vip_until == services.ctx.now() + 30 * 86400
+    detail = await (await client.get(base)).json()
+    assert detail["vip_until"] and detail["ticket"] is False
+    assert (await client.post(f"{base}/vip", json={"clear": True}, headers=h)).status == 200
+    assert (await services.players.require(30)).vip_until == 0
+    assert (await client.post(f"{base}/vip", json={"days": 99999}, headers=h)).status == 400
+
+    assert (await (await client.post(f"{base}/ticket", json={"give": True}, headers=h)).json())["changed"] is True
+    assert (await (await client.get(base)).json())["ticket"] is True
+    assert (await (await client.post(f"{base}/ticket", json={"give": False}, headers=h)).json())["changed"] is True
+
+    assert (await client.post(f"{base}/pet", json={"pet": "fox", "give": True}, headers=h)).status == 200
+    assert await services.pets.owned(p.id) == {"fox": True}
+    assert (await client.post(f"{base}/pet", json={"pet": "nope", "give": True}, headers=h)).status == 400
+    assert (await client.post(f"{base}/pet", json={"pet": "fox", "give": False}, headers=h)).status == 200
+    assert await services.pets.owned(p.id) == {}
+
+    assert (await client.post(f"{base}/title", json={"title": "قهرمان بزرگ"}, headers=h)).status == 200
+    assert (await services.players.require(30)).honor == "قهرمان بزرگ"
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET energy = 1 WHERE id = ?", (p.id,))
+        await tx.execute("INSERT INTO cooldowns (player_id, key, until) VALUES (?, 'hunt', 9999999999)", (p.id,))
+    assert (await client.post(f"{base}/energy", json={}, headers=h)).status == 200
+    assert (await client.post(f"{base}/cooldowns", json={}, headers=h)).status == 200
+    async with db.read() as tx:
+        assert await tx.scalar("SELECT COUNT(*) FROM cooldowns WHERE player_id = ?", (p.id,), 0) == 0
+    audit = {r["action"] for r in await (await client.get("/api/audit")).json()}
+    assert {"set_vip", "grant_ticket", "revoke_ticket", "grant_pet", "revoke_pet", "set_title", "refill_energy", "reset_cooldowns"} <= audit
+
+
+async def test_group_controls_and_event_creation(client, auth, services, db):
+    for uid in (40, 41, 42):
+        await hero(services, db, uid, f"عضو{uid}", level=6)
+    await services.groups.touch(-300, "گروه سیصد")
+    async with db.transaction() as tx:
+        for pid in (1, 2, 3):
+            await tx.execute("INSERT INTO group_members (chat_id, player_id, points, last_active) VALUES (-300, ?, 0, ?)",
+                             (pid, services.ctx.now()))
+    csrf = await sign_in(client, auth)
+    h = {"X-CSRF-Token": csrf}
+    assert (await client.post("/api/groups/-300/toggle", json={"enabled": False}, headers=h)).status == 200
+    assert not (await (await client.get("/api/groups")).json())[0]["enabled"]
+    assert (await client.post("/api/groups/-999/toggle", json={"enabled": True}, headers=h)).status == 400
+    assert (await client.post("/api/groups/-300/message", json={"text": "سلام گروه"}, headers=h)).status == 200
+    assert (-300, "سلام گروه") in client.bot.sent
+    assert (await client.post("/api/groups/-300/event", json={"kind": "bogus"}, headers=h)).status == 400
+    ok = await client.post("/api/groups/-300/event", json={"kind": "merchant"}, headers=h)
+    assert ok.status == 200 and (await ok.json())["kind"] == "merchant"
+
+
+async def test_membership_settings_api(client, auth, services):
+    csrf = await sign_in(client, auth)
+    h = {"X-CSRF-Token": csrf}
+    assert await (await client.get("/api/membership")).json() == {"enabled": False, "channels": []}
+    bad = await client.post("/api/membership", json={"enabled": True, "channels": []}, headers=h)
+    assert bad.status == 400
+    good = await client.post("/api/membership", json={"enabled": True, "channels": [
+        {"chat": "@mychannel", "title": "کانال ما", "link": "https://ble.ir/join/x"}]}, headers=h)
+    assert good.status == 200
+    saved = await (await client.get("/api/membership")).json()
+    assert saved["enabled"] and saved["channels"][0]["chat"] == "@mychannel"
+    assert (await client.post("/api/membership", json={"enabled": True, "channels": ["x"]}, headers=h)).status == 400
+    assert (await client.post("/api/membership/probe", json={"chat": "bad chat"}, headers=h)).status == 400

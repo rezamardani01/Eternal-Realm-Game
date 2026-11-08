@@ -90,6 +90,22 @@ function confirmBox({ title, text, ok = "تأیید", danger = false, icon = "tr
   });
 }
 
+function promptBox({ title, text, placeholder = "", ok = "ارسال", multiline = false }) {
+  return new Promise((resolve) => {
+    const field = multiline ? h("textarea", { rows: 5, placeholder, maxlength: 1000 }) : h("input", { placeholder });
+    field.style.width = "100%";
+    const done = (v) => { box.remove(); document.removeEventListener("keydown", onKey); resolve(v); };
+    const onKey = (e) => { if (e.key === "Escape") done(null); };
+    const box = h("div", { class: "confirm", onclick: (e) => { if (e.target === box) done(null); } },
+      h("div", { class: "box" }, h("h3", {}, title), h("p", { class: "muted" }, text || ""), field,
+        h("div", { class: "row" }, h("button", { class: "btn ghost", onclick: () => done(null) }, "انصراف"), h("button", { class: "btn", onclick: () => done(field.value.trim()) }, ok))));
+    document.addEventListener("keydown", onKey);
+    $("layer").append(box);
+    field.focus();
+  });
+}
+let PETS = [];
+
 const empty = (text) => h("div", { class: "card empty" }, h("img", { src: "/static/img/empty.svg", alt: "" }), h("p", {}, text));
 const skeleton = (n = 4) => h("div", { class: "grid kpis" }, Array.from({ length: n }, () => h("div", { class: "skel" })));
 const avatar = (name, id, cls = "") => h("span", { class: `av av-${id % 6} ${cls}` }, [...(name || "?")][0]);
@@ -206,6 +222,7 @@ const PAGES = {
   orders: ["banknote", "فروش"],
   broadcast: ["megaphone", "پیام همگانی"],
   audit: ["scroll-text", "گزارش مدیریت"],
+  settings: ["settings", "تنظیمات"],
 };
 let current = "dashboard";
 let refreshTimer = null;
@@ -324,19 +341,24 @@ async function players(main) {
 async function openPlayer(id) {
   const p = await api(`/api/players/${id}`);
   if (!ITEMS.length) ITEMS = await api("/api/items");
+  if (!PETS.length) PETS = await api("/api/pets");
   const sheet = $("sheet");
   const gold = h("input", { type: "number", placeholder: "سکه (±)" });
   const crystal = h("input", { type: "number", placeholder: "کریستال (±)" });
   const level = h("input", { type: "number", min: 1, value: p.level });
   const item = h("select", {}, ITEMS.map((i) => h("option", { value: i.id }, i.label)));
   const qty = h("input", { type: "number", min: 1, value: 1 });
+  const vipDays = h("input", { type: "number", placeholder: "تعداد روز", value: 30 });
+  const petSel = h("select", {}, PETS.map((x) => h("option", { value: x.id }, x.label)));
+  const titleInput = h("input", { placeholder: "عنوان (خالی = حذف)", value: p.title || "" });
   const post = (path, body, msg) => run(async () => { await api(`/api/players/${id}/${path}`, { method: "POST", body }); toast(msg); await openPlayer(id); if (current === "players") show("players"); });
 
   const panes = {
     "نمای کلی": () => h("div", { class: "pane" },
       h("div", { class: "card kv" }, ...[["سطح", num(p.level)], ["تجربه", num(p.xp)], ["انرژی", num(p.energy)], ["سکه", num(p.gold)], ["کریستال", num(p.crystal)],
         ["برد / باخت", `${num(p.wins)} / ${num(p.losses)}`], ["امتیاز لیگ", num(p.rating)], ["کارت‌ها", num(p.cards)],
-        ["خاندان", p.clan ? `${p.clan.name} (${p.clan.role})` : "—"], ["عنوان", p.title || "—"], ["بیداری", p.awakened ? "بله" : "خیر"], ["ثبت‌نام", p.created]]
+        ["خاندان", p.clan ? `${p.clan.name} (${p.clan.role})` : "—"], ["عنوان", p.title || "—"], ["بیداری", p.awakened ? "بله" : "خیر"],
+        ["VIP", p.vip_until ? `تا ${p.vip_until}` : "—"], ["بلیط طلایی", p.ticket ? "دارد" : "ندارد"], ["ثبت‌نام", p.created]]
         .flatMap(([k, v]) => [h("span", {}, k), h("span", {}, v)]))),
     "کوله‌پشتی": () => h("div", { class: "pane" },
       h("div", { class: "card" }, h("h3", {}, ic("package"), "آیتم‌ها و منابع"), h("div", { class: "chips" }, p.items.length ? p.items.map((i) => h("span", { class: "badge" }, `${i.label} ×${num(i.qty)}`)) : h("span", { class: "muted" }, "خالی"))),
@@ -350,6 +372,22 @@ async function openPlayer(id) {
           post("give", { gold: g, crystal: c }, "ثبت شد"); } }, ic("check"), "اعمال"))),
       h("div", { class: "card mt" }, h("h3", {}, ic("star"), "سطح"), h("div", { class: "row" }, level, h("button", { class: "btn", onclick: () => post("level", { level: +level.value }, "سطح عوض شد") }, "تغییر سطح"))),
       h("div", { class: "card mt" }, h("h3", {}, ic("gift"), "دادن آیتم"), h("div", { class: "row" }, item, qty, h("button", { class: "btn", onclick: () => post("item", { item: item.value, qty: +qty.value }, "آیتم داده شد") }, "ارسال"))),
+      h("div", { class: "card mt" }, h("h3", {}, ic("crown"), "اشتراک VIP"),
+        h("p", { class: "muted" }, p.vip_until ? `فعال تا ${p.vip_until}` : "فعال نیست"),
+        h("div", { class: "row" }, vipDays, h("button", { class: "btn good", onclick: () => post("vip", { days: +vipDays.value || 0 }, "اشتراک تغییر کرد") }, ic("plus"), "افزودن روز"),
+          h("button", { class: "btn bad", disabled: !p.vip_until, onclick: () => post("vip", { clear: true }, "اشتراک حذف شد") }, ic("trash-2"), "حذف اشتراک"))),
+      h("div", { class: "card mt" }, h("h3", {}, ic("sparkles"), "بلیط طلایی این فصل"),
+        h("p", { class: "muted" }, p.ticket ? `دارد · ${num(p.path_points)} امتیاز مسیر` : `ندارد · ${num(p.path_points)} امتیاز مسیر`),
+        h("div", { class: "row" }, h("button", { class: "btn good", disabled: p.ticket, onclick: () => post("ticket", { give: true }, "بلیط اهدا شد") }, ic("gift"), "اهدای بلیط"),
+          h("button", { class: "btn bad", disabled: !p.ticket, onclick: () => post("ticket", { give: false }, "بلیط حذف شد") }, ic("trash-2"), "حذف بلیط"))),
+      h("div", { class: "card mt" }, h("h3", {}, ic("sparkles"), "حیوان خانگی"),
+        h("p", { class: "muted" }, p.pets.length ? p.pets.map((x) => `${x.id} (سطح ${x.level})`).join("، ") : "حیوانی ندارد"),
+        h("div", { class: "row" }, petSel, h("button", { class: "btn good", onclick: () => post("pet", { pet: petSel.value, give: true }, "حیوان اهدا شد") }, ic("gift"), "اهدا"),
+          h("button", { class: "btn bad", onclick: () => post("pet", { pet: petSel.value, give: false }, "حیوان حذف شد") }, ic("trash-2"), "حذف"))),
+      h("div", { class: "card mt" }, h("h3", {}, ic("crown"), "عنوان"), h("div", { class: "row" }, titleInput, h("button", { class: "btn", onclick: () => post("title", { title: titleInput.value }, "عنوان ذخیره شد") }, "ذخیره"))),
+      h("div", { class: "card mt" }, h("h3", {}, ic("zap"), "میانبرها"), h("div", { class: "row" },
+        h("button", { class: "btn ghost", onclick: () => post("energy", {}, "انرژی پر شد") }, ic("zap"), "پر کردن انرژی"),
+        h("button", { class: "btn ghost", onclick: () => post("cooldowns", {}, "زمان‌های انتظار پاک شد") }, ic("clock"), "پاک کردن زمان انتظار"))),
       h("div", { class: "card mt" }, h("h3", {}, ic("ban"), "دسترسی"), h("div", { class: "row" }, h("button", { class: p.banned ? "btn good" : "btn bad", onclick: async () => {
         if (await confirmBox({ title: p.banned ? "آزاد کردن بازیکن" : "مسدود کردن بازیکن", text: `${p.name} ${p.banned ? "آزاد شود؟" : "از بازی مسدود شود؟"}`, ok: p.banned ? "آزاد کن" : "مسدود کن", danger: !p.banned }))
           post("ban", { banned: !p.banned }, p.banned ? "آزاد شد" : "مسدود شد"); } }, ic("ban"), p.banned ? "آزاد کردن بازیکن" : "مسدود کردن بازیکن")))),
@@ -374,13 +412,26 @@ function closeSheet() { $("sheet").classList.remove("on"); $("overlay").classLis
 async function groups(main) {
   main.append(skeleton(3));
   const rows = await api("/api/groups");
+  const kinds = [["", "رویداد تصادفی"], ["mystery_chest", "صندوقچه‌ی اسرارآمیز"], ["merchant", "تاجر دوره‌گرد"], ["double_xp", "تجربه‌ی دوبرابر"], ["hidden_boss", "باس مخفی"]];
+  const card = (g, i) => {
+    const kind = h("select", {}, kinds.map(([v, t]) => h("option", { value: v }, t)));
+    const reload = () => show("groups");
+    return h("div", { class: "card lift reveal" },
+      h("div", { class: "who-cell" }, h("span", { class: `av av-${i % 6}` }, ic("building-2")),
+        h("div", {}, h("b", {}, g.title), h("div", { class: "muted", style: "font-size:12px" }, `آخرین فعالیت ${g.seen}`))),
+      h("div", { class: "row" }, h("span", { class: "badge " + (g.enabled ? "good" : "bad") }, g.enabled ? "فعال" : "غیرفعال"), h("span", { class: "badge info" }, `${num(g.members)} بازیکن`),
+        h("span", { class: "muted", style: "font-size:12px" }, `ثبت ${g.created}`)),
+      h("div", { class: "row" },
+        h("button", { class: "btn sm " + (g.enabled ? "bad" : "good"), onclick: () => run(async () => { await api(`/api/groups/${g.id}/toggle`, { method: "POST", body: { enabled: !g.enabled } }); toast(g.enabled ? "گروه غیرفعال شد" : "گروه فعال شد"); reload(); }) }, g.enabled ? "غیرفعال کردن" : "فعال کردن"),
+        h("button", { class: "btn sm ghost", onclick: () => run(async () => {
+          const t = await promptBox({ title: `پیام به «${g.title}»`, placeholder: "متن پیام...", multiline: true });
+          if (t) { await api(`/api/groups/${g.id}/message`, { method: "POST", body: { text: t } }); toast("پیام ارسال شد"); } }) }, ic("send"), "پیام")),
+      h("div", { class: "row" }, kind,
+        h("button", { class: "btn sm", onclick: () => run(async () => { const r = await api(`/api/groups/${g.id}/event`, { method: "POST", body: { kind: kind.value } }); toast(`رویداد «${r.kind}» ساخته شد`); }) }, ic("sparkles"), "ساخت رویداد")));
+  };
   main.replaceChildren(
     h("p", { class: "sub" }, `${num(rows.length)} گروه در قلمرو ثبت شده است`),
-    rows.length ? stagger(h("div", { class: "grid three" }, rows.map((g, i) =>
-      h("div", { class: "card lift reveal" }, h("div", { class: "who-cell" }, h("span", { class: `av av-${i % 6}` }, ic("building-2")),
-        h("div", {}, h("b", {}, g.title), h("div", { class: "muted", style: "font-size:12px" }, `آخرین فعالیت ${g.seen}`))),
-        h("div", { class: "row" }, h("span", { class: "badge " + (g.enabled ? "good" : "bad") }, g.enabled ? "فعال" : "غیرفعال"), h("span", { class: "badge info" }, `${num(g.members)} بازیکن`),
-          h("span", { class: "muted", style: "font-size:12px" }, `ثبت ${g.created}`)))))) : empty("هنوز گروهی ثبت نشده است."));
+    rows.length ? stagger(h("div", { class: "grid three" }, rows.map(card))) : empty("هنوز گروهی ثبت نشده است."));
 }
 
 async function orders(main) {
@@ -437,8 +488,40 @@ async function audit(main) {
         h("div", { class: "muted", style: "margin-top:4px" }, r.detail || "—"), h("div", { class: "muted", style: "font-size:12px" }, `مدیر ${r.admin}`))))) : empty("هنوز چیزی ثبت نشده است."));
 }
 
+async function settings(main) {
+  main.append(skeleton(2));
+  const cfg = await api("/api/membership");
+  const state = { enabled: cfg.enabled, channels: cfg.channels.map((c) => ({ ...c })) };
+  const list = h("div", { class: "grid" });
+  const sw = h("button", { class: "btn " + (state.enabled ? "good" : "ghost"), onclick: () => { state.enabled = !state.enabled; paint(); } });
+  function paint() {
+    sw.className = "btn " + (state.enabled ? "good" : "ghost");
+    sw.replaceChildren(ic(state.enabled ? "check" : "lock"), state.enabled ? "عضویت اجباری فعال است" : "عضویت اجباری خاموش است");
+    list.replaceChildren(...state.channels.map((c, i) => {
+      const chat = h("input", { placeholder: "@mychannel یا شناسه عددی", value: c.chat, oninput: () => (c.chat = chat.value.trim()) });
+      const title = h("input", { placeholder: "نام نمایشی (مثلاً کانال ما)", value: c.title, oninput: () => (c.title = title.value) });
+      const link = h("input", { placeholder: "لینک دعوت https://ble.ir/...", value: c.link, oninput: () => (c.link = link.value.trim()) });
+      const probe = h("button", { class: "btn ghost sm", onclick: () => run(async () => {
+        const r = await api("/api/membership/probe", { method: "POST", body: { chat: c.chat } });
+        if (r.title && !c.title) { c.title = r.title; title.value = r.title; }
+        toast(`کانال «${r.title || c.chat}» پیدا شد · وضعیت ربات: ${r.bot_status}`); }) }, ic("search"), "بررسی");
+      return h("div", { class: "card reveal" }, h("h3", {}, ic("link"), `کانال ${num(i + 1)}`),
+        h("div", { class: "grid two" }, chat, title), h("div", { class: "row" }, link, probe,
+          h("button", { class: "btn bad sm", onclick: () => { state.channels.splice(i, 1); paint(); } }, ic("trash-2"), "حذف")));
+    }));
+    if (!state.channels.length) list.append(empty("هنوز کانالی تنظیم نشده است."));
+  }
+  paint();
+  main.replaceChildren(
+    h("p", { class: "sub" }, "بازیکنان باید قبل از بازی در این کانال‌ها عضو شوند. ربات باید در هر کانال ادمین باشد تا عضویت را ببیند."),
+    h("div", { class: "card reveal" }, h("h3", {}, ic("lock"), "عضویت اجباری"), h("div", { class: "row" }, sw,
+      h("button", { class: "btn ghost", onclick: () => { if (state.channels.length >= 5) return toast("حداکثر ۵ کانال", true); state.channels.push({ chat: "", title: "", link: "" }); paint(); } }, ic("plus"), "افزودن کانال"),
+      h("button", { class: "btn", onclick: () => run(async () => { await api("/api/membership", { method: "POST", body: { enabled: state.enabled, channels: state.channels } }); toast("تنظیمات ذخیره شد"); }) }, ic("check"), "ذخیره‌ی تنظیمات"))),
+    h("div", { class: "mt" }, list));
+}
+
 /* ---------------------------------------------------------------- shell */
-const VIEWS = { dashboard, players, groups, orders, broadcast, audit };
+const VIEWS = { dashboard, players, groups, orders, broadcast, audit, settings };
 function go(name) { location.hash = "#/" + name; }
 
 async function show(name) {

@@ -20,6 +20,7 @@ from ..bot.services import Services
 from ..game.data.classes import CLASSES
 from ..game.data.items import ITEMS, find_item
 from ..game.data.races import RACES
+from ..game.data.season import season_of
 from ..shared.errors import GameError
 from ..shared.jalali import describe
 from .auth import SESSION_TTL, Session, WebAuth
@@ -240,6 +241,8 @@ class AdminWeb:
                 "SELECT c.name, m.role FROM clan_members m JOIN clans c ON c.id = m.clan_id WHERE m.player_id = ?", (pid,))
             pets = await tx.fetchall("SELECT pet_id, level, active FROM player_pets WHERE player_id = ?", (pid,))
             cards = await tx.scalar("SELECT COALESCE(SUM(qty), 0) FROM player_cards WHERE player_id = ?", (pid,), 0)
+            season = await tx.fetchone(
+                "SELECT premium, points FROM season_progress WHERE player_id = ? AND season = ?", (pid, season_of(now)))
             history = await tx.fetchall(
                 "SELECT gold_delta, crystal_delta, reason, created_at FROM transactions WHERE player_id = ?"
                 " ORDER BY id DESC LIMIT 20", (pid,))
@@ -251,6 +254,8 @@ class AdminWeb:
         detail.update({
             "xp": row["xp"], "energy": row["energy"], "race": row["race"], "class2": row["class2"],
             "awakened": bool(row["awakened"]), "title": row["title"], "cards": cards,
+            "vip_until": fmt(row["vip_until"]) if row["vip_until"] > now else None,
+            "ticket": bool(season["premium"]) if season else False, "path_points": season["points"] if season else 0,
             "clan": {"name": clan["name"], "role": clan["role"]} if clan else None,
             "pets": [{"id": p["pet_id"], "level": p["level"], "active": bool(p["active"])} for p in pets],
             "items": [{"label": label(s["item_id"]), "qty": s["qty"]} for s in stacks],
@@ -313,6 +318,97 @@ class AdminWeb:
         qty = self._int(data, "qty", 1, 1000)
         await self.s.admin.give_item(request[SESSION_KEY].admin_id, await self._player_name(pid), item, qty)
         return _json({"ok": True})
+
+    async def vip(self, request: web.Request) -> web.Response:
+        pid, data = int(request.match_info["id"]), await self._body(request)
+        days = -3650 if data.get("clear") else self._int(data, "days", -3650, 3650)
+        until = await self.s.admin.set_vip(request[SESSION_KEY].admin_id, pid, days)
+        return _json({"vip_until": fmt(until) if until else None})
+
+    async def ticket(self, request: web.Request) -> web.Response:
+        pid, data = int(request.match_info["id"]), await self._body(request)
+        changed = await self.s.admin.grant_ticket(request[SESSION_KEY].admin_id, pid, bool(data.get("give", True)))
+        return _json({"changed": changed})
+
+    async def pet(self, request: web.Request) -> web.Response:
+        pid, data = int(request.match_info["id"]), await self._body(request)
+        changed = await self.s.admin.grant_pet(request[SESSION_KEY].admin_id, pid, str(data.get("pet", "")), bool(data.get("give", True)))
+        return _json({"changed": changed})
+
+    async def title(self, request: web.Request) -> web.Response:
+        pid, data = int(request.match_info["id"]), await self._body(request)
+        await self.s.admin.set_title(request[SESSION_KEY].admin_id, pid, str(data.get("title", "")))
+        return _json({"ok": True})
+
+    async def refill(self, request: web.Request) -> web.Response:
+        await self.s.admin.refill_energy(request[SESSION_KEY].admin_id, int(request.match_info["id"]))
+        return _json({"ok": True})
+
+    async def cooldowns(self, request: web.Request) -> web.Response:
+        await self.s.admin.reset_cooldowns(request[SESSION_KEY].admin_id, int(request.match_info["id"]))
+        return _json({"ok": True})
+
+    async def pets(self, request: web.Request) -> web.Response:
+        from ..game.data.pets import PETS
+
+        return _json([{"id": p.id, "label": f"{p.emoji} {p.name}"} for p in PETS])
+
+    async def group_toggle(self, request: web.Request) -> web.Response:
+        data = await self._body(request)
+        await self.s.admin.set_group_enabled(request[SESSION_KEY].admin_id, int(request.match_info["id"]), bool(data.get("enabled")))
+        return _json({"ok": True})
+
+    async def group_message(self, request: web.Request) -> web.Response:
+        data = await self._body(request)
+        text = str(data.get("text", "")).strip()
+        if not 3 <= len(text) <= 1000:
+            raise GameError("متن پیام باید بین ۳ تا ۱۰۰۰ حرف باشد.")
+        if self.bot is None:
+            raise GameError("ربات برای ارسال در دسترس نیست.")
+        chat_id = int(request.match_info["id"])
+        try:
+            await self.bot.send_message(chat_id, text)
+        except Exception as exc:
+            raise GameError("ارسال به این گروه ممکن نشد؛ شاید ربات از گروه حذف شده است.") from exc
+        await self.s.admin.log_action(request[SESSION_KEY].admin_id, "group_message", f"{chat_id}")
+        return _json({"ok": True})
+
+    async def group_event(self, request: web.Request) -> web.Response:
+        from ..bot import events as events_ui
+        from ..game.services.events import KINDS, EventAction
+
+        data = await self._body(request)
+        kind = str(data.get("kind", "")) or None
+        if kind is not None and kind not in KINDS:
+            raise GameError("نوع رویداد درست نیست.")
+        if self.bot is None:
+            raise GameError("ربات برای ارسال در دسترس نیست.")
+        chat_id = int(request.match_info["id"])
+        view = await self.s.events.spawn(chat_id, kind)
+        if view is None:
+            raise GameError("الان در این گروه رویداد یا باس در جریان است یا شرایطش آماده نیست.")
+        await events_ui.announce(self.bot, self.s, EventAction("spawned", view))
+        await self.s.admin.log_action(request[SESSION_KEY].admin_id, "group_event", f"{chat_id} {view.kind}")
+        return _json({"kind": view.kind})
+
+    async def membership_get(self, request: web.Request) -> web.Response:
+        enabled, channels = await self.s.membership.settings()
+        return _json({"enabled": enabled, "channels": [c.as_dict() for c in channels]})
+
+    async def membership_save(self, request: web.Request) -> web.Response:
+        data = await self._body(request)
+        channels = data.get("channels", [])
+        if not isinstance(channels, list) or not all(isinstance(c, dict) for c in channels):
+            raise GameError("فهرست کانال‌ها درست نیست.")
+        await self.s.membership.save(bool(data.get("enabled")), channels)
+        await self.s.admin.log_action(request[SESSION_KEY].admin_id, "membership", f"enabled={bool(data.get('enabled'))} channels={len(channels)}")
+        return _json({"ok": True})
+
+    async def membership_probe(self, request: web.Request) -> web.Response:
+        data = await self._body(request)
+        if self.bot is None:
+            raise GameError("ربات برای بررسی در دسترس نیست.")
+        return _json(await self.s.membership.probe(self.bot, str(data.get("chat", "")).strip()))
 
     async def items(self, request: web.Request) -> web.Response:
         return _json([{"id": i.id, "label": f"{i.emoji} {i.name}"} for i in ITEMS.values()])
@@ -396,6 +492,14 @@ def build_app(services: Services, auth: WebAuth, bot: Any = None, secure_cookie:
         ("POST", "/api/players/{id:\\d+}/level", panel.set_level), ("POST", "/api/players/{id:\\d+}/ban", panel.ban),
         ("POST", "/api/players/{id:\\d+}/item", panel.give_item), ("GET", "/api/items", panel.items),
         ("GET", "/api/export/players.csv", panel.export_players),
+        ("POST", "/api/players/{id:\\d+}/vip", panel.vip), ("POST", "/api/players/{id:\\d+}/ticket", panel.ticket),
+        ("POST", "/api/players/{id:\\d+}/pet", panel.pet), ("POST", "/api/players/{id:\\d+}/title", panel.title),
+        ("POST", "/api/players/{id:\\d+}/energy", panel.refill), ("POST", "/api/players/{id:\\d+}/cooldowns", panel.cooldowns),
+        ("GET", "/api/pets", panel.pets),
+        ("POST", "/api/groups/{id:-?\\d+}/toggle", panel.group_toggle), ("POST", "/api/groups/{id:-?\\d+}/message", panel.group_message),
+        ("POST", "/api/groups/{id:-?\\d+}/event", panel.group_event),
+        ("GET", "/api/membership", panel.membership_get), ("POST", "/api/membership", panel.membership_save),
+        ("POST", "/api/membership/probe", panel.membership_probe),
         ("GET", "/api/groups", panel.groups), ("GET", "/api/orders", panel.orders), ("GET", "/api/audit", panel.audit),
         ("POST", "/api/broadcast", panel.broadcast), ("POST", "/api/logout", panel.logout),
     ]

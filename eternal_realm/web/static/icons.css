@@ -20,6 +20,8 @@
 .ic-gem{--i:url(/static/icons/gem.svg)}
 .ic-gift{--i:url(/static/icons/gift.svg)}
 .ic-layout-dashboard{--i:url(/static/icons/layout-dashboard.svg)}
+.ic-link{--i:url(/static/icons/link.svg)}
+.ic-lock{--i:url(/static/icons/lock.svg)}
 .ic-log-out{--i:url(/static/icons/log-out.svg)}
 .ic-megaphone{--i:url(/static/icons/megaphone.svg)}
 .ic-menu{--i:url(/static/icons/menu.svg)}
@@ -32,14 +34,17 @@
 .ic-scroll-text{--i:url(/static/icons/scroll-text.svg)}
 .ic-search{--i:url(/static/icons/search.svg)}
 .ic-send{--i:url(/static/icons/send.svg)}
+.ic-settings{--i:url(/static/icons/settings.svg)}
 .ic-shield{--i:url(/static/icons/shield.svg)}
 .ic-sparkles{--i:url(/static/icons/sparkles.svg)}
 .ic-star{--i:url(/static/icons/star.svg)}
 .ic-sun{--i:url(/static/icons/sun.svg)}
 .ic-swords{--i:url(/static/icons/swords.svg)}
+.ic-trash-2{--i:url(/static/icons/trash-2.svg)}
 .ic-trending-up{--i:url(/static/icons/trending-up.svg)}
 .ic-trophy{--i:url(/static/icons/trophy.svg)}
 .ic-user{--i:url(/static/icons/user.svg)}
 .ic-user-plus{--i:url(/static/icons/user-plus.svg)}
 .ic-users{--i:url(/static/icons/users.svg)}
 .ic-x{--i:url(/static/icons/x.svg)}
+.ic-zap{--i:url(/static/icons/zap.svg)}
