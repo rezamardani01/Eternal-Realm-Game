@@ -478,6 +478,34 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_bet_duels_status ON bet_duels (status, expires_at);
     CREATE INDEX idx_bet_duels_duel ON bet_duels (duel_id);
     """,
+    # 35: bet duels over a gear piece: the opponent pays its value in coins/crystals or puts up the same piece
+    """
+    CREATE TABLE bet_duels_new (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id       INTEGER NOT NULL,
+        message_id    INTEGER,
+        challenger_id INTEGER NOT NULL REFERENCES players (id),
+        accepter_id   INTEGER REFERENCES players (id),
+        kind          TEXT    NOT NULL CHECK (kind IN ('gold', 'crystal', 'item', 'gear')),
+        item_id       TEXT    NOT NULL DEFAULT '',
+        amount        INTEGER NOT NULL CHECK (amount > 0),
+        status        TEXT    NOT NULL CHECK (status IN ('open', 'active', 'done', 'cancelled', 'expired')),
+        duel_id       INTEGER,
+        created_at    INTEGER NOT NULL,
+        expires_at    INTEGER NOT NULL,
+        gear_id       INTEGER,
+        gear_upgrade  INTEGER NOT NULL DEFAULT 0,
+        pay_kind      TEXT    NOT NULL DEFAULT '',
+        pay_amount    INTEGER NOT NULL DEFAULT 0,
+        pay_gear_id   INTEGER
+    );
+    INSERT INTO bet_duels_new (id, chat_id, message_id, challenger_id, accepter_id, kind, item_id, amount, status, duel_id, created_at, expires_at)
+    SELECT id, chat_id, message_id, challenger_id, accepter_id, kind, item_id, amount, status, duel_id, created_at, expires_at FROM bet_duels;
+    DROP TABLE bet_duels;
+    ALTER TABLE bet_duels_new RENAME TO bet_duels;
+    CREATE INDEX idx_bet_duels_status ON bet_duels (status, expires_at);
+    CREATE INDEX idx_bet_duels_duel ON bet_duels (duel_id);
+    """,
 ]
 
 

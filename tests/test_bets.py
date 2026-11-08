@@ -218,3 +218,153 @@ async def test_wallet_ledger_unaffected_by_helpers(services, db):
     async with db.transaction() as tx:
         await wallet.apply(tx, p.id, gold=1, reason="t", now=services.ctx.now())
     assert (await services.players.require(10)).gold == 101
+
+
+# --- bets on gear ----------------------------------------------------------------------------------------------
+async def give_gear(services, db, player, item_id):
+    async with db.transaction() as tx:
+        return (await services.inventory.grant(tx, player.id, item_id, 1))[0]
+
+
+async def gear_ids(services, pid):
+    return {g.id for g in (await services.inventory.view(pid)).gear}
+
+
+async def owner_of(db, gear_id):
+    async with db.read() as tx:
+        return await tx.scalar("SELECT player_id FROM gear WHERE id = ?", (gear_id,), 0)
+
+
+async def test_a_gear_bet_locks_the_piece_and_shows_what_the_opponent_must_pay(h, services, db):
+    from eternal_realm.game.data.items import get_item, item_value
+
+    a = await hero(services, db, 10, "آرش")
+    gid = await give_gear(services, db, a, "strength_ring")
+    value = item_value(get_item("strength_ring"))
+    await h.say(10, "مبارزه شرطی", group=True)
+    await h.tap(10, "تجهیزات", group=True)
+    assert "انگشتر قدرت" in " ".join(h.labels())
+    await h.tap(10, "انگشتر قدرت", group=True)
+    text = h.session.last_text()
+    assert "شرط روی تجهیزات" in text and "ارزش" in text and "همان آیتم را می‌گذارد" in text
+    await h.tap(10, "ثبت شرط", group=True)
+    waiting = h.session.last_text()
+    for part in ("آیتم شرط", "ارزش آیتم", "دو برابر ارزش", "کریستال", "همین آیتم را بگذارید"):
+        assert part in waiting
+    labels = " ".join(h.labels())
+    assert "قبول با" in labels and "همین آیتم" in labels and "لغو شرط" in labels
+    assert gid not in await gear_ids(services, a.id)  # locked on the table: not in the backpack list
+    bet = await services.bets.open_for(a.id)
+    assert bet.kind == "gear" and bet.pay_gold == 2 * value and bet.pay_crystal >= 1
+
+
+async def test_the_opponent_pays_twice_the_value_in_coins_and_the_winner_takes_the_piece(h, services, db):
+    from eternal_realm.game.services.bets import settle
+
+    a = await hero(services, db, 10, "آرش")
+    b = await hero(services, db, 11, "سارا", gold=50_000)
+    gid = await give_gear(services, db, a, "strength_ring")
+    bet = await services.bets.create(a, CHAT, "gear", "", 1, gear_id=gid)
+    before = (await services.players.require(11)).gold
+    bet, duel, update = await services.bets.accept(bet.id, b, "gold")
+    assert (await services.players.require(11)).gold == before - bet.pay_gold
+    async with db.transaction() as tx:  # the opponent wins
+        outcome = await settle(tx, services.ctx, duel.id, b.id, services.ctx.now())
+    assert outcome.winner_id == b.id and not outcome.winner_is_creator
+    assert await owner_of(db, gid) == b.id and (await services.players.require(11)).gold == before  # item won, payment back
+    assert gid in await gear_ids(services, b.id)  # and it is a normal piece again (unlocked)
+
+
+async def test_when_the_maker_wins_the_piece_goes_home_and_the_payment_is_theirs_minus_the_fee(h, services, db):
+    from eternal_realm.game.services.bets import FEE_PERCENT, settle
+
+    a = await hero(services, db, 10, "آرش", gold=1_000)
+    b = await hero(services, db, 11, "سارا", gold=50_000)
+    gid = await give_gear(services, db, a, "strength_ring")
+    bet = await services.bets.create(a, CHAT, "gear", "", 1, gear_id=gid)
+    bet, duel, _ = await services.bets.accept(bet.id, b, "gold")
+    mine = (await services.players.require(10)).gold
+    async with db.transaction() as tx:
+        outcome = await settle(tx, services.ctx, duel.id, a.id, services.ctx.now())
+    assert outcome.winner_is_creator and await owner_of(db, gid) == a.id and gid in await gear_ids(services, a.id)
+    assert (await services.players.require(10)).gold == mine + bet.pay_gold - bet.pay_gold * FEE_PERCENT // 100
+    assert (await services.players.require(11)).gold == 50_000 - bet.pay_gold
+
+
+async def test_matching_with_crystals_or_with_the_same_piece_and_a_draw(h, services, db):
+    from eternal_realm.game.services.bets import settle
+
+    a = await hero(services, db, 10, "آرش")
+    rich = await hero(services, db, 11, "سارا", crystal=500)
+    twin = await hero(services, db, 12, "رها", gold=0)
+    g1 = await give_gear(services, db, a, "strength_ring")
+    bet = await services.bets.create(a, CHAT, "gear", "", 1, gear_id=g1)
+    with pytest.raises(GameError, match="را ندارید"):
+        await services.bets.accept(bet.id, twin, "gear")  # no such piece
+    with pytest.raises(GameError):
+        await services.bets.accept(bet.id, twin, "gold")  # cannot afford 2x the value
+    assert (await services.bets.get(bet.id)).status == "open" and (await services.players.require(12)).gold == 0
+    bet, duel, _ = await services.bets.accept(bet.id, rich, "crystal")
+    assert (await services.players.require(11)).crystal == 500 - bet.pay_crystal
+    async with db.transaction() as tx:
+        outcome = await settle(tx, services.ctx, duel.id, None, services.ctx.now())  # a draw
+    assert outcome.winner_id is None
+    assert (await services.players.require(11)).crystal == 500 and g1 in await gear_ids(services, a.id)
+
+    b = await hero(services, db, 13, "پویا")
+    c = await hero(services, db, 14, "نگار")
+    gb = await give_gear(services, db, b, "iron_helm")
+    gc = await give_gear(services, db, c, "iron_helm")
+    bet = await services.bets.create(b, CHAT, "gear", "", 1, gear_id=gb)
+    bet, duel, _ = await services.bets.accept(bet.id, c, "gear")  # the same piece against it
+    assert gb not in await gear_ids(services, b.id) and gc not in await gear_ids(services, c.id)
+    async with db.transaction() as tx:
+        await settle(tx, services.ctx, duel.id, b.id, services.ctx.now())
+    assert await owner_of(db, gb) == b.id and await owner_of(db, gc) == b.id  # the winner keeps his and takes the other
+
+
+async def test_worn_or_foreign_pieces_cannot_be_bet_and_cancelling_unlocks(h, services, db, clock):
+    a = await hero(services, db, 10, "آرش")
+    worn = (await services.inventory.view(a.id)).gear[0]  # the equipped starter weapon
+    with pytest.raises(GameError, match="دربیاورید"):
+        await services.bets.create(a, CHAT, "gear", "", 1, gear_id=worn.id)
+    gid = await give_gear(services, db, a, "strength_ring")
+    bet = await services.bets.create(a, CHAT, "gear", "", 1, gear_id=gid)
+    assert gid not in await gear_ids(services, a.id)
+    await services.bets.cancel(bet.id, a)
+    assert gid in await gear_ids(services, a.id)  # unlocked again
+    bet = await services.bets.create(await services.players.require(10), CHAT, "gear", "", 1, gear_id=gid)
+    clock.advance(OPEN_SECONDS + 1)
+    await services.bets.expire_stale()
+    assert gid in await gear_ids(services, a.id)
+    with pytest.raises(GameError, match="کوله"):
+        await services.bets.create(await hero(services, db, 11, "سارا"), CHAT, "gear", "", 1, gear_id=gid)  # somebody else's piece
+
+
+async def test_the_glass_buttons_start_the_gear_duel_with_the_chosen_payment(h, services, db):
+    a = await hero(services, db, 10, "آرش")
+    b = await hero(services, db, 11, "سارا", gold=50_000)
+    await give_gear(services, db, a, "strength_ring")
+    await h.say(10, "مبارزه شرطی", group=True)
+    await h.tap(10, "تجهیزات", group=True)
+    await h.tap(10, "انگشتر قدرت", group=True)
+    await h.tap(10, "ثبت شرط", group=True)
+    await h.click(11, h.button_data("قبول با"), group=True)  # the first accept button is the coin payment
+    assert "دوئل شرطی شروع شد" in h.session.last_text() and "میدان نبرد" in h.session.last_text()
+    bet = await services.bets.get(1)
+    assert bet.pay_kind == "gold" and (await services.players.require(11)).gold == 50_000 - bet.pay_gold
+    duel = await play_to_the_end(h, services, a, b)
+    assert duel.status == "finished"
+    result = h.session.last_text()
+    assert "شرط دوئل" in result and "جایزه را برد" in result
+    assert (await services.bets.get(1)).status == "done"
+
+
+async def test_resources_can_be_bet_through_the_buttons_too(h, services, db):
+    a = await hero(services, db, 10, "آرش", ore=20)
+    await h.say(10, "مبارزه شرطی", group=True)
+    await h.tap(10, "منابع", group=True)
+    await h.tap(10, "سنگ آهن", group=True)
+    assert "مقدار شرط" in h.session.last_text() and "سنگ آهن" in h.session.last_text()
+    await h.tap(10, "ثبت شرط", group=True)
+    assert "دوئل شرطی" in h.session.last_text() and (await services.bets.open_for(a.id)).kind == "item"

@@ -957,23 +957,34 @@ def welcome_back(player) -> str:  # noqa: ANN001 - Player
 def bet_waiting(bet, challenger, seconds: int) -> str:  # noqa: ANN001 - Bet, Player
     from ..game.services.bets import FEE_PERCENT, prize_for
 
-    prize, fee = prize_for(bet.kind, bet.amount)
-    lines = [
+    head = [
         f"🎰 {bold('دوئل شرطی')}",
         "",
         f"{challenger.char_class.emoji} {challenger.mention} · سطح {fa(challenger.level)}",
         f"🏆 {fa(challenger.wins)} پیروزی · 💀 {fa(challenger.losses)} شکست",
         "",
-        f"💰 شرط هر نفر: {bold(bet.label)}",
-        f"🏅 جایزه‌ی برنده: {bold(stake_prize(bet.kind, bet.item_id, prize))}",
     ]
-    if fee:
-        lines.append(f"🏦 کارمزد قلمرو: {fa(FEE_PERCENT)}٪ از جایزه")
-    lines += [
-        f"⏳ مهلت: {duration(seconds)}",
-        "",
-        "هر کس شرط را قبول کند همان لحظه وارد دوئل می‌شود. باید همین مقدار را داشته باشد 👇",
-    ]
+    if bet.kind == "gear":
+        lines = head + [
+            f"🎁 آیتم شرط: {bold(bet.label)}",
+            f"💎 ارزش آیتم: {fa(bet.value)} سکه",
+            "",
+            f"{bold('برای قبول، یکی از این‌ها را می‌پردازید')}",
+            f"🪙 {fa(bet.pay_gold)} سکه (دو برابر ارزش)",
+            f"💎 {fa(bet.pay_crystal)} کریستال",
+            "🔁 یا همین آیتم را بگذارید (اگر دارید)",
+            "",
+            f"🏅 برنده همه‌چیز را می‌برد؛ از پرداخت سکه یا کریستال {fa(FEE_PERCENT)}٪ کارمزد کم می‌شود.",
+        ]
+    else:
+        prize, fee = prize_for(bet.kind, bet.amount)
+        lines = head + [
+            f"💰 شرط هر نفر: {bold(bet.label)}",
+            f"🏅 جایزه‌ی برنده: {bold(stake_prize(bet.kind, bet.item_id, prize))}",
+        ]
+        if fee:
+            lines.append(f"🏦 کارمزد قلمرو: {fa(FEE_PERCENT)}٪ از جایزه")
+    lines += [f"⏳ مهلت: {duration(seconds)}", "", "هر کس شرط را قبول کند همان لحظه وارد دوئل می‌شود 👇"]
     return "\n".join(lines)
 
 
@@ -988,6 +999,22 @@ def bet_lines(update) -> list[str]:  # noqa: ANN001 - DuelUpdate
     outcome = update.bet
     if outcome is None:
         return []
+    if outcome.kind == "gear":
+        if outcome.winner_id is None:
+            return ["", f"🎰 {bold('شرط دوئل')}", f"🤝 مساوی شد؛ {outcome.gear} و پرداخت حریف به صاحبانشان برگشت."]
+        winner = next((f for f in update.battle.fighters if f.player_id == outcome.winner_id), None)
+        name = (winner.mention or winner.name) if winner else "برنده"
+        lines = ["", f"🎰 {bold('شرط دوئل')}", f"🏆 {name} جایزه را برد"]
+        if outcome.winner_is_creator:
+            lines.append(f"🎁 آیتم خودش برگشت: {outcome.gear}")
+            if outcome.payment:
+                lines.append(f"💰 از حریف گرفت: {bold(outcome.payment)}")
+            if outcome.fee_label:
+                lines.append(f"🏦 کارمزد قلمرو: {outcome.fee_label}")
+        else:
+            lines.append(f"🎁 آیتم برنده شد: {bold(outcome.gear)}")
+            lines.append("↩️ پرداخت او هم به خودش برگشت.")
+        return lines
     if outcome.winner_id is None:
         return ["", f"🎰 {bold('شرط دوئل')}", f"🤝 مساوی شد؛ شرط {stake_prize(outcome.kind, outcome.item_id, outcome.amount)} به هر دو برگشت."]
     winner = next((f for f in update.battle.fighters if f.player_id == outcome.winner_id), None)
