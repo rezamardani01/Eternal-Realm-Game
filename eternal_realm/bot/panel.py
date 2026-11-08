@@ -369,6 +369,11 @@ async def _piece_screen(c: Ctx, gear_id: int, toast: str | None = None) -> Scree
     ]
     if p.slot:
         lines += ["", "✅ الان بر تن شماست"]
+    set_lines = await c.services.inventory.set_lines(c.player.id, p.item.id)
+    if set_lines:
+        lines += ["", *set_lines]
+    if p.origin:
+        lines += ["", "📜 تاریخچه‌ی این تجهیزات", *p.origin.split("\n")]
     rows = [[c.btn("↩️ درآوردن" if p.slot else "🛡️ پوشیدن", "unequip" if p.slot else "equip", p.id,
                    style=None if p.slot else "success")]]
     second = [c.btn("🔨 ارتقا", "upq", p.id)]

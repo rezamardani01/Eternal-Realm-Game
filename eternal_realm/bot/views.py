@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from ..game.data.bosses import behavior_of
 from ..game.data.classes import CLASSES
+from ..game.data.items import get_item
 from ..game.data.leagues import league_of
 from ..game.data.races import RACES, Race
 from ..game.data.stats import Stats
@@ -611,6 +612,8 @@ def boss_final(v) -> str:  # noqa: ANN001 - BossView
         entry = [f"{medal} {p.mention} — {fa(p.damage)} آسیب ({fa(round(p.share * 100))}٪)"]
         if p.level_up:
             entry.append(f"🎉 رسید به سطح {fa(p.level_up)}")
+        if p.trophy:
+            entry.append(f"🏆 غنیمت ویژه: {get_item(p.trophy).label}")
         blocks.append("\n".join(entry))
     blocks.append("🪙 پاداش هر نفر در دکمه‌های زیر است 👇")
     return "\n\n".join(blocks)

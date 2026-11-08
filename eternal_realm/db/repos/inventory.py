@@ -15,11 +15,13 @@ class GearRow:
     upgrade: int
     slot: str | None
     listed: bool = False
+    origin: str = ""
 
     @classmethod
     def from_row(cls, row: Row) -> GearRow:
         return cls(
-            row["id"], row["player_id"], row["item_id"], row["upgrade"], row["slot"], bool(row["listed"])
+            row["id"], row["player_id"], row["item_id"], row["upgrade"], row["slot"], bool(row["listed"]),
+            row["origin"],
         )
 
 
@@ -60,10 +62,10 @@ async def stacks(tx: Tx, player_id: int) -> list[tuple[str, int]]:
 
 
 # --- gear -------------------------------------------------------------------------------------
-async def add_gear(tx: Tx, player_id: int, item_id: str, now: int, upgrade: int = 0) -> int:
+async def add_gear(tx: Tx, player_id: int, item_id: str, now: int, upgrade: int = 0, origin: str = "") -> int:
     return await tx.execute(
-        "INSERT INTO gear (player_id, item_id, upgrade, created_at) VALUES (?, ?, ?, ?)",
-        (player_id, item_id, upgrade, now),
+        "INSERT INTO gear (player_id, item_id, upgrade, created_at, origin) VALUES (?, ?, ?, ?, ?)",
+        (player_id, item_id, upgrade, now, origin),
     )
 
 
@@ -99,8 +101,12 @@ async def delete_gear(tx: Tx, gear_id: int) -> None:
 
 
 async def transfer_gear(tx: Tx, gear_id: int, new_owner: int) -> None:
+    """Hand a piece to a new owner and note the previous owner in its history."""
     await tx.execute(
-        "UPDATE gear SET player_id = ?, slot = NULL, listed = 0 WHERE id = ?", (new_owner, gear_id)
+        "UPDATE gear SET origin = origin || CASE WHEN origin = '' THEN '' ELSE char(10) END"
+        " || 'دست‌به‌دست شد؛ صاحب قبلی: ' || (SELECT display_name FROM players WHERE id = gear.player_id),"
+        " player_id = ?, slot = NULL, listed = 0 WHERE id = ?",
+        (new_owner, gear_id),
     )
 
 

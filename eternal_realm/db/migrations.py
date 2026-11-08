@@ -255,6 +255,10 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (week, clan_id)
     );
     """,
+    # 14: every gear piece remembers where it came from and who owned it
+    """
+    ALTER TABLE gear ADD COLUMN origin TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

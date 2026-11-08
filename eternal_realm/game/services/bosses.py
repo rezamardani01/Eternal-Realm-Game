@@ -16,6 +16,7 @@ from ...db.repos import bosses as repo
 from ...db.repos import clans as clan_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError, NotRegistered
+from ...shared.jalali import describe
 from ...shared.text import duration, fa
 from ..data.bosses import (
     BossType,
@@ -27,6 +28,7 @@ from ..data.bosses import (
     boss_max_hp,
 )
 from ..data.classes import CLASSES
+from ..data.sets import BOSS_DROPS
 from ..engine.boss_fight import Boss, Hero, is_over, run_round
 from ..models import Player
 from .characters import CharacterService
@@ -47,6 +49,7 @@ class Payout:
     xp: int
     chest: str | None = None
     level_up: int | None = None
+    trophy: str | None = None
 
 
 @dataclass
@@ -367,14 +370,24 @@ class BossService:
             await wallet.apply(tx, pid, gold=gold, reason="boss_reward", now=now, ref=f"boss:{row['id']}:{pid}")
             level_up = await self.players.grant_xp(tx, pid, xp)
             await clan_repo.add_war_points(tx, pid, round((10 + 60 * share) * factor), now)
-            chest = None
+            chest = trophy = None
             if status == "defeated":
                 chest = "magic_chest" if index == 0 else "wooden_chest" if share >= 0.10 else None
                 if chest:
                     await self.inventory.grant(tx, pid, chest, 1)
+                chance = 0.40 if index == 0 else 0.12
+                if self.ctx.rng.random() < chance:
+                    trophy = self.ctx.rng.choices(
+                        [i for i, _ in BOSS_DROPS], weights=[w for _, w in BOSS_DROPS], k=1
+                    )[0]
+                    kind = boss_by_id(row["boss_type"])
+                    date = describe(now)[0]
+                    await self.inventory.grant(
+                        tx, pid, trophy, 1, origin=f"غنیمت شکست {kind.name} · {date}\nنخستین صاحب: {r['name']}"
+                    )
             payouts.append(
                 Payout(r["name"], f"[{r['name']}](uid:{r['platform_user_id']})", r["damage"], share, gold, xp, chest,
-                       level_up.new_level if level_up else None)
+                       level_up.new_level if level_up else None, trophy)
             )
         return payouts
 

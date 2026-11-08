@@ -9,6 +9,7 @@ from ...db.database import Tx
 from ...db.repos import inventory as repo
 from ...shared.errors import GameError
 from ...shared.text import fa
+from ..data.sets import set_bonus, set_of, worn_count
 from ..data.items import ITEMS, SLOT_LABELS, STARTER_WEAPON, Item, Kind, get_item, upgraded_stats
 from ..data.stats import Stats
 from ..models import Player
@@ -23,6 +24,7 @@ class Piece:
     item: Item
     upgrade: int
     slot: str | None
+    origin: str = ""
 
     @property
     def stats(self) -> Stats:
@@ -46,14 +48,14 @@ class InventoryService:
         self.players = players
 
     # --- granting / removing (inside the caller's transaction) --------------------------------
-    async def grant(self, tx: Tx, player_id: int, item_id: str, qty: int = 1) -> list[int]:
+    async def grant(self, tx: Tx, player_id: int, item_id: str, qty: int = 1, origin: str = "") -> list[int]:
         """Give items. Returns the new gear ids (empty for stackable items)."""
         item = get_item(item_id)
         if qty <= 0:
             return []
         if item.is_gear:
             now = self.ctx.now()
-            return [await repo.add_gear(tx, player_id, item_id, now) for _ in range(qty)]
+            return [await repo.add_gear(tx, player_id, item_id, now, origin=origin) for _ in range(qty)]
         await repo.add_stack(tx, player_id, item_id, qty)
         return []
 
@@ -71,7 +73,7 @@ class InventoryService:
             raise GameError("چنین تجهیزاتی در کوله‌پشتی شما پیدا نشد. «کوله‌پشتی» را بنویسید تا شماره‌ی درست را ببینید.")
         if row.listed:
             raise GameError("این تجهیزات روی تخته‌ی بازار برای فروش گذاشته شده است. اگر پشیمان شدید، اول آگهی را «لغو» کنید.")
-        return Piece(row.id, get_item(row.item_id), row.upgrade, row.slot)
+        return Piece(row.id, get_item(row.item_id), row.upgrade, row.slot, row.origin)
 
     async def on_registered(self, tx: Tx, player: Player) -> None:
         """Starter kit: a class weapon (equipped) and two energy potions."""
@@ -85,15 +87,32 @@ class InventoryService:
     async def view(self, player_id: int) -> InventoryView:
         async with self.ctx.db.read() as tx:
             stacks = [(get_item(i), q) for i, q in await repo.stacks(tx, player_id) if i in ITEMS]
-            gear = [Piece(g.id, get_item(g.item_id), g.upgrade, g.slot) for g in await repo.list_gear(tx, player_id)]
+            gear = [Piece(g.id, get_item(g.item_id), g.upgrade, g.slot, g.origin) for g in await repo.list_gear(tx, player_id)]
         return InventoryView(stacks, gear)
 
     async def equipped_stats(self, tx: Tx, player_id: int) -> Stats:
         total = Stats()
+        worn: list[str] = []
         for row in await repo.list_gear(tx, player_id):
             if row.slot:
                 total = total + upgraded_stats(get_item(row.item_id), row.upgrade)
-        return total
+                worn.append(row.item_id)
+        return total + set_bonus(worn)
+
+    async def set_lines(self, player_id: int, item_id: str) -> list[str]:
+        """Explain the set an item belongs to: how many pieces are worn and what each tier gives."""
+        gear_set = set_of(item_id)
+        if gear_set is None:
+            return []
+        async with self.ctx.db.read() as tx:
+            worn = [r.item_id for r in await repo.list_gear(tx, player_id) if r.slot]
+        have = worn_count(gear_set, worn)
+        lines = [f"{gear_set.emoji} {gear_set.name} ({fa(have)} از {fa(len(gear_set.pieces))} قطعه)"]
+        for need, stats in gear_set.bonuses:
+            mark = "✅" if have >= need else "🔒"
+            lines.append(f"{mark} با {fa(need)} قطعه:")
+            lines += stats.bonus_lines()
+        return lines
 
     # --- equipping ----------------------------------------------------------------------------
     async def equip(self, player: Player, gear_id: int) -> tuple[Piece, Piece | None]:
