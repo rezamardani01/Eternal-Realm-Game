@@ -713,7 +713,89 @@ def event_text(view) -> str:  # noqa: ANN001 - EventView
                 f"{bold('دو برابر')} تجربه می‌دهند.\n\nهمین حالا به میدان بروید!"
             )
         return f"🌙 {bold('ستاره‌ی تجربه محو شد')}\n\nتجربه‌ی دوبرابر تمام شد."
+    if view.kind == "hidden_chest":
+        return _hidden_chest_text(view)
+    if view.kind == "invasion":
+        return _invasion_text(view)
+    if view.kind == "meteor":
+        return _meteor_text(view)
     return f"{view.kind}"
+
+
+def _hidden_chest_text(view) -> str:  # noqa: ANN001 - EventView
+    from ..game.data.items import get_item
+    from ..game.data.world_events import place
+
+    st = view.state
+    if view.status == "done":
+        spot = place(st["target"])
+        return (
+            f"🗝️ {bold('صندوقچه‌ی مخفی پیدا شد!')}\n\n"
+            f"{st['mention']} در {spot.name} صندوقچه را یافت و {get_item(st['prize']).label} و ۱۵۰ سکه برد."
+        )
+    if view.status == "expired":
+        return f"⌛ {bold('صندوقچه‌ی مخفی ناپدید شد')}\n\nکسی مکانش را پیدا نکرد و جادوی صندوقچه خاموش شد."
+    lines = [
+        f"🗝️ {bold('صندوقچه‌ی مخفی!')}",
+        "",
+        "نقشه‌ی کهنه‌ای به دست رسیده؛ صندوقچه‌ای در یکی از جاهای قلمرو پنهان شده است. سرنخ:",
+        "",
+        f"📜 «{st['clue']}»",
+        "",
+        "جایی را که فکر می‌کنید بگردید. هر جای اشتباه از لیست حذف می‌شود و برای دیگران ساده‌تر می‌شود!",
+    ]
+    if st["tried"]:
+        lines += ["", f"{bold('گشته‌شده‌ها')}"]
+        from ..game.data.world_events import place as _place
+
+        lines += [f"❌ {_place(pid).name} — {who}" for pid, who in st["tried"].items()]
+    lines += ["", f"⏳ مهلت: {_clock(view.seconds_left)}", "", "🎲 جایزه: صندوقچه + ۱۵۰ سکه برای پیدا‌کننده 👇"]
+    return "\n".join(lines)
+
+
+def _invasion_text(view) -> str:  # noqa: ANN001 - EventView
+    st = view.state
+    lines = []
+    if view.status == "done":
+        lines = [f"🏆 {bold('قلمرو نجات یافت!')}", "", f"{st['army']} شکست خورد و با ترس عقب نشست.", ""]
+    elif view.status == "expired":
+        lines = [f"💀 {bold('مدافعان عقب نشستند')}", "", f"{st['army']} پیش از پایان مهلت قلمرو را غارت کرد؛ اما تلاش مدافعان بی‌پاداش نماند.", ""]
+    else:
+        lines = [f"🚨 {bold('تهاجم! ' + st['army'])}", "", f"این لشکر {st['cry']}", "همه‌ی قهرمانان برای دفاع از قلمرو فراخوانده می‌شوند!", ""]
+    percent = round(100 * st["hp"] / st["max_hp"]) if st["max_hp"] else 0
+    lines.append(f"❤️ جان لشکر: {bar(st['hp'], st['max_hp'], 10)} {fa(percent)}٪")
+    if st["hits"]:
+        top = sorted(st["hits"].items(), key=lambda kv: -kv[1])[:5]
+        lines += ["", bold("🏅 برترین مدافعان")]
+        lines += [f"{MEDALS[i] if i < len(MEDALS) else '🔹'} {st['names'][pid]} — {fa(dmg)}" for i, (pid, dmg) in enumerate(top)]
+    if view.status == "active":
+        lines += ["", f"⏳ مهلت: {_clock(view.seconds_left)}", "هر کس می‌تواند هر چند ثانیه یک بار ضربه بزند؛ هرچه بیشتر بزنید سهم بیشتری می‌برید 👇"]
+    elif st.get("payouts"):
+        lines += ["", bold("🎁 پاداش مدافعان")]
+        for p in st["payouts"]:
+            extra = f" + {get_item(p['chest']).label}" if p["chest"] else ""
+            lines.append(f"• {p['mention']}: {fa(p['gold'])} سکه · {fa(p['xp'])} تجربه{extra}")
+    return "\n".join(lines)
+
+
+def _meteor_text(view) -> str:  # noqa: ANN001 - EventView
+    st = view.state
+    lines = []
+    if view.status == "active":
+        lines = [
+            f"☄️ {bold('شهاب‌سنگ سقوط کرد!')}", "",
+            f"سنگی آسمانی در {st['region']} فرود آمد و تکه‌هایش پر از مواد کمیاب است.",
+            "تکه‌ها محدودند؛ هر کس زودتر برسد برمی‌دارد (حداکثر ۳ تکه برای هر نفر).", "",
+        ]
+    else:
+        lines = [f"🌌 {bold('شهاب‌سنگ خاموش شد')}", "", "دیگر چیزی از آن نمانده."]
+    lines.append(f"💎 تکه‌های مانده: {fa(st['left'])}")
+    if st["taken"]:
+        top = sorted(st["taken"].items(), key=lambda kv: -kv[1])[:6]
+        lines += ["", bold("⛏️ برداشت‌کنندگان")] + [f"• {st['names'][pid]} — {fa(n)} تکه" for pid, n in top]
+    if view.status == "active":
+        lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "زود باشید 👇"]
+    return "\n".join(lines)
 
 
 def events_overview(views_, double_xp: bool) -> str:  # noqa: ANN001
@@ -721,14 +803,15 @@ def events_overview(views_, double_xp: bool) -> str:  # noqa: ANN001
     if views_:
         for v in views_:
             label = {"mystery_chest": "🎁 صندوقچه‌ی اسرارآمیز", "merchant": "🧳 تاجر دوره‌گرد",
-                     "double_xp": "✨ تجربه‌ی دوبرابر"}.get(v.kind, v.kind)
+                     "double_xp": "✨ تجربه‌ی دوبرابر", "hidden_chest": "🗝️ صندوقچه‌ی مخفی",
+                     "invasion": "🚨 تهاجم هیولاها", "meteor": "☄️ شهاب‌سنگ"}.get(v.kind, v.kind)
             lines.append(f"• {label} — {duration(v.seconds_left)} مانده")
         lines.append("")
     else:
         lines += ["الان رویدادی در جریان نیست.", ""]
     lines += [
-        "ربات گاهی خودش در گروه‌های فعال اتفاق می‌اندازد: صندوقچه‌ی اسرارآمیز، تاجر دوره‌گرد، "
-        "ستاره‌ی تجربه و باس مخفی.",
+        "ربات گاهی خودش در گروه‌های فعال اتفاق می‌اندازد: صندوقچه‌ی اسرارآمیز، صندوقچه‌ی مخفی با سرنخ، "
+        "تاجر دوره‌گرد، ستاره‌ی تجربه، باس مخفی، تهاجم هیولاها و شهاب‌سنگ.",
         "",
         "مدیران گروه با «غیرفعال رویدادها» می‌توانند آن‌ها را خاموش کنند.",
     ]

@@ -22,6 +22,8 @@ class MissionKind:
     fits: Callable[[Facts], bool]
     #: weight when picking (higher = more likely)
     weight: int = 10
+    #: reward multiplier (special missions pay more)
+    bonus: float = 1.0
 
 
 KINDS: tuple[MissionKind, ...] = (
@@ -38,6 +40,12 @@ KINDS: tuple[MissionKind, ...] = (
     MissionKind("recover", "activity", "🌿", "سه کار آرام بکن تا نیرو بگیری", 3, lambda f: f.losses > f.wins and f.losses >= 3, 14),
 )
 
+#: handed out by the «come back» offer, never picked by the daily draw
+WELCOME = MissionKind(
+    "welcome", "hunt", "🎯", "مأموریت ویژه‌ی بازگشت: سه هیولا را شکار کن", 3, lambda f: False, 0, 3.0
+)
+WELCOME_SLOT = 9
+KINDS = (*KINDS, WELCOME)
 _BY_ID = {k.id: k for k in KINDS}
 
 
@@ -58,4 +66,4 @@ def pick(facts: Facts, player_id: int, day: int, count: int = PER_DAY) -> list[M
 
 
 def reward_for(kind: MissionKind, level: int) -> int:
-    return round((60 + 12 * level) * (1 + 0.15 * (kind.target - 1)))
+    return round((60 + 12 * level) * (1 + 0.15 * (kind.target - 1)) * kind.bonus)

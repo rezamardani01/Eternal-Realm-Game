@@ -25,7 +25,7 @@ async def missions(c: Ctx) -> Screen:
             "",
         ]
         if m.done and not m.claimed:
-            rows.append([c.btn(f"🎁 دریافت پاداش مأموریت {fa(m.slot + 1)}", "msclaim", m.slot, style="success")])
+            rows.append([c.btn(f"🎁 دریافت پاداش مأموریت {'ویژه' if m.kind_id == 'welcome' else fa(m.slot + 1)}", "msclaim", m.slot, style="success")])
     if not todays:
         lines.append("برای امروز مأموریتی پیدا نشد.")
     rows.append(c.back("profile"))

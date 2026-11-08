@@ -16,14 +16,20 @@ from ...db.repos import events as repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
 from ..data.items import get_item
+from ..data.world_events import ARMIES, METEOR_LOOT, METEOR_PER_PLAYER, METEOR_PIECES, PLACES, REGIONS
 from ..models import Player
 from .bosses import BossService, BossView
 from .inventory import InventoryService
 
-KINDS = ("mystery_chest", "merchant", "double_xp", "hidden_boss")
-WEIGHTS = (45, 20, 20, 15)
-LIFETIME = {"mystery_chest": 300, "merchant": 600, "double_xp": 1800}
+KINDS = ("mystery_chest", "merchant", "double_xp", "hidden_boss", "hidden_chest", "invasion", "meteor")
+WEIGHTS = (30, 18, 16, 10, 12, 8, 8)
+LIFETIME = {
+    "mystery_chest": 300, "merchant": 600, "double_xp": 1800, "hidden_chest": 900, "invasion": 900, "meteor": 600,
+}
 TRY_GAP = 20
+SEARCH_GAP = 20
+DEFEND_GAP = 25
+COLLECT_GAP = 15
 CHEST_ODDS = (("wooden_chest", 70), ("magic_chest", 27), ("royal_chest", 3))
 #: (item, price in gold) the travelling merchant may carry
 MERCHANT_STOCK = (
@@ -101,6 +107,12 @@ class EventService:
             state: dict[str, Any] = {}
             if kind == "mystery_chest":
                 state = {"tries": {}, "attempts": 0}
+            elif kind == "hidden_chest":
+                state = self._new_hidden_chest()
+            elif kind == "invasion":
+                state = await self._new_invasion(tx, chat_id, now)
+            elif kind == "meteor":
+                state = {"region": rng.choice(REGIONS), "left": METEOR_PIECES, "taken": {}, "names": {}, "at": {}}
             elif kind == "merchant":
                 picks = rng.sample(MERCHANT_STOCK, 3)
                 state = {"stock": [{"item": i, "price": round(p * rng.uniform(0.6, 0.85)), "left": rng.randint(2, 3)}
@@ -110,6 +122,134 @@ class EventService:
             assert row is not None
             return self._view(row)
 
+    def _new_hidden_chest(self) -> dict[str, Any]:
+        rng = self.ctx.rng
+        spots = rng.sample(PLACES, 5)
+        target = rng.choice(spots)
+        return {"places": [p.id for p in spots], "target": target.id, "clue": target.clue, "tried": {}, "at": {}}
+
+    async def _new_invasion(self, tx: Tx, chat_id: int, now: int) -> dict[str, Any]:
+        rng = self.ctx.rng
+        row = await tx.fetchone(
+            "SELECT COUNT(*) AS n, AVG(p.level) AS lvl FROM group_members m JOIN players p ON p.id = m.player_id"
+            " WHERE m.chat_id = ? AND m.last_active >= ?", (chat_id, now - 86400),
+        )
+        members, level = max(2, int(row["n"] or 0)), max(1.0, float(row["lvl"] or 1))
+        army, cry = rng.choice(ARMIES)
+        hp = round(max(1_500, 700 * members) * (1 + level / 25))
+        return {"army": army, "cry": cry, "hp": hp, "max_hp": hp, "hits": {}, "names": {}, "at": {}, "level": round(level)}
+
+    # --- hidden chest: find the place the clue points at -----------------------------------------
+    async def search(self, event_id: int, player: Player, place_id: str) -> tuple[EventView, str]:
+        """Search one place. Returns the new view and ``found`` / ``empty``."""
+        now, rng = self.ctx.now(), self.ctx.rng
+        async with self.ctx.db.transaction() as tx:
+            row = await self._live(tx, event_id, "hidden_chest")
+            state = json.loads(row["state"])
+            if place_id not in state["places"] or place_id in state["tried"]:
+                raise GameError("اینجا را قبلاً گشته‌اند.")
+            wait = state["at"].get(str(player.id), 0) + SEARCH_GAP - now
+            if wait > 0:
+                raise GameError(f"⏳ هنوز خسته‌اید! {wait} ثانیه دیگر دوباره بگردید.")
+            state["at"][str(player.id)] = now
+            if place_id == state["target"] and await repo.finish(tx, event_id, "done"):
+                chest = rng.choices([c for c, _ in CHEST_ODDS], weights=[w for _, w in CHEST_ODDS], k=1)[0]
+                await self.inventory.grant(tx, player.id, chest, 1)
+                await wallet.apply(tx, player.id, gold=150, reason="hidden_chest", now=now)
+                state["winner"], state["mention"], state["prize"] = player.name, player.mention, chest
+                outcome = "found"
+            else:
+                state["tried"][place_id] = player.mention
+                outcome = "empty"
+            await repo.save_state(tx, event_id, json.dumps(state))
+            fresh = await repo.get(tx, event_id)
+            assert fresh is not None
+            return self._view(fresh), outcome
+
+    # --- invasion: everybody hits the same army -------------------------------------------------
+    async def defend(self, event_id: int, player: Player) -> tuple[EventView, int, bool]:
+        """One blow against the invaders. Returns the view, the damage and whether it was the last blow."""
+        now, rng = self.ctx.now(), self.ctx.rng
+        async with self.ctx.db.transaction() as tx:
+            row = await self._live(tx, event_id, "invasion")
+            state = json.loads(row["state"])
+            wait = state["at"].get(str(player.id), 0) + DEFEND_GAP - now
+            if wait > 0:
+                raise GameError(f"⏳ شمشیرتان هنوز داغ است! {wait} ثانیه دیگر دوباره بزنید.")
+            stats = await self.bosses.characters.stats_in(tx, player)
+            damage = max(25, round((stats.atk + 0.6 * stats.magic) * rng.uniform(1.2, 1.8)) + 20)
+            key = str(player.id)
+            state["at"][key] = now
+            state["hits"][key] = state["hits"].get(key, 0) + damage
+            state["names"][key] = player.mention
+            state["hp"] = max(0, state["hp"] - damage)
+            final = state["hp"] == 0 and await repo.finish(tx, event_id, "done")
+            if final:
+                state["payouts"] = await self._pay_invasion(tx, event_id, state, won=True, now=now)
+            await repo.save_state(tx, event_id, json.dumps(state))
+            fresh = await repo.get(tx, event_id)
+            assert fresh is not None
+            return self._view(fresh), damage, bool(final)
+
+    async def _pay_invasion(self, tx: Tx, event_id: int, state: dict[str, Any], won: bool, now: int) -> list[dict[str, Any]]:
+        factor = 1.0 if won else 0.3
+        hits: dict[str, int] = state["hits"]
+        total = sum(hits.values()) or 1
+        level = state.get("level", 1)
+        pool = round((600 + 80 * level) * factor)
+        paid: list[dict[str, Any]] = []
+        for index, (pid, damage) in enumerate(sorted(hits.items(), key=lambda kv: -kv[1])):
+            share = damage / total
+            gold = max(round(60 * factor), round(pool * share))
+            xp = round((50 + 8 * level) * (0.5 + share) * factor)
+            await wallet.apply(tx, int(pid), gold=gold, reason="invasion", now=now, ref=f"invasion:{event_id}:{pid}")
+            await self.bosses.players.grant_xp(tx, int(pid), xp)
+            chest = ""
+            if won:
+                chest = "magic_chest" if index == 0 else "wooden_chest" if share >= 0.12 else ""
+                if chest:
+                    await self.inventory.grant(tx, int(pid), chest, 1)
+            paid.append({"mention": state["names"][pid], "damage": damage, "gold": gold, "xp": xp, "chest": chest})
+        return paid
+
+    # --- meteor: a limited heap of rare pieces, first come first served ----------------------------
+    async def collect(self, event_id: int, player: Player) -> tuple[EventView, str]:
+        now, rng = self.ctx.now(), self.ctx.rng
+        async with self.ctx.db.transaction() as tx:
+            row = await self._live(tx, event_id, "meteor")
+            state = json.loads(row["state"])
+            key = str(player.id)
+            if state["left"] <= 0:
+                raise GameError("☄️ همه‌ی تکه‌ها برداشته شد.")
+            if state["taken"].get(key, 0) >= METEOR_PER_PLAYER:
+                raise GameError(f"هر نفر حداکثر {METEOR_PER_PLAYER} تکه می‌تواند بردارد؛ بقیه را برای دیگران بگذارید.")
+            wait = state["at"].get(key, 0) + COLLECT_GAP - now
+            if wait > 0:
+                raise GameError(f"⏳ {wait} ثانیه دیگر دوباره بردارید.")
+            item = rng.choices([i for i, _ in METEOR_LOOT], weights=[w for _, w in METEOR_LOOT], k=1)[0]
+            await self.inventory.grant(tx, player.id, item, 1)
+            state["left"] -= 1
+            state["taken"][key] = state["taken"].get(key, 0) + 1
+            state["names"][key] = player.mention
+            state["at"][key] = now
+            if state["left"] == 0:
+                await repo.finish(tx, event_id, "done")
+            await repo.save_state(tx, event_id, json.dumps(state))
+            fresh = await repo.get(tx, event_id)
+            assert fresh is not None
+            return self._view(fresh), item
+
+    async def hunters(self, chat_id: int, min_level: int, limit: int = 30) -> list[int]:
+        """Players of this group who could join a boss now and have not switched personal messages off."""
+        now = self.ctx.now()
+        async with self.ctx.db.read() as tx:
+            rows = await tx.fetchall(
+                "SELECT p.platform_user_id AS uid FROM group_members m JOIN players p ON p.id = m.player_id"
+                " WHERE m.chat_id = ? AND m.last_active >= ? AND p.level >= ? AND p.banned = 0 AND p.offers_off = 0"
+                " ORDER BY m.last_active DESC LIMIT ?", (chat_id, now - 7 * 86400, min_level, limit),
+            )
+        return [int(r["uid"]) for r in rows]
+
     async def tick(self) -> list[EventAction]:
         """Close lapsed events and start new ones in groups that are due. Call every ~30 seconds."""
         b, now, rng = self.ctx.balance, self.ctx.now(), self.ctx.rng
@@ -118,6 +258,10 @@ class EventService:
             for row in await repo.lapsed(tx, now):
                 status = "done" if row["kind"] == "double_xp" else "expired"
                 if await repo.finish(tx, row["id"], status):
+                    if row["kind"] == "invasion":
+                        state = json.loads(row["state"] or "{}")
+                        state["payouts"] = await self._pay_invasion(tx, row["id"], state, won=False, now=now)
+                        await repo.save_state(tx, row["id"], json.dumps(state))
                     fresh = await repo.get(tx, row["id"])
                     assert fresh is not None
                     actions.append(EventAction("ended", self._view(fresh)))

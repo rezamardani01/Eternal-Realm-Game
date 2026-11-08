@@ -52,6 +52,8 @@ async def test_collection_offer_fires_once_per_day_and_respects_cooldown(service
     clock.advance(DAY + 1)
     assert await services.offers.due() == []  # the rule's own cooldown (5 days)
     clock.advance(5 * DAY)
+    async with db.transaction() as tx:  # the player is active again, so the idle-days offers stay quiet
+        await wallet.apply(tx, p.id, gold=1, reason="t", now=services.ctx.now())
     assert [o.rule.id for _, o in await services.offers.due()] == ["collection"]
 
 
@@ -91,3 +93,27 @@ async def test_delivery_sends_a_private_message_with_buttons(h, services, db):
                           if "دیگر پیشنهاد" in b["text"]))
     assert not await services.offers.enabled(await services.players.require(5))
     assert await offers_ui.deliver(h.bot, services) == 0
+
+
+async def test_three_idle_days_offer_a_special_mission_worth_triple(h, services, db, clock):
+    p = await hero(services, db, 6, "رها", level=5)
+    clock.advance(4 * DAY)
+    due = await services.offers.due()
+    assert [o.rule.id for _, o in due] == ["comeback3"]
+    await h.panel(6, "offerwelcome")
+    todays = await services.missions.today(p)
+    special = next(m for m in todays if m.kind_id == "welcome")
+    ordinary = next(m for m in todays if m.kind_id != "welcome" and m.target == 3) if any(
+        m.kind_id != "welcome" and m.target == 3 for m in todays) else None
+    assert special.target == 3 and special.gold > 0
+    if ordinary:
+        assert special.gold == 3 * ordinary.gold
+    assert await services.missions.grant_welcome(p) is False  # once a day
+    for _ in range(3):
+        async with db.transaction() as tx:
+            from eternal_realm.db.repos import season as season_repo
+
+            await season_repo.add_points(tx, p.id, "hunt", services.ctx.now())
+    gold = (await services.players.require(6)).gold
+    await services.missions.claim(p, 9)
+    assert (await services.players.require(6)).gold == gold + special.gold

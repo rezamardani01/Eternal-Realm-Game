@@ -56,6 +56,16 @@ async def offer_return(c: Ctx) -> Screen:
     )
 
 
+@screen("offerwelcome")
+async def offer_welcome(c: Ctx) -> Screen:
+    from .mission_panel import missions
+
+    fresh = await c.services.missions.grant_welcome(c.player)
+    shown = await missions(c)
+    shown.toast = "🎯 مأموریت ویژه‌ی بازگشت به لیست شما اضافه شد" if fresh else "🎯 مأموریت ویژه‌ی امروز را دارید"
+    return shown
+
+
 @screen("offeroff")
 async def offer_off(c: Ctx) -> Screen:
     await c.services.offers.set_enabled(c.player, False)

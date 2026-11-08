@@ -202,3 +202,109 @@ async def test_boss_boards_and_history(h, services, db, clock):
         assert "سارا" in h.session.sent("editMessageText")[-1]["text"] or label == "شکارچیان باس"
     text = h.session.sent("editMessageText")[-1]["text"]
     assert "تاریخچه‌ی نبردها" in text and "پیروزی" in text and "شکست" in text
+
+
+async def test_hidden_chest_is_found_by_searching_the_places(services, db, clock):
+    a = await hero(services, db, 1, "آرش")
+    b = await hero(services, db, 2, "سارا")
+    view = await services.events.spawn(CHAT, "hidden_chest")
+    assert view is not None and view.state["target"] in view.state["places"] and view.state["clue"]
+    wrong = next(p for p in view.state["places"] if p != view.state["target"])
+    view, outcome = await services.events.search(view.id, a, wrong)
+    assert outcome == "empty" and wrong in view.state["tried"]
+    with pytest.raises(GameError, match="قبلاً"):
+        await services.events.search(view.id, b, wrong)
+    with pytest.raises(GameError, match="خسته"):
+        await services.events.search(view.id, a, view.state["target"])  # a searched a moment ago
+    clock.advance(30)
+    view, outcome = await services.events.search(view.id, a, view.state["target"])
+    assert outcome == "found" and view.status == "done" and view.state["winner"] == "آرش"
+    with pytest.raises(GameError):
+        await services.events.search(view.id, b, view.state["target"])
+    assert "صندوقچه‌ی مخفی پیدا شد" in events_ui.text_for(view)
+
+
+async def test_invasion_is_beaten_together_and_pays_by_share(services, db, clock):
+    a, b = await hero(services, db, 1, "آرش", level=20), await hero(services, db, 2, "سارا", level=20)
+    await active_group(services, db, [a, b])
+    view = await services.events.spawn(CHAT, "invasion")
+    assert view is not None and view.state["hp"] == view.state["max_hp"] > 0
+    assert "🚨" in events_ui.text_for(view)
+    before = (await services.players.require(1)).gold
+    final = False
+    for _ in range(400):
+        for p in (a, b):
+            try:
+                view, damage, final = await services.events.defend(view.id, p)
+            except GameError:
+                continue
+            if final:
+                break
+        if final:
+            break
+        clock.advance(26)
+    assert final and view.status == "done" and view.state["payouts"]
+    assert (await services.players.require(1)).gold > before
+    assert "قلمرو نجات یافت" in events_ui.text_for(view)
+
+
+async def test_a_lost_invasion_still_pays_a_consolation(services, db, clock):
+    a = await hero(services, db, 1, "آرش")
+    await active_group(services, db, [a])
+    view = await services.events.spawn(CHAT, "invasion")
+    before = (await services.players.require(1)).gold
+    view, _, _ = await services.events.defend(view.id, a)
+    clock.advance(1_000)
+    actions = await services.events.tick()
+    ended = [x for x in actions if x.what == "ended" and x.view.kind == "invasion"]
+    assert ended and ended[0].view.status == "expired" and ended[0].view.state["payouts"]
+    assert (await services.players.require(1)).gold > before
+
+
+async def test_meteor_pieces_are_limited_and_shared(services, db, clock):
+    from eternal_realm.game.data.world_events import METEOR_PER_PLAYER, METEOR_PIECES
+
+    players = [await hero(services, db, 10 + i, f"p{i}") for i in range(3)]
+    view = await services.events.spawn(CHAT, "meteor")
+    assert view is not None and view.state["left"] == METEOR_PIECES
+    taken = 0
+    for _ in range(METEOR_PER_PLAYER):
+        for p in players:
+            view, item = await services.events.collect(view.id, p)
+            taken += 1
+        clock.advance(16)
+    assert view.state["left"] == METEOR_PIECES - taken
+    with pytest.raises(GameError, match="حداکثر"):
+        await services.events.collect(view.id, players[0])
+    extra = await hero(services, db, 99, "تازه")
+    for _ in range(METEOR_PIECES - taken):
+        view, _ = await services.events.collect(view.id, extra)
+        clock.advance(16)
+    assert view.status == "done" and view.state["left"] == 0
+    with pytest.raises(GameError):
+        await services.events.collect(view.id, players[1])
+
+
+async def test_rare_boss_alert_goes_to_eligible_group_members_only(h, services, db):
+    from eternal_realm.game.services.events import EventAction
+
+    strong, weak = await hero(services, db, 1, "آرش", level=20), await hero(services, db, 2, "سارا", level=1)
+    await active_group(services, db, [strong, weak])
+    view = await services.events.spawn(CHAT, "hidden_boss")
+    assert view is not None and view.boss is not None
+    events_ui._alerted.clear()
+    await events_ui.announce(h.bot, services, EventAction("spawned", view))
+    dms = [p for p in h.session.sent("sendMessage") if p["chat_id"] == 1]
+    assert dms and "اعلان شکار" in dms[0]["text"]
+    assert not [p for p in h.session.sent("sendMessage") if p["chat_id"] == 2]
+    n = len(h.session.sent("sendMessage"))
+    await events_ui.alert_hunters(h.bot, services, view)  # no second alert within the gap
+    assert len(h.session.sent("sendMessage")) == n
+
+
+async def test_event_buttons_work_through_the_glass_keyboard(h, services, db):
+    a = await hero(services, db, 1, "آرش")
+    await active_group(services, db, [a])
+    view = await services.events.spawn(CHAT, "meteor")
+    await h.click(1, f"e:collect:{view.id}:0", group=True)
+    assert any("برداشتید" in x.get("text", "") for x in h.session.callback_answers())

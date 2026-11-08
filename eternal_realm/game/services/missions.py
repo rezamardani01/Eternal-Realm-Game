@@ -68,6 +68,25 @@ class MissionService:
                                    reward_for(kind, level), bool(r["claimed"])))
         return out
 
+    async def grant_welcome(self, player: Player) -> bool:
+        """Today's «welcome back» mission, once a day. False when it was already handed out."""
+        from ..data.missions import WELCOME, WELCOME_SLOT
+
+        await self.today(player)  # the day's ordinary missions exist first
+        day = today(self.ctx.now())
+        async with self.ctx.db.transaction() as tx:
+            have = await tx.fetchone(
+                "SELECT 1 FROM daily_missions WHERE player_id = ? AND day = ? AND slot = ?", (player.id, day, WELCOME_SLOT)
+            )
+            if have:
+                return False
+            await tx.execute(
+                "INSERT INTO daily_missions (player_id, day, slot, kind_id, deed, target, progress, claimed)"
+                " VALUES (?, ?, ?, ?, ?, ?, 0, 0)",
+                (player.id, day, WELCOME_SLOT, WELCOME.id, WELCOME.deed, WELCOME.target),
+            )
+        return True
+
     async def claim(self, player: Player, slot: int) -> MissionView:
         now = self.ctx.now()
         day = today(now)

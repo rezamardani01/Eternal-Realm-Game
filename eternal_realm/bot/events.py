@@ -11,7 +11,9 @@ from baleropy.exceptions import BaleAPIError
 from baleropy.types import CallbackQuery, Message
 
 from ..game.services.events import EventAction, EventView
-from ..shared.text import bold
+from ..game.data.items import get_item
+from ..shared.errors import GameError
+from ..shared.text import bold, duration, fa, headline
 from . import boss as boss_ui
 from . import keyboards, views
 from .callbacks import EventCb
@@ -33,6 +35,7 @@ async def announce(bot: Bot, services: Services, action: EventAction) -> None:
                 view.chat_id, boss_ui.text_for(services, view.boss), buttons=boss_ui.buttons_for(view.boss)
             )
             await services.bosses.attach_message(view.boss.id, sent.message_id)
+            await alert_hunters(bot, services, view)
             return
         if action.what == "spawned":
             buttons = keyboards.event_buttons(view)
@@ -69,8 +72,53 @@ async def on_event_button(query: CallbackQuery, callback_data: EventCb, services
         view, label = await services.events.buy(callback_data.id, player, callback_data.arg)
         await _show(query, view)
         await query.answer(f"🛒 {label} خریداری شد!")
+    elif callback_data.action == "search":
+        before = await services.events.get(callback_data.id)
+        if before is None or not 0 <= callback_data.arg < len(before.state.get("places", [])):
+            raise GameError("⌛ این رویداد تمام شده است.")
+        view, outcome = await services.events.search(callback_data.id, player, before.state["places"][callback_data.arg])
+        await _show(query, view)
+        await query.answer("🗝️ صندوقچه را پیدا کردید!" if outcome == "found" else "🍂 این‌جا چیزی نبود؛ جای دیگری را بگردید.")
+    elif callback_data.action == "defend":
+        view, damage, final = await services.events.defend(callback_data.id, player)
+        await _show(query, view)
+        await query.answer("🏆 ضربه‌ی آخر را شما زدید!" if final else f"⚔️ {fa(damage)} آسیب زدید!")
+    elif callback_data.action == "collect":
+        view, item = await services.events.collect(callback_data.id, player)
+        await _show(query, view)
+        await query.answer(f"☄️ {get_item(item).label} برداشتید!")
     else:
         await query.answer()
+
+
+#: one «rare boss» alert per player at most this often (seconds)
+ALERT_GAP = 3 * 3600
+_alerted: dict[int, float] = {}
+
+
+async def alert_hunters(bot: Bot, services: Services, view) -> int:  # noqa: ANN001 - EventView
+    """Tell the group's eligible players, in private, that a rare boss walked in. Returns how many were told."""
+    import time
+
+    boss = view.boss
+    chat = await services.groups.get(view.chat_id)
+    where = (chat.title if chat and chat.title else "گروهتان")
+    text = (
+        f"🐉 {bold('اعلان شکار')}\n\n"
+        f"{boss.type.emoji} {bold(boss.type.name)} در «{where}» ظاهر شد!\n"
+        f"عنصر: {boss.type.element.emoji} {boss.type.element.noun}\n\n"
+        f"⏳ تا {duration(boss.recruit_until - boss.now)} دیگر وقت پیوستن دارید؛ خودتان را به گروه برسانید و «پیوستن» را بزنید!"
+    )
+    now, told = time.monotonic(), 0
+    for uid in await services.events.hunters(view.chat_id, boss.type.min_level):
+        last = _alerted.get(uid)
+        if last is not None and now - last < ALERT_GAP:
+            continue
+        _alerted[uid] = now
+        with contextlib.suppress(BaleAPIError):
+            await bot.send_message(uid, headline(text))
+            told += 1
+    return told
 
 
 @router.message(F.new_chat_members)

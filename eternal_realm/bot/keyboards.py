@@ -109,6 +109,15 @@ def event_buttons(view) -> Rows | None:  # noqa: ANN001 - EventView
                                   EventCb(action="buy", id=view.id, arg=index), style="success")
                 ])
         return rows or None
+    if view.kind == "hidden_chest":
+        from ..game.data.world_events import place
+
+        spots = [(i, place(pid)) for i, pid in enumerate(view.state["places"]) if pid not in view.state["tried"]]
+        return grid([Button.inline(spot.name, EventCb(action="search", id=view.id, arg=i)) for i, spot in spots], 2)
+    if view.kind == "invasion":
+        return [[Button.inline("⚔️ دفاع از قلمرو", EventCb(action="defend", id=view.id), style="danger")]]
+    if view.kind == "meteor":
+        return [[Button.inline("⛏️ برداشتن تکه", EventCb(action="collect", id=view.id), style="success")]]
     return None
 
 
