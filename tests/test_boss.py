@@ -350,7 +350,9 @@ async def test_full_fight_in_a_group_with_buttons(h, services, db, clock):
     assert any("فقط احضارکننده" in a.get("text", "") for a in h.session.callback_answers())
 
     await h.click(10, start, group=True)
-    assert "نبرد با" in h.session.last_text() and not h.session.sent("editMessageText")[-1].get("reply_markup")
+    assert "نبرد آغاز شد" in h.session.last_text() and "تماشا می‌کنیم" in h.session.last_text()
+    assert any(name == "deleteMessage" for name, _ in h.session.calls)  # the sign-up message is gone
+    assert not h.session.sent("sendMessage")[-1].get("reply_markup")
 
     boss_id = (await services.bosses.active(-500)).id
     await edit_state(db, boss_id, lambda s: s["boss"].update(hp=200, max_hp=200, atk=3))
@@ -361,6 +363,10 @@ async def test_full_fight_in_a_group_with_buttons(h, services, db, clock):
             break
     assert "شکست خورد" in h.session.last_text() and "آسیب" in h.session.last_text()
     assert "(uid:" in h.session.last_text()
+    deletes = [c for c in h.session.calls if c[0] == "deleteMessage"]
+    assert len(deletes) >= 2  # the sign-up message, then the live fight message
+    chips = h.labels()
+    assert any("پیروزی" in label for label in chips) and any("🪙" in label for label in chips)
 
 
 async def test_boss_word_shows_the_live_boss_and_admins_can_disable_it(h, services, db):

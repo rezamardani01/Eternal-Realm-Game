@@ -71,6 +71,27 @@ def boss_buttons(boss_id: int) -> Rows:
     ]
 
 
+def boss_result(view) -> Rows:  # noqa: ANN001 - BossView
+    """Glass chips under a finished boss fight: the verdict and what each hero earned."""
+    info = BossCb(action="info", id=view.id)
+    verdicts = {"won": "🏆 پیروزی بزرگ", "lost": "💀 شکست", "fled": "⌛ باس گریخت"}
+    rows: Rows = [[Button.inline(verdicts.get(view.outcome or "", "🏁 پایان"), info, style="success" if view.outcome == "won" else None)]]
+    rows.append([
+        Button.inline(f"🔁 {fa(view.round)} دور", info),
+        Button.inline(f"👥 {fa(len(view.fighters))} جنگجو", info),
+    ])
+    for p in view.payouts[:5]:
+        chips = [Button.inline(p.name, info)]
+        if p.gold:
+            chips.append(Button.inline(f"🪙 {fa(p.gold)}", info))
+        if p.xp:
+            chips.append(Button.inline(f"⭐ {fa(p.xp)}", info))
+        if p.chest:
+            chips.append(Button.inline("🎁 صندوقچه", info))
+        rows.append(chips)
+    return rows
+
+
 def event_buttons(view) -> Rows | None:  # noqa: ANN001 - EventView
     if view.status != "active":
         return None

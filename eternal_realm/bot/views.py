@@ -577,6 +577,15 @@ def boss_fight(v) -> str:  # noqa: ANN001 - BossView
     return "\n".join(lines)
 
 
+def boss_started(v) -> str:  # noqa: ANN001 - BossView
+    return (
+        f"🚀 {bold('نبرد آغاز شد!')}\n\n"
+        f"{fa(len(v.fighters))} جنگجو در برابر {v.type.emoji} {bold(v.type.name)} صف کشیدند. "
+        f"زمین می‌لرزد و شمشیرها از نیام بیرون آمده‌اند.\n\n"
+        f"👀 لحظه‌ای تماشا می‌کنیم...\n\n" + boss_fight(v)
+    )
+
+
 def boss_final(v) -> str:  # noqa: ANN001 - BossView
     if v.outcome == "cancelled":
         return (
@@ -585,20 +594,23 @@ def boss_final(v) -> str:  # noqa: ANN001 - BossView
             "💰 سکه‌ی احضار به احضارکننده برگشت."
         )
     heads = {
-        "won": f"🏆 {bold(v.type.name + ' شکست خورد!')}\n\nجنگجویان قلمرو پیروز شدند.",
+        "won": f"🏆 {bold(v.type.name + ' شکست خورد!')}\n\nجنگجویان قلمرو پیروز شدند و غریو شادی بلند شد.",
         "lost": f"💀 {bold('همه‌ی جنگجویان از پا افتادند')}\n\n{v.type.name} پیروز میدان شد؛ ولی تلاشتان بی‌پاداش نماند.",
         "fled": f"⌛ {bold(v.type.name + ' گریخت')}\n\nزمان تمام شد و باس ناپدید شد؛ ولی تلاشتان بی‌پاداش نماند.",
     }
-    lines = [heads.get(v.outcome or "fled", heads["fled"]), "", DIV]
+    blocks = [heads.get(v.outcome or "fled", heads["fled"]), f"📊 {bold('نتیجه‌ی نبرد')}\n{fa(v.round)} دور · {fa(len(v.fighters))} جنگجو"]
+    if not v.payouts:
+        blocks.append("هیچ‌کس در نبرد نبود.")
+    else:
+        blocks.append(f"🏅 {bold('سهم هر جنگجو')}")
     for i, p in enumerate(v.payouts):
         medal = MEDALS[i] if i < len(MEDALS) else "🔹"
-        extra = {"magic_chest": " · 🎁 صندوقچه جادویی", "wooden_chest": " · 📦 صندوقچه چوبی"}.get(p.chest or "", "")
-        up = f" · 🎉 سطح {fa(p.level_up)}" if p.level_up else ""
-        lines.append(f"{medal} {p.mention} — {fa(p.damage)} آسیب ({fa(round(p.share * 100))}٪)")
-        lines.append(f"   🪙 {fa(p.gold)} · ⭐ {fa(p.xp)}{extra}{up}")
-    if not v.payouts:
-        lines.append("هیچ‌کس در نبرد نبود.")
-    return "\n".join(lines)
+        entry = [f"{medal} {p.mention} — {fa(p.damage)} آسیب ({fa(round(p.share * 100))}٪)"]
+        if p.level_up:
+            entry.append(f"🎉 رسید به سطح {fa(p.level_up)}")
+        blocks.append("\n".join(entry))
+    blocks.append("🪙 پاداش هر نفر در دکمه‌های زیر است 👇")
+    return "\n\n".join(blocks)
 
 
 # --- random group events --------------------------------------------------------------------------

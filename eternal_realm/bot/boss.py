@@ -29,7 +29,28 @@ def text_for(services: Services, view: BossView) -> str:
 
 
 def buttons_for(view: BossView) -> keyboards.Rows | None:
-    return keyboards.boss_buttons(view.id) if view.phase == "recruiting" else None
+    if view.phase == "recruiting":
+        return keyboards.boss_buttons(view.id)
+    if view.phase == "ended" and view.outcome != "cancelled":
+        return keyboards.boss_result(view)
+    return None
+
+
+async def _replace(bot: Bot, services: Services, view: BossView, text: str, old_message_id: int | None) -> None:
+    """Remove the old boss message and send a fresh one at the bottom of the chat."""
+    if old_message_id is not None:
+        with contextlib.suppress(BaleAPIError):
+            await bot.delete_message(view.chat_id, old_message_id)
+    buttons = buttons_for(view)
+    try:
+        if buttons:
+            sent = await bot.send_message(view.chat_id, text, buttons=buttons)
+        else:
+            sent = await bot.send_message(view.chat_id, text)
+    except BaleAPIError:
+        log.warning("could not post boss message in chat %s", view.chat_id)
+        return
+    await services.bosses.attach_message(view.id, sent.message_id)
 
 
 async def post(message: Message, services: Services, view: BossView) -> Message:
@@ -52,7 +73,10 @@ async def _edit(bot: Bot, services: Services, view: BossView) -> None:
 
 
 @router.callback_query(BossCb.filter())
-async def on_boss_button(query: CallbackQuery, callback_data: BossCb, services: Services) -> None:
+async def on_boss_button(query: CallbackQuery, callback_data: BossCb, services: Services, bot: Bot) -> None:
+    if callback_data.action == "info":
+        await query.answer()
+        return
     player = await services.players.require(query.from_user.id)
     if callback_data.action == "join":
         view = await services.bosses.join(callback_data.id, player)
@@ -63,7 +87,9 @@ async def on_boss_button(query: CallbackQuery, callback_data: BossCb, services: 
     else:
         await query.answer()
         return
-    if query.message is not None:
+    if callback_data.action == "start" and query.message is not None:
+        await _replace(bot, services, view, views.boss_started(view), query.message.message_id)
+    elif query.message is not None:
         text, buttons = text_for(services, view), buttons_for(view)
         with contextlib.suppress(BaleAPIError):
             if buttons:
@@ -75,7 +101,12 @@ async def on_boss_button(query: CallbackQuery, callback_data: BossCb, services: 
 
 async def apply_updates(bot: Bot, services: Services, updates: list[BossUpdate]) -> None:
     for update in updates:
-        await _edit(bot, services, update.view)
+        if update.kind == "started":
+            await _replace(bot, services, update.view, views.boss_started(update.view), update.view.message_id)
+        elif update.kind == "final" and update.view.outcome != "cancelled":
+            await _replace(bot, services, update.view, text_for(services, update.view), update.view.message_id)
+        else:
+            await _edit(bot, services, update.view)
 
 
 async def processor(bot: Bot, services: Services, interval: float = 3.0) -> None:
