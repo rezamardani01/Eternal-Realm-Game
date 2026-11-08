@@ -535,3 +535,29 @@ async def test_merchant_purchase_names_the_backpack_section_and_sends_a_receipt(
     assert any(g.item.id == "swift_boots" for g in (await services.inventory.view(p.id)).gear)
     await h.click(10, f"e:buy:{view.id}:1", group=True)
     assert any("آیتم‌ها" in a.get("text", "") for a in h.session.callback_answers())
+
+
+async def test_selling_the_last_of_a_stack_or_a_piece_returns_to_the_list(h, services, db):
+    p = await reg(services)
+    async with db.transaction() as tx:
+        await services.inventory.grant(tx, p.id, "herb", 2)
+        await services.inventory.grant(tx, p.id, "stone", 1)
+    await h.panel(10, "items")
+    await h.tap(10, "گیاه شفابخش")
+    await h.tap(10, "فروش همه")
+    await h.tap(10, "بله")  # the whole stack is gone: back to the items list, with no «invalid page» error
+    assert "آیتم‌ها" in h.session.last_text() and not any("نامعتبر" in a.get("text", "") for a in h.session.callback_answers())
+    assert any("فروخته شد" in a.get("text", "") for a in h.session.callback_answers())
+    assert not any("گیاه شفابخش" in t for t in h.labels())
+    await h.tap(10, "سنگ")
+    await h.tap(10, "فروش ۱")
+    await h.tap(10, "نه")  # declining keeps the item
+    assert "سنگ" in h.session.last_text()
+    await h.tap(10, "فروش ۱")
+    await h.tap(10, "بله")
+    assert not any("نامعتبر" in a.get("text", "") for a in h.session.callback_answers())
+    spare = (await give(services, db, p.id, "leather_cap"))[0]
+    await h.panel(10, "sellq", str(spare))
+    await h.tap(10, "بله")
+    assert "تجهیزات" in h.session.last_text() and not any("نامعتبر" in a.get("text", "") for a in h.session.callback_answers())
+    assert any("فروخته شد" in a.get("text", "") for a in h.session.callback_answers())

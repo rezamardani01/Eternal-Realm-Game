@@ -458,7 +458,7 @@ async def sell_confirm(c: Ctx) -> Screen:
 @screen("sell")
 async def sell_gear(c: Ctx) -> Screen:
     sold, total = await c.services.shop.sell_gear(c.player, _int(c.a))
-    shown = await gear(c)
+    shown = await gear(replace(c, a="0", b=""))  # «a» held the gear id, not a page number
     shown.toast = f"💰 {sold.item.name} فروخته شد: {fa(total)} سکه"
     return shown
 
@@ -516,7 +516,8 @@ async def _item_screen(c: Ctx, item_id: str, toast: str | None = None) -> Screen
     item = get_item(item_id)
     qty = await _stack_qty(c, item_id)
     if qty <= 0:
-        shown = await (chests(c) if item.kind is Kind.CHEST else items(c))
+        first_page = replace(c, a="0", b="")  # «a» held the item id, not a page number
+        shown = await (chests(first_page) if item.kind is Kind.CHEST else items(first_page))
         shown.toast = toast
         return shown
     lines = [f"{item.emoji} {bold(item.name)}", f"{item.rarity_label} · در کوله‌پشتی: {bold(fa(qty))}", "", *_describe(item)]
