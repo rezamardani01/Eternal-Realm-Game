@@ -109,3 +109,36 @@ async def test_the_first_notice_is_sent_even_right_after_a_machine_boot(h, servi
     await h.say(9, "ماهیگیری", group=True)
     assert "عضویت در کانال لازم است" in h.session.last_text()
     assert time.monotonic() > 0
+
+
+async def test_when_bale_refuses_the_check_nobody_passes_and_the_owner_is_told(h, services):
+    await services.membership.save(True, [{"chat": "@mychannel", "title": "کانال ما"}])
+    h.session.check_error = "Forbidden: bot is not a member of the channel chat"
+    await h.say(5, "/start")  # the bot cannot verify anything: the gate must not silently open
+    assert "عضویت در کانال لازم است" in h.session.last_text()
+    assert "@mychannel" in services.membership.problems
+    warnings = [p for p in h.session.sent("sendMessage") if p["chat_id"] == 1 and "عضویت اجباری کار نمی‌کند" in p["text"]]
+    assert len(warnings) == 1
+    await h.say(6, "/start")
+    assert len([p for p in h.session.sent("sendMessage") if p["chat_id"] == 1 and "کار نمی‌کند" in p["text"]]) == 1  # once an hour
+    h.session.check_error = None  # the manager made the bot an admin
+    services.membership.forget(5)
+    h.session.non_members.discard(5)
+    await h.say(5, "/start")
+    assert "عضویت در کانال لازم است" not in h.session.last_text()
+    assert not services.membership.problems
+
+
+async def test_the_panel_refuses_to_switch_the_gate_on_while_the_bot_is_not_an_admin(h, services):
+    await hero(services, 1, "ارباب")
+    await services.membership.save(False, [{"chat": "@mychannel"}])
+    h.session.bot_is_admin = False
+    await h.panel(1, "admm")
+    assert "ربات ادمین نیست" in h.session.last_text()
+    await h.tap(1, "روشن کردن")
+    assert not (await services.membership.settings())[0]
+    assert any("ادمین کنید" in a.get("text", "") for a in h.session.callback_answers()) or "ادمین" in h.session.last_text()
+    h.session.bot_is_admin = True
+    await h.panel(1, "admm")
+    await h.tap(1, "روشن کردن")
+    assert (await services.membership.settings())[0]

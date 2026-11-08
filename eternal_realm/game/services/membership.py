@@ -6,13 +6,17 @@ The list lives in the database (``app_settings``) so the admin panel can change 
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from dataclasses import dataclass
 
+from baleropy.exceptions import BaleAPIError, BaleRetryAfter, BaleServerError
+
 from ...context import AppContext
 from ...shared.errors import GameError
 
+log = logging.getLogger("eternal_realm.membership")
 KEY = "membership"
 MAX_CHANNELS = 5
 CACHE_SECONDS = 600
@@ -40,6 +44,9 @@ class MembershipService:
     def __init__(self, ctx: AppContext) -> None:
         self.ctx = ctx
         self._ok: dict[tuple[int, str], float] = {}
+        self._ids: dict[str, int | str] = {}
+        #: channel -> why the bot cannot check it (Bale refused). Filled while players are being checked.
+        self.problems: dict[str, str] = {}
 
     # --- settings ------------------------------------------------------------------------------------
     async def settings(self) -> tuple[bool, list[Channel]]:
@@ -89,10 +96,21 @@ class MembershipService:
             if self._ok.get((user_id, channel.chat), 0) > now:
                 continue
             try:
-                member = await bot.get_chat_member(self._chat_id(channel.chat), user_id)
+                member = await bot.get_chat_member(await self._resolve(bot, channel.chat), user_id)
                 status = getattr(member.status, "value", member.status)
+            except (BaleRetryAfter, BaleServerError):
+                continue  # Bale is busy or down right now: never lock players out for that
+            except BaleAPIError as error:
+                # Bale answered «no»: the bot is not an admin of the channel or the id is wrong. The gate must not
+                # silently turn itself off, so nobody passes until a manager fixes it.
+                if self.problems.get(channel.chat) != str(error):
+                    log.warning("cannot check membership of %s: %s", channel.chat, error)
+                self.problems[channel.chat] = str(error)
+                out.append(channel)
+                continue
             except Exception:
-                continue  # the channel is unreachable (bot not an admin there?): fail open
+                continue  # network trouble: fail open
+            self.problems.pop(channel.chat, None)
             if status in JOINED:
                 self._ok[(user_id, channel.chat)] = now + CACHE_SECONDS
             else:
@@ -103,6 +121,17 @@ class MembershipService:
     def _chat_id(chat: str) -> str | int:
         return chat if chat.startswith("@") else int(chat)
 
+    async def _resolve(self, bot, chat: str) -> str | int:  # noqa: ANN001
+        """A channel written as «@name» is looked up once and then checked by its numeric id (what Bale likes best)."""
+        if not chat.startswith("@"):
+            return self._chat_id(chat)
+        if chat not in self._ids:
+            try:
+                self._ids[chat] = int((await bot.get_chat(chat)).id)
+            except Exception:
+                return chat  # fall back to the name; the check itself will report what is wrong
+        return self._ids[chat]
+
     def forget(self, user_id: int) -> None:
         for key in [k for k in self._ok if k[0] == user_id]:
             del self._ok[key]
@@ -111,6 +140,7 @@ class MembershipService:
         """For the admin panel: can the bot see this channel, and is it an admin there?"""
         if not _CHAT.match(chat):
             raise GameError("شناسه‌ی کانال درست نیست.")
+        self._ids.pop(chat, None)
         try:
             info = await bot.get_chat(self._chat_id(chat))
         except Exception as exc:
@@ -118,8 +148,22 @@ class MembershipService:
         title = str(getattr(info, "title", "") or "")
         try:
             me = await bot.me()
-            member = await bot.get_chat_member(self._chat_id(chat), me.id)
+            member = await bot.get_chat_member(await self._resolve(bot, chat), me.id)
             status = str(getattr(member.status, "value", member.status))
         except Exception:
             status = "unknown"
         return {"title": title, "bot_status": status}
+
+    async def verify(self, bot) -> list[str]:  # noqa: ANN001
+        """What stops the gate from working: a line per channel where the bot is not an admin (empty = all good)."""
+        _, channels = await self.settings()
+        out = []
+        for channel in channels:
+            try:
+                info = await self.probe(bot, channel.chat)
+            except GameError as error:
+                out.append(f"{channel.title or channel.chat}: {error}")
+                continue
+            if info["bot_status"] not in ("administrator", "creator"):
+                out.append(f"{channel.title or channel.chat}: ربات در این کانال ادمین نیست")
+        return out

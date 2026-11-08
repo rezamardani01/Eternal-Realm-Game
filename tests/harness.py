@@ -20,6 +20,8 @@ class FakeSession(BaseSession):
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.chat_admins: set[int] = set()
         self.member_count = 100  # what getChatMembersCount answers
+        self.bot_is_admin = True  # the bot (user id 1) is an admin of every channel
+        self.check_error: str | None = None  # make getChatMember fail like Bale does when the bot is not an admin
         self.non_members: set[int] = set()  # users who have NOT joined the (forced) channel
         self._next_id = 1000
 
@@ -31,10 +33,15 @@ class FakeSession(BaseSession):
             result: Any = {"id": 1, "is_bot": True, "first_name": "bot", "username": "er_bot"}
         elif name == "getChatMembersCount":
             result = self.member_count
+        elif name == "getChat":
+            result = {"id": -100123, "type": "channel", "title": "کانال تست"}
         elif name == "getChatMember":
+            if self.check_error:
+                return 403, json.dumps({"ok": False, "error_code": 403, "description": self.check_error}).encode()
             uid = int(payload["user_id"])
+            admin = uid in self.chat_admins or (uid == 1 and self.bot_is_admin)
             result = {
-                "status": "left" if uid in self.non_members else ("administrator" if uid in self.chat_admins else "member"),
+                "status": "left" if uid in self.non_members else ("administrator" if admin else "member"),
                 "user": {"id": uid, "is_bot": False, "first_name": f"user{uid}"},
             }
         elif name.startswith(("send", "edit", "forward")) and name != "sendChatAction":

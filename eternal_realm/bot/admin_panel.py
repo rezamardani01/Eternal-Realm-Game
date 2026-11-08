@@ -605,7 +605,14 @@ async def membership(c: Ctx, note: str = "") -> Screen:
     if channels:
         lines += ["", bold("کانال‌ها")]
     for i, ch in enumerate(channels):
-        lines.append(f"📣 {ch.title or ch.chat} ({ch.chat})")
+        status = ""
+        if c.message is not None:
+            try:
+                info = await c.services.membership.probe(c.message.bot, ch.chat)
+                status = " ✅ ربات ادمین است" if info["bot_status"] in ("administrator", "creator") else " ⚠️ ربات ادمین نیست"
+            except GameError:
+                status = " ⚠️ کانال پیدا نشد"
+        lines.append(f"📣 {ch.title or ch.chat} ({ch.chat}){status}")
         rows.append([c.btn(f"🔍 بررسی {ch.title or ch.chat}", "admmp", i), c.btn("❌ حذف", "admmr", i, style="danger")])
     if len(channels) < 5:
         rows.append([c.btn("➕ افزودن کانال", "admask", "chan", style="primary")])
@@ -617,6 +624,10 @@ async def membership(c: Ctx, note: str = "") -> Screen:
 async def membership_toggle(c: Ctx) -> Screen:
     _guard(c)
     enabled, channels = await c.services.membership.settings()
+    if not enabled and channels and c.message is not None:
+        problems = await c.services.membership.verify(c.message.bot)
+        if problems:
+            raise GameError("⚠️ قبل از روشن کردن، ربات را در کانال‌ها ادمین کنید:\n" + "\n".join(problems))
     await c.services.membership.save(not enabled, [x.as_dict() for x in channels])
     await c.services.admin.log_action(c.owner, "membership", f"enabled={not enabled}")
     return await membership(c, "🔔 عضویت اجباری روشن شد" if not enabled else "🔕 عضویت اجباری خاموش شد")
