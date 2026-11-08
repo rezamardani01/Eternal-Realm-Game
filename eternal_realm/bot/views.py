@@ -306,9 +306,9 @@ def upgrade_quote(piece, quote) -> str:  # noqa: ANN001
         f"🔨 {bold('کارگاه آهنگری')}\n"
         f"{piece.item.name} به مرتبه‌ی {bold('+' + fa(quote.next_level))}\n\n"
         f"💰 دستمزد: {fa(quote.gold)} سکه\n"
-        f"📦 مواد: {mats}\n"
+        f"📦 منابع: {mats}\n"
         f"🎯 شانس موفقیت: {fa(round(quote.chance * 100))}٪\n\n"
-        "اگر نشد، فقط مواد از بین می‌رود؛ تجهیزات سالم می‌ماند."
+        "اگر نشد، فقط منابع از بین می‌رود؛ تجهیزات سالم می‌ماند."
     )
 
 
@@ -317,7 +317,7 @@ def upgrade_result(result) -> str:  # noqa: ANN001 - UpgradeResult
         return f"✨ {bold('ارتقا موفق بود')}\n{result.piece.item.name} حالا {bold('+' + fa(result.piece.upgrade))} است."
     return (
         f"💥 {bold('این بار نشد')}\n"
-        f"مواد از بین رفت، اما {result.piece.item.name} سالم ماند. دوباره تلاش کنید!"
+        f"منابع از بین رفت، اما {result.piece.item.name} سالم ماند. دوباره تلاش کنید!"
     )
 
 
@@ -465,7 +465,7 @@ def delivery(order, granted: str = "") -> str:  # noqa: ANN001 - Order
 
 SECTION_NAMES = {
     "coins": "بسته‌ی سکه", "crystals": "بسته‌ی کریستال", "bundles": "بسته‌ی ویژه",
-    "materials": "مواد", "lucky": "بسته‌ی شانسی روزانه", "deal": "تخفیف روز",
+    "materials": "منابع", "lucky": "بسته‌ی شانسی روزانه", "deal": "تخفیف روز",
 }
 
 

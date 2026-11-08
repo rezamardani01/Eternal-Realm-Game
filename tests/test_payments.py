@@ -155,7 +155,7 @@ async def test_premium_hub_has_four_sections_each_with_its_own_text(h, services)
     await reg(services)
     await h.panel(10, "premium")
     labels = h.labels()
-    for word in ("خرید سکه", "خرید کریستال", "خرید بسته", "خرید صندوق", "خرید مواد"):
+    for word in ("خرید سکه", "خرید کریستال", "خرید بسته", "خرید صندوق", "خرید منابع"):
         assert any(word in t for t in labels), word
     assert all("منو" not in t for t in labels)
 

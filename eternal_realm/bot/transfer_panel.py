@@ -45,7 +45,7 @@ async def xfer(c: Ctx) -> Screen:
     t = str(other.id)
     rows = [
         [c.btn("🪙 سکه", "xamt", f"{t}.coin", "1"), c.btn("💎 کریستال", "xamt", f"{t}.crystal", "1")],
-        [c.btn("🎒 آیتم", "xlist", t, "items"), c.btn("⛓️ مواد", "xlist", t, "mats")],
+        [c.btn("🎒 آیتم", "xlist", t, "items"), c.btn("⛓️ منابع", "xlist", t, "mats")],
         [c.btn("❌ انصراف", "xcancel")],
     ]
     return Screen(text, rows)
@@ -71,7 +71,7 @@ async def xlist(c: Ctx) -> Screen:
     else:
         entries += [(f"{i.label} ×{fa(q)}", "xamt", f"{other.id}.{i.id}", "1") for i, q in view.stacks
                     if i.tradable and i.kind is Kind.MATERIAL]
-    title = "🎒 آیتم‌ها" if kind == "items" else "⛓️ مواد"
+    title = "🎒 آیتم‌ها" if kind == "items" else "⛓️ منابع"
     if not entries:
         return Screen(f"{title.split(' ')[0]} {bold(title.split(' ', 1)[1])}\n\nچیزی برای بخشیدن ندارید.", [c.back("xfer", "🔙 بازگشت", other.id)])
     chunk, prev, nxt = _page(entries, page)

@@ -341,7 +341,7 @@ async def test_market_has_category_buttons_with_listings_below(h, services, db):
     assert any("دسته" in t for t in labels) and any("فیلتر" in t for t in labels)
     assert any("کلاه چرمی" in t for t in labels) and any("سنگ آهن" in t for t in labels)
     await h.tap(11, "دسته")
-    await h.tap(11, "مواد")
+    await h.tap(11, "منابع")
     await h.tap(11, "نمایش آگهی‌ها")
     labels = h.labels()
     assert any("سنگ آهن" in t for t in labels) and not any("کلاه چرمی" in t for t in labels)
