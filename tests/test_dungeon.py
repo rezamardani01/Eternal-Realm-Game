@@ -78,5 +78,5 @@ async def test_glass_flow_walks_the_whole_dungeon(h, services, db):
             break
         await h.tap(4, "اتاق بعدی", group=True)
     text = h.session.sent("editMessageText")[-1]["text"]
-    assert "سیاه‌چال فتح شد" in text or "شکست خوردید" in text
+    assert "سیاه‌چال را فتح کردید" in text or "جانتان تمام شد" in text
     assert await services.dungeon.current((await services.players.require(4)).id) is None

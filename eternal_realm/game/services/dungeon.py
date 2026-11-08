@@ -133,25 +133,26 @@ class DungeonService:
                 if won:
                     gold += round(rng.randint(*monster.gold) * (3 if boss_room else 1) * (1 + 0.1 * fresh.level))
                     xp += round(rng.randint(*monster.xp) * (3 if boss_room else 1))
-                    lines.append(f"{emoji} {foe.name} به زانو درآمد!")
+                    lines.append(f"با {foe.name} جنگیدید و برنده شدید!")
+                    lines.append(f"از جانتان {fa(max(0, row['hp'] - hp))} کم شد." if row["hp"] > hp else "تقریباً زخمی نشدید.")
                     hp = min(max_hp, hp + round(max_hp * 0.10))
                     if boss_room:
                         loot["magic_chest"] = loot.get("magic_chest", 0) + 1
                 else:
                     died = True
-                    lines.append(f"💀 {foe.name} شما را از پا انداخت...")
+                    lines.append(f"با {foe.name} جنگیدید، اما او قوی‌تر بود و جانتان تمام شد.")
             else:
                 kind = rng.choice(("treasure", "trap", "spring", "shrine"))
                 if kind == "treasure":
                     emoji, title = "💰", f"اتاق {fa(stage)} · گنج"
                     found = rng.randint(40, 90) + 8 * fresh.level
                     gold += found
-                    lines.append(f"صندوقچه‌ای کهنه پیدا کردید: {fa(found)} سکه!")
+                    lines.append(f"یک صندوق قدیمی پیدا کردید! توی آن {fa(found)} سکه بود.")
                 elif kind == "trap":
                     emoji, title = "🪤", f"اتاق {fa(stage)} · تله"
                     hurt = max(1, round(max_hp * rng.uniform(0.12, 0.22)))
                     hp = max(1, hp - hurt)
-                    lines.append(f"تله‌ای پنهان کار کرد و {fa(hurt)} جان از دست دادید.")
+                    lines.append(f"آخ! پایتان روی یک تله رفت و {fa(hurt)} از جانتان کم شد.")
                 elif kind == "shrine":
                     from .effects import EffectService
 
@@ -159,12 +160,12 @@ class DungeonService:
                     effect = service.roll(0.6)
                     await service.give(tx, player.id, effect)
                     emoji, title = effect.emoji, f"اتاق {fa(stage)} · محراب"
-                    lines.append(f"محرابی کهن بود. {'برکت' if effect.blessing else 'نفرین'} «{effect.name}» بر شما نشست!")
+                    lines.append(f"یک محراب قدیمی پیدا کردید. {'یک برکت خوب' if effect.blessing else 'یک نفرین'} به نام «{effect.name}» گرفتید!")
                 else:
                     emoji, title = "⛲", f"اتاق {fa(stage)} · چشمه"
                     healed = min(max_hp - hp, round(max_hp * 0.30))
                     hp += healed
-                    lines.append(f"چشمه‌ای درخشان بود؛ {fa(healed)} جان برگشت.")
+                    lines.append(f"یک چشمه‌ی درخشان پیدا کردید. از آبش خوردید و {fa(healed)} جان گرفتید.")
 
             view = RunView(stage, hp, max_hp, gold, xp, loot, "active", lines, emoji, title)
             if died or boss_room:
