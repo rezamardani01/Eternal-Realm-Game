@@ -25,6 +25,8 @@ class ActivityResult:
     level_up: LevelUp | None
     player: Player
     items: list[tuple[str, int, str]]
+    #: seconds until this activity may be used again
+    next_in: int = 0
 
 
 class ActivityService:
@@ -56,7 +58,10 @@ class ActivityService:
             key = f"act:{activity.id}"
             until = await inv_repo.cooldown_until(tx, player_id, key)
             if until > now:
-                raise GameError(f"⏳ دست‌هایتان هنوز خسته است، فرمانده! {duration(until - now)} دیگر دوباره امتحان کنید.")
+                raise GameError(
+                    f"⏳ دست‌هایتان هنوز خسته است، فرمانده!\n\nتا {duration(until - now)} دیگر می‌توانید دوباره "
+                    f"{activity.title} کنید."
+                )
             await self.players.spend_energy(tx, player_id, activity.energy)
 
             stats = progression.base_stats(player.race_id, player.class_id, player.level)
@@ -71,9 +76,9 @@ class ActivityService:
             for item_id, qty in rolled.items.items():
                 await self.inventory.grant(tx, player_id, item_id, qty)
             level_up = await self.players.grant_xp(tx, player_id, rolled.xp) if rolled.xp else None
-            await inv_repo.set_cooldown(tx, player_id, key, now + activity.cooldown)
+            wait = await self.players.schedule_cooldown(tx, player_id, key)
 
             after = await player_repo.get(tx, player_id)
             assert after is not None
         items = [(get_item(i).label, q, i) for i, q in rolled.items.items()]
-        return ActivityResult(activity, rolled, level_up, self.players.with_energy(after), items)
+        return ActivityResult(activity, rolled, level_up, self.players.with_energy(after), items, wait)

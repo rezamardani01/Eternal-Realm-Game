@@ -14,7 +14,7 @@ def _make_handler(activity: Activity) -> Handler:
         result = await ctx.services.activities.perform(ctx.me.id, activity.id)
         rows = keyboards.result_rows(
             ctx.me.platform_user_id, gold=result.rolled.gold, xp=result.rolled.xp, crystal=result.rolled.crystal,
-            items=result.items, energy=result.player.energy, again=activity.id,
+            items=result.items, energy=result.player.energy, again=activity.id, wait=result.next_in,
         )
         await ctx.play(
             views.activity_frames(ctx.who(ctx.me), result.activity), views.activity_result(ctx.who(ctx.me), result), rows
@@ -50,6 +50,6 @@ async def hunt(ctx: CommandContext) -> None:
     result = await ctx.services.hunting.hunt(ctx.me.id)
     rows = keyboards.result_rows(
         ctx.me.platform_user_id, gold=result.gold, xp=result.xp, items=result.items,
-        energy=result.player.energy, again="hunt", hp=(result.hero_hp, result.hero_max_hp),
+        energy=result.player.energy, again="hunt", hp=(result.hero_hp, result.hero_max_hp), wait=result.next_in,
     )
     await ctx.play(views.hunt_frames(ctx.who(ctx.me), result), views.hunt_result(ctx.who(ctx.me), result), rows)

@@ -42,6 +42,7 @@ class HuntResult:
     player: Player
     highlights: list[str]
     log: list[str]
+    next_in: int = 0
 
 
 class HuntService:
@@ -69,7 +70,9 @@ class HuntService:
                 raise NotRegistered
             until = await inv_repo.cooldown_until(tx, player_id, "hunt")
             if until > now:
-                raise GameError(f"⏳ زخم‌هایتان هنوز تازه است، فرمانده! {duration(until - now)} دیگر دوباره به شکار بروید.")
+                raise GameError(
+                    f"⏳ زخم‌هایتان هنوز تازه است، فرمانده!\n\nتا {duration(until - now)} دیگر می‌توانید دوباره شکار کنید."
+                )
             await self.players.spend_energy(tx, player_id, HUNT_ENERGY)
 
             stats = await self.characters.stats_in(tx, player)
@@ -95,12 +98,12 @@ class HuntService:
             for item_id, qty in items.items():
                 await self.inventory.grant(tx, player_id, item_id, qty)
             level_up = await self.players.grant_xp(tx, player_id, xp) if xp else None
-            await inv_repo.set_cooldown(tx, player_id, "hunt", now + HUNT_COOLDOWN)
+            wait = await self.players.schedule_cooldown(tx, player_id, "hunt")
             after = await player_repo.get(tx, player_id)
             assert after is not None
         return HuntResult(
             monster=monster, won=won, rounds=min(battle.round, battle.max_rounds),
             hero_hp=max(0, hero.hp), hero_max_hp=hero.max_hp, gold=gold, xp=xp,
             items=[(get_item(i).label, q, i) for i, q in items.items()], level_up=level_up,
-            player=self.players.with_energy(after), highlights=log[-3:], log=log,
+            player=self.players.with_energy(after), highlights=log[-3:], log=log, next_in=wait,
         )

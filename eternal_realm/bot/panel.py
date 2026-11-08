@@ -288,7 +288,7 @@ async def act(c: Ctx) -> Screen:
         text = views.hunt_result(c.who(p), hunted)
         rows = keyboards.result_rows(
             c.owner, gold=hunted.gold, xp=hunted.xp, items=hunted.items, energy=hunted.player.energy,
-            again="hunt", hp=(hunted.hero_hp, hunted.hero_max_hp),
+            again="hunt", hp=(hunted.hero_hp, hunted.hero_max_hp), wait=hunted.next_in,
         )
         return Screen(text, rows)
     else:
@@ -298,7 +298,7 @@ async def act(c: Ctx) -> Screen:
         text = views.activity_result(c.who(p), done)
         rows = keyboards.result_rows(
             c.owner, gold=done.rolled.gold, xp=done.rolled.xp, crystal=done.rolled.crystal, items=done.items,
-            energy=done.player.energy, again=c.a,
+            energy=done.player.energy, again=c.a, wait=done.next_in,
         )
         return Screen(text, rows)
 

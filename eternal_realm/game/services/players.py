@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from ...context import AppContext
 from ...db.database import Tx
 from ...db.repos import players as repo
+from ...config import cooldown_ladder
+from ...db.repos import inventory as inv_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError, NotRegistered
 from ...shared.text import duration, fa
@@ -160,6 +162,21 @@ class PlayerService:
         level, xp, gained = progression.apply_xp(player.level, player.xp, amount, self.ctx.balance)
         await repo.set_progress(tx, player_id, level, xp)
         return LevelUp(player.level, level) if gained else None
+
+    async def schedule_cooldown(self, tx: Tx, player_id: int, key: str) -> int:
+        """Start the waiting time after using ``key`` and return it in seconds.
+
+        The wait grows during the day: 5 minutes after the first use, 15 after the second, and so on
+        (``Balance.cooldown_ladder``). It starts over every Tehran midnight.
+        """
+        now = self.ctx.now()
+        day = (now + 12600) // 86400
+        used = await inv_repo.uses_today(tx, player_id, key, day)
+        steps = cooldown_ladder(self.ctx.balance)
+        wait = steps[min(used, len(steps) - 1)]
+        await inv_repo.record_use(tx, player_id, key, day)
+        await inv_repo.set_cooldown(tx, player_id, key, now + wait)
+        return wait
 
     # --- daily reward -------------------------------------------------------------------------
     async def claim_daily(self, player_id: int) -> DailyReward:

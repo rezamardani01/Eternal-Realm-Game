@@ -59,7 +59,7 @@ async def test_fishing_spends_energy_gives_rewards_and_sets_cooldown(services, c
     with pytest.raises(GameError) as err:
         await services.activities.perform(p.id, "fishing")
     assert "دیگر" in err.value.message
-    clock.advance(FISHING.cooldown + 1)
+    clock.advance(301)
     await services.activities.perform(p.id, "fishing")
 
 
@@ -127,3 +127,43 @@ async def test_rest_restores_energy_once_per_cooldown(h, services, db, clock):
     clock.advance(1801)  # natural regeneration also tops the bar up, so only part of 25 fits
     await h.say(10, "استراحت", group=True)
     assert "انرژی تازه" in h.session.last_text()
+
+
+# --- stepped cooldowns --------------------------------------------------------------------------
+async def test_cooldown_grows_during_the_day_and_resets_at_midnight(services, clock):
+    p = await reg(services)
+    first = await services.activities.perform(p.id, "mining")
+    assert first.next_in == 300
+    clock.advance(301)
+    second = await services.activities.perform(p.id, "mining")
+    assert second.next_in == 900
+    clock.advance(901)
+    third = await services.activities.perform(p.id, "mining")
+    assert third.next_in == 1800
+    # another activity has its own ladder
+    assert (await services.activities.perform(p.id, "herb")).next_in == 300
+    # a new Tehran day starts again from five minutes
+    clock.advance(24 * 3600)
+    assert (await services.activities.perform(p.id, "mining")).next_in == 300
+
+
+async def test_the_wait_message_says_when_and_what(services, clock):
+    p = await reg(services)
+    await services.activities.perform(p.id, "fishing")
+    with pytest.raises(GameError) as err:
+        await services.activities.perform(p.id, "fishing")
+    assert "ماهیگیری" in err.value.message and "دیگر می‌توانید" in err.value.message
+
+
+async def test_result_tells_when_the_next_turn_comes(h, services):
+    await reg(services)
+    await h.say(10, "ماهیگیری", group=True)
+    assert "ماهیگیری بعدی" in h.session.last_text() and "۵ دقیقه" in h.session.last_text()
+    assert any("دوباره" in t and "۵ دقیقه" in t for t in h.labels())
+
+
+def test_ladder_can_be_configured():
+    from eternal_realm.config import cooldown_ladder, parse_settings
+
+    s = parse_settings({"bot": {"token": "x", "owner_id": 1}, "balance": {"cooldown_ladder": "60, 120"}})
+    assert cooldown_ladder(s.balance) == (60, 120)

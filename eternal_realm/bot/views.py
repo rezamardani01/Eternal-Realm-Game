@@ -249,6 +249,8 @@ def activity_result(name: str, result) -> str:  # noqa: ANN001 - ActivityResult
         emphasize(result.rolled.outcome.text.format(name=name)),
         "",
         DIV,
+        f"⏰ {result.activity.title} بعدی: {duration(result.next_in)} دیگر",
+        "",
         "🎁 چیزهایی که پیدا کردید یا به دست آوردید 👇",
     ]
     if result.level_up:
@@ -277,7 +279,7 @@ def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
             f"💔 {bold('این بار هیولا قوی‌تر بود')} و عقب‌نشینی کردید. چیزی از دست ندادید؛ "
             "قوی‌تر شوید و دوباره بیایید!"
         )
-    lines += ["", DIV, "🎁 چیزهایی که به دست آوردید 👇"]
+    lines += ["", DIV, f"⏰ شکار بعدی: {duration(r.next_in)} دیگر", "", "🎁 چیزهایی که به دست آوردید 👇"]
     if r.level_up:
         lines += ["", level_up_text(r.level_up.new_level)]
     return "\n".join(lines)

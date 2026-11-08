@@ -108,6 +108,21 @@ async def set_listed(tx: Tx, gear_id: int, listed: bool) -> None:
     await tx.execute("UPDATE gear SET listed = ? WHERE id = ?", (int(listed), gear_id))
 
 
+# --- daily usage (stepped cooldowns) -----------------------------------------------------------
+async def uses_today(tx: Tx, player_id: int, key: str, day: int) -> int:
+    row = await tx.fetchone("SELECT day, uses FROM activity_usage WHERE player_id = ? AND key = ?", (player_id, key))
+    return int(row["uses"]) if row is not None and row["day"] == day else 0
+
+
+async def record_use(tx: Tx, player_id: int, key: str, day: int) -> None:
+    await tx.execute(
+        "INSERT INTO activity_usage (player_id, key, day, uses) VALUES (?, ?, ?, 1)"
+        " ON CONFLICT (player_id, key) DO UPDATE SET"
+        " uses = CASE WHEN day = excluded.day THEN uses + 1 ELSE 1 END, day = excluded.day",
+        (player_id, key, day),
+    )
+
+
 # --- cooldowns --------------------------------------------------------------------------------
 async def cooldown_until(tx: Tx, player_id: int, key: str) -> int:
     return int(

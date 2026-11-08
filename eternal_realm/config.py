@@ -45,6 +45,8 @@ class Balance:
     command_gap_seconds: float = 1.0
     #: pause between the steps of «در حال شکار...»-style animations (0 turns them off)
     animation_seconds: float = 1.0
+    #: waiting time after the 1st, 2nd, 3rd ... use of the same activity in one day (seconds; the last repeats)
+    cooldown_ladder: str = "300,900,1800,3600,7200"
     boss_summon_gold: int = 200
     boss_min_level: int = 3
     boss_cooldown_seconds: int = 7200
@@ -56,6 +58,11 @@ class Balance:
     boss_fight_seconds: int = 600
     group_flood_window: int = 10
     group_flood_max: int = 25
+
+
+def cooldown_ladder(balance: Balance) -> tuple[int, ...]:
+    steps = tuple(int(x) for x in balance.cooldown_ladder.replace(" ", "").split(",") if x)
+    return steps or (300,)
 
 
 @dataclass(frozen=True)
@@ -80,6 +87,9 @@ def _build_balance(raw: dict[str, Any]) -> Balance:
         if key not in known:
             raise ConfigError(f"[balance] کلید ناشناخته: {key}")
         default = getattr(Balance, key)
+        if isinstance(default, str):
+            kwargs[key] = str(value)
+            continue
         if isinstance(value, bool) or not isinstance(value, int | float):
             raise ConfigError(f"[balance] مقدار {key} نامعتبر است")
         kwargs[key] = type(default)(value)

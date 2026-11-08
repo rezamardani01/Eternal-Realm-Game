@@ -97,7 +97,7 @@ async def test_hunt_flow(services, clock):
     assert result.player.energy == pl.energy - 10
     with pytest.raises(GameError):
         await services.hunting.hunt(pl.id)  # cooldown
-    clock.advance(31)
+    clock.advance(301)
     await services.hunting.hunt(pl.id)
 
 

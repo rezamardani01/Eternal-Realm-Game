@@ -197,6 +197,16 @@ MIGRATIONS: list[str] = [
     ALTER TABLE boss_hits ADD COLUMN alive INTEGER NOT NULL DEFAULT 1;
     ALTER TABLE boss_hits ADD COLUMN absorbed INTEGER NOT NULL DEFAULT 0;
     """,
+    # 10: how often each activity was used today (drives the stepped cooldowns)
+    """
+    CREATE TABLE activity_usage (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        key       TEXT    NOT NULL,
+        day       INTEGER NOT NULL,
+        uses      INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (player_id, key)
+    );
+    """,
 ]
 
 

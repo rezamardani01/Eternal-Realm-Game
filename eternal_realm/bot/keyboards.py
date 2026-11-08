@@ -8,7 +8,7 @@ from baleropy.types import InlineKeyboardButton
 from ..game.data.classes import CLASSES
 from ..game.data.races import RACES
 from ..game.engine.combat import Fighter
-from ..shared.text import fa
+from ..shared.text import duration, fa
 from .callbacks import BossCb, ClassCb, DuelCb, PanelCb, RaceCb
 
 Rows = list[list[InlineKeyboardButton]]
@@ -40,7 +40,7 @@ def panel_button(label: str, screen: str, owner: int, a: str = "", b: str = "") 
 
 def result_rows(
     owner: int, *, gold: int = 0, crystal: int = 0, xp: int = 0, items=(), energy: int, again: str,  # noqa: ANN001
-    hp: tuple[int, int] | None = None,
+    hp: tuple[int, int] | None = None, wait: int = 0,
 ) -> Rows:
     """Glass buttons under an activity result: what you got, your energy, and what to do next."""
     chips = []
@@ -57,7 +57,8 @@ def result_rows(
     if hp is not None:
         status.insert(0, panel_button(f"❤️ جان: {fa(hp[0])}/{fa(hp[1])}", "note", owner, "hp"))
     rows.append(status)
-    rows.append([panel_button("🔁 دوباره", "act", owner, again), panel_button("🗺️ ماجراجویی", "adv", owner)])
+    again_label = f"🔁 دوباره · {duration(wait)}" if wait else "🔁 دوباره"
+    rows.append([panel_button(again_label, "act", owner, again), panel_button("🗺️ ماجراجویی", "adv", owner)])
     return rows
 
 
