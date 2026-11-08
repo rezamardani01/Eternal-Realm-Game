@@ -163,16 +163,16 @@ async def xdo(c: Ctx) -> Screen:
     lines = [
         f"🎁 {bold('هدیه رسید!')}",
         "",
-        f"{_who(c, c.player)} این هدیه را به {_who(c, other)} بخشید:",
-        "",
-        receipt.what,
+        f"از: {_who(c, c.player)}",
+        f"به: {_who(c, other)}",
+        f"هدیه: {receipt.what}",
     ]
     if receipt.left is not None:
         lines += ["", f"🏦 امروز می‌توانید {fa(receipt.left)} {receipt.unit}‌ی دیگر ببخشید."]
     if c.message is not None:
         dm = (
             f"🎁 {bold('هدیه‌ای برای شما رسید!')}\n\n"
-            f"فرستنده: {c.player.name}\n\n"
+            f"از: {c.player.name}\n"
             f"هدیه: {receipt.what}\n\n"
             "از کیف و کوله‌پشتی‌تان ببینیدش."
         )
