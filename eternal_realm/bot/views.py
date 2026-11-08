@@ -322,6 +322,26 @@ def ranking(board) -> str:  # noqa: ANN001 - Board
 
 
 # --- chests ------------------------------------------------------------------------------------
+def chest_contents(item, odds) -> str:  # noqa: ANN001
+    """What a chest can hold and with which chance (a block for the confirm and detail pages)."""
+    from ..game.data.items import get_item
+
+    lines = [f"🎲 {bold('محتویات و شانس‌ها')}"]
+    for prize, share in sorted(odds, key=lambda x: -x[1]):
+        parts = []
+        if prize.gold[1]:
+            parts.append(f"{fa(prize.gold[0])} تا {fa(prize.gold[1])} سکه")
+        if prize.crystal[1]:
+            parts.append(f"{fa(prize.crystal[0])} تا {fa(prize.crystal[1])} کریستال")
+        if prize.item_id:
+            qty = f" ×{fa(prize.qty[0])}" + (f" تا {fa(prize.qty[1])}" if prize.qty[1] > prize.qty[0] else "")
+            parts.append(get_item(prize.item_id).name + qty)
+        pct = f"{share * 100:.1f}".translate(str.maketrans("0123456789.", "۰۱۲۳۴۵۶۷۸۹٫"))
+        lines.append(f"{pct}٪  " + " + ".join(parts))
+    lines.append("این‌ها شانس واقعی ربات هستند.")
+    return "\n".join(lines)
+
+
 def chest_odds(item, odds) -> str:  # noqa: ANN001
     from ..game.data.items import get_item
 

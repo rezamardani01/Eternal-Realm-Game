@@ -166,10 +166,14 @@ async def test_premium_hub_has_four_sections_each_with_its_own_text(h, services)
     assert "شامل" in h.session.last_text()
     await h.tap(10, "بازگشت")
     await h.tap(10, "خرید صندوق")
-    assert "گنجی پنهان" in h.session.last_text() and any("شانس" in t for t in h.labels())
-    await h.tap(10, "شانس")
-    assert "٪" in h.session.last_text()
-    await h.tap(10, "بازگشت")
+    text = h.session.last_text()
+    assert "گنجی پنهان" in text and "
+
+• 🎁" in text  # one blank line between entries
+    assert not any("شانس" in x for x in h.labels())  # the odds live in the confirm page instead
+    await h.tap(10, "صندوقچه جادویی")
+    assert "٪" in h.session.last_text() and "مطمئنید" in h.session.last_text()
+    await h.tap(10, "نه")
     assert "خرید صندوق" in h.session.last_text()
 
 

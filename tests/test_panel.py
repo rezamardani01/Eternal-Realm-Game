@@ -194,13 +194,13 @@ async def test_a_bought_chest_comes_with_an_open_button_right_below(h, services,
     assert "magic_chest" not in stacks
 
 
-async def test_chest_odds_by_button(h, services, db):
+async def test_chest_odds_live_under_the_chest_itself(h, services, db):
     p = await reg(services)
     await give(services, db, p.id, "wooden_chest")
     await h.panel(10, "chests")
     await h.tap(10, "صندوقچه چوبی")
-    await h.tap(10, "شانس")
-    assert "٪" in h.session.last_text()
+    assert "٪" in h.session.last_text() and "محتویات" in h.session.last_text()
+    assert not any("شانس" in t for t in h.labels())  # no separate odds button any more
 
 
 # --- shop ----------------------------------------------------------------------------------------

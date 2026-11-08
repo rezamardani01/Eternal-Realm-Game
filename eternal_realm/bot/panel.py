@@ -470,13 +470,15 @@ async def _item_screen(c: Ctx, item_id: str, toast: str | None = None) -> Screen
         shown.toast = toast
         return shown
     lines = [f"{item.emoji} {bold(item.name)}", f"{item.rarity_label} · در کوله‌پشتی: {bold(fa(qty))}", "", *_describe(item)]
+    if item.kind is Kind.CHEST and item.id in CHESTS:
+        lines += ["", views.chest_contents(item, c.services.chests.odds(CHESTS[item.id]))]
     if item.sell > 0:
         lines.append(f"💰 بها در بازارچه: {fa(item.sell)} سکه")
     rows: Rows = []
     if item.kind is Kind.CONSUMABLE:
         rows.append([c.btn("🧪 مصرف", "use", item.id, style="success")])
     if item.kind is Kind.CHEST:
-        rows.append([c.btn("🗝️ باز کردن", "open", item.id, style="success"), c.btn("🎲 شانس‌ها", "odds", item.id)])
+        rows.append([c.btn("🗝️ باز کردن", "open", item.id, style="success")])
     if item.sell > 0:
         sell_row = [c.btn("💰 فروش ۱", "isell", item.id, "1")]
         if qty > 1:
@@ -569,7 +571,7 @@ async def chest_buy(c: Ctx) -> Screen:
     icon = "🪙" if currency == "gold" else "💎"
     text = f"✅ {bold('صندوقچه خریده شد')}\n{item.label} به کوله‌پشتی شما رسید ({fa(total)}{icon})."
     rows = [
-        [c.btn("🗝️ باز کردن", "open", item.id, style="success"), c.btn("🎲 شانس‌ها", "odds", item.id)],
+        [c.btn("🗝️ باز کردن", "open", item.id, style="success")],
         [c.btn("🛍️ خرید دیگر", "chestshop")],
         c.back("chests", "🔙 بازگشت"),
     ]
@@ -628,7 +630,8 @@ async def shop_item(c: Ctx) -> Screen:
 
 
 async def _confirm(
-    c: Ctx, what: str, currency: str, total: int, action: str, a: str, b: str, back: tuple[str, str, str]
+    c: Ctx, what: str, currency: str, total: int, action: str, a: str, b: str, back: tuple[str, str, str],
+    extra: str = "",
 ) -> Screen:
     """«Are you sure?» step before spending gold or crystals."""
     p = await c.refresh()
@@ -643,7 +646,9 @@ async def _confirm(
         return Screen(text, [[undo]])
     text = (
         f"🛍️ {bold('تأیید خرید')}\n\n{what}\nبها: {bold(fa(total))} {icon}\n"
-        f"موجودی شما: {fa(have)} {icon} ← پس از خرید {fa(have - total)} {icon}\n\nمطمئنید می‌خواهید بخرید؟"
+        f"موجودی شما: {fa(have)} {icon} ← پس از خرید {fa(have - total)} {icon}\n\n"
+        + (f"{extra}\n\n" if extra else "")
+        + "مطمئنید می‌خواهید بخرید؟"
     )
     return Screen(text, [[c.btn("✅ بله، بخر", action, a, b, style="success"), undo]])
 
@@ -665,7 +670,9 @@ async def chest_confirm(c: Ctx) -> Screen:
     if chest is None or chest.price is None:
         raise GameError("این صندوقچه فروشی نیست.")
     currency, unit = chest.price
-    return await _confirm(c, item.label, currency, unit, "cbuy", item.id, "", ("chestshop", "", ""))
+    contents = views.chest_contents(item, c.services.chests.odds(chest))
+    back = ("prem", "chests", "") if c.b == "p" else ("chestshop", "", "")
+    return await _confirm(c, item.label, currency, unit, "cbuy", item.id, "", back, contents)
 
 
 @screen("buy")
@@ -910,6 +917,7 @@ def _lucky_block(c: Ctx, lines: list[str]) -> list:
         tier = lucky.TIERS[pack.id]
         lines.append(f"• {pack.label} — {fa(pack.price_toman)} تومان")
         lines.append(f"   {fa(tier.guaranteed_gold)} سکه‌ی تضمینی + {fa(tier.rolls)} جایزه")
+        lines.append("")
         rows.append([Button.inline(f"{pack.label} — {fa(pack.price_toman)} تومان", BuyCb(kind="cash", id=pack.id), style="success")])
     rows.append([c.btn("🎲 شانس‌های امروز", "luckyodds")])
     return rows
@@ -935,13 +943,12 @@ async def premium_section(c: Ctx) -> Screen:
                 continue
             icon = "🪙" if chest.price[0] == "gold" else "💎"
             item = get_item(chest.item_id)
-            lines.append(f"• {item.label} — {fa(chest.price[1])} {icon}")
-            lines.append(f"   {CHEST_BLURB.get(item.id, '')}")
-            rows.append([
-                c.btn(f"{item.label} · {fa(chest.price[1])}{icon}", "cbuyq", item.id),
-                c.btn("🎲 شانس‌ها", "odds", item.id, "p"),
-            ])
-        lines += ["", f"موجودی شما: 🪙 {fa(p.gold)} · 💎 {fa(p.crystal)}", "شانس دقیق محتویات را با «🎲 شانس‌ها» ببینید."]
+            lines += [f"• {item.label} — {fa(chest.price[1])} {icon}", f"   {CHEST_BLURB.get(item.id, '')}", ""]
+            rows.append([c.btn(f"{item.label} · {fa(chest.price[1])}{icon}", "cbuyq", item.id, "p")])
+        lines += [
+            f"موجودی شما: 🪙 {fa(p.gold)} · 💎 {fa(p.crystal)}",
+            "روی هر صندوقچه بزنید تا محتویات و شانس‌هایش را ببینید و خرید را تأیید کنید 👇",
+        ]
         rows.append(c.back("premium"))
         return Screen("\n".join(lines), rows)
 
@@ -955,11 +962,12 @@ async def premium_section(c: Ctx) -> Screen:
         for pack in (x for x in PACKS.values() if x.section == c.a and not x.lucky):
             lines.append(f"• {pack.label} — {fa(pack.price_toman)} تومان")
             if c.a == "bundles":
-                lines.append(f"   {views.pack_description(pack)}")
+                lines.append(f"   {views.pack_description(pack, c.services.ctx.now())}")
+            lines.append("")
             rows.append([Button.inline(f"{pack.label} — {fa(pack.price_toman)} تومان", BuyCb(kind="cash", id=pack.id), style="success")])
         if c.a == "bundles":
             rows += _lucky_block(c, lines)
-        lines += ["", "پس از زدن، فاکتور پرداخت بله برایتان می‌آید."]
+        lines.append("پس از زدن، فاکتور پرداخت بله برایتان می‌آید.")
     rows.append(c.back("premium"))
     return Screen("\n".join(lines), rows)
 
