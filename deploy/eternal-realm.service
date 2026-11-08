@@ -1,0 +1,21 @@
+[Unit]
+Description=Eternal Realm Bale bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=erbot
+WorkingDirectory=/opt/eternal-realm
+ExecStart=/opt/eternal-realm/.venv/bin/python main.py
+Restart=always
+RestartSec=5
+# hardening: the bot only needs its own folder
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/eternal-realm
+
+[Install]
+WantedBy=multi-user.target
