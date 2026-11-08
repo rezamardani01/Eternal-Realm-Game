@@ -373,6 +373,11 @@ class BossService:
             await wallet.apply(tx, pid, gold=gold, reason="boss_reward", now=now, ref=f"boss:{row['id']}:{pid}")
             level_up = await self.players.grant_xp(tx, pid, xp)
             await clan_repo.add_war_points(tx, pid, round((10 + 60 * share) * factor), now)
+            from ...db.repos import season as season_repo
+
+            await season_repo.add_points(tx, pid, "boss", now)
+            if status == "defeated":
+                await season_repo.add_points(tx, pid, "boss_win", now)
             chest = trophy = None
             if status == "defeated":
                 chest = "magic_chest" if index == 0 else "wooden_chest" if share >= 0.10 else None

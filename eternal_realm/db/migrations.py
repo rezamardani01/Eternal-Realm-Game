@@ -318,6 +318,25 @@ MIGRATIONS: list[str] = [
         started_at INTEGER NOT NULL
     );
     """,
+    # 20: the hero-path ticket (season pass)
+    """
+    CREATE TABLE season_progress (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        season    INTEGER NOT NULL,
+        points    INTEGER NOT NULL DEFAULT 0,
+        premium   INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (player_id, season)
+    );
+
+    CREATE TABLE season_claims (
+        player_id  INTEGER NOT NULL REFERENCES players (id),
+        season     INTEGER NOT NULL,
+        track      TEXT    NOT NULL,
+        tier       INTEGER NOT NULL,
+        claimed_at INTEGER NOT NULL,
+        PRIMARY KEY (player_id, season, track, tier)
+    );
+    """,
 ]
 
 

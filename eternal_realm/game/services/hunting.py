@@ -8,6 +8,7 @@ from ...context import AppContext
 from ...db.repos import events as event_repo
 from ...db.repos import inventory as inv_repo
 from ...db.repos import players as player_repo
+from ...db.repos import season as season_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError, NotRegistered
 from ...shared.text import duration
@@ -106,6 +107,7 @@ class HuntService:
                 await self.inventory.grant(tx, player_id, item_id, qty)
             level_up = await self.players.grant_xp(tx, player_id, xp) if xp else None
             card = None
+            await season_repo.add_points(tx, player_id, "hunt", now)
             if won and self.cards is not None:
                 card = await self.cards.drop_for_monster(tx, player_id, monster.id)
             wait = await self.players.schedule_cooldown(tx, player_id, "hunt")

@@ -121,6 +121,9 @@ class CardService:
             for _ in range(PACK_SIZE):
                 card = roll_pack_card(rng)
                 result.append((card, await self.grant(tx, player.id, card.id)))
+            from ...db.repos import season as season_repo
+
+            await season_repo.add_points(tx, player.id, "card_pack", self.ctx.now())
         return PackResult(result, PACK_PRICE)
 
     async def sell_duplicate(self, player: Player, card_id: str) -> int:

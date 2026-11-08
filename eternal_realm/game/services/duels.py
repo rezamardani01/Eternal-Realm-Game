@@ -225,6 +225,9 @@ class DuelService:
                 )
             if payout.xp:
                 payout.level_up = await self.players.grant_xp(tx, pid, payout.xp)
+            from ...db.repos import season as season_repo
+
+            await season_repo.add_points(tx, pid, "duel_win" if won else "duel", now)
             payouts[pid] = payout
         return payouts
 

@@ -195,4 +195,7 @@ class PlayerService:
                 tx, player_id, gold=gold, reason="daily", now=now, ref=f"daily:{player_id}:{now // DAY}"
             )
             await repo.set_daily(tx, player_id, now, streak)
+            from ...db.repos import season as season_repo
+
+            await season_repo.add_points(tx, player_id, "daily", now)
             return DailyReward(gold, streak)

@@ -97,6 +97,9 @@ class QuestService:
             view = self._build(quest, choice.next, flags, done)
             if nxt.reward is not None:
                 view.reward = nxt.reward
+                from ...db.repos import season as season_repo
+
+                await season_repo.add_points(tx, player.id, "quest", now)
                 await wallet.apply(
                     tx, player.id, gold=nxt.reward.gold, crystal=nxt.reward.crystal, reason=f"quest:{quest_id}",
                     now=now, ref=f"quest:{quest_id}:{player.id}",

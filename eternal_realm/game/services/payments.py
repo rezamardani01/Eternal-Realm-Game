@@ -71,6 +71,13 @@ class PaymentService:
         if pack is None:
             raise GameError("چنین بسته‌ای در خزانه نیست.")
         amount = pack.price_rial
+        if pack.season:
+            from ...db.repos import season as season_repo
+
+            async with self.ctx.db.read() as tx:
+                st = await season_repo.state(tx, player.id, self.ctx.now())
+            if st.premium:
+                raise GameError("بلیط این فصل را از قبل دارید؛ خرید دوباره لازم نیست و پولی کسر نشد.")
         if pack.pet:
             async with self.ctx.db.read() as tx:
                 have = await tx.fetchone(
@@ -141,6 +148,15 @@ class PaymentService:
         )
         for item_id, qty in items.items():
             await self.inventory.grant(tx, order.player_id, item_id, qty)
+        if pack.season:
+            from ...db.repos import season as season_repo
+
+            if not await season_repo.grant_ticket(tx, order.player_id, now):
+                await wallet.apply(
+                    tx, order.player_id, crystal=100, reason=f"order:{pack.id}:duplicate_ticket", now=now,
+                    ref=f"order:{order.id}:ticket",
+                )
+                granted = "بلیط این فصل را داشتید؛ ۱۰۰ کریستال جایگزین شد."
         if pack.pet:
             from .pets import PetService
 

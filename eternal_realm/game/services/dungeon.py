@@ -163,6 +163,11 @@ class DungeonService:
                 await tx.execute("DELETE FROM player_dungeon WHERE player_id = ?", (player.id,))
                 share = 0.5 if died else 1.0
                 view.status = "dead" if died else "won"
+                from ...db.repos import season as season_repo
+
+                await season_repo.add_points(tx, player.id, "dungeon", self.ctx.now())
+                if not died:
+                    await season_repo.add_points(tx, player.id, "dungeon_win", self.ctx.now())
                 view.paid_gold, view.paid_xp = round(gold * share), round(xp * share)
                 now = self.ctx.now()
                 await wallet.apply(
