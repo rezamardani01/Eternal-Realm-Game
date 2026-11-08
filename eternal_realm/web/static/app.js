@@ -219,6 +219,7 @@ const PAGES = {
   dashboard: ["layout-dashboard", "داشبورد"],
   players: ["users", "بازیکنان"],
   groups: ["building-2", "گروه‌ها"],
+  clans: ["castle", "خاندان‌ها"],
   orders: ["banknote", "فروش"],
   broadcast: ["megaphone", "پیام همگانی"],
   audit: ["scroll-text", "گزارش مدیریت"],
@@ -434,6 +435,22 @@ async function groups(main) {
     rows.length ? stagger(h("div", { class: "grid three" }, rows.map(card))) : empty("هنوز گروهی ثبت نشده است."));
 }
 
+async function clans(main) {
+  main.append(skeleton(3));
+  const rows = await api("/api/clans");
+  const most = Math.max(1, ...rows.map((c) => c.members));
+  const card = (c, i) => h("div", { class: "card lift reveal" },
+    h("div", { class: "who-cell" }, h("span", { class: `av av-${i % 6}` }, ic("castle")),
+      h("div", {}, h("b", {}, c.name), h("div", { class: "muted", style: "font-size:12px" }, `رهبر: ${c.leader}`))),
+    h("div", { class: "row" }, h("span", { class: "badge " + (c.open ? "good" : "warn") }, c.open ? "عضوگیری باز" : "عضوگیری بسته"),
+      h("span", { class: "badge info" }, `${num(c.members)} عضو`), h("span", { class: "muted", style: "font-size:12px" }, `ساخت ${c.created}`)),
+    h("div", { class: "meter" }, h("i", { style: `width:${Math.round((c.members / most) * 100)}%` })),
+    h("div", { class: "row" }, h("span", { class: "badge" }, `خزانه ${num(c.treasury)}`), h("span", { class: "badge" }, `کل کمک‌ها ${num(c.donated)}`),
+      h("button", { class: "btn sm ghost", onclick: () => run(() => openPlayer(c.leader_id)) }, ic("users"), "رهبر")));
+  main.replaceChildren(h("p", { class: "sub" }, `${num(rows.length)} خاندان در قلمرو ساخته شده است`),
+    rows.length ? stagger(h("div", { class: "grid three" }, rows.map(card))) : empty("هنوز خاندانی ساخته نشده است."));
+}
+
 async function orders(main) {
   const state = { page: 0 };
   const holder = h("div");
@@ -522,7 +539,7 @@ async function settings(main) {
 }
 
 /* ---------------------------------------------------------------- shell */
-const VIEWS = { dashboard, players, groups, orders, broadcast, audit, settings };
+const VIEWS = { dashboard, players, groups, clans, orders, broadcast, audit, settings };
 function go(name) { location.hash = "#/" + name; }
 
 async function show(name) {

@@ -356,3 +356,7 @@ tbody tr.click:hover { background: rgba(139, 107, 255, 0.11); }
   table.stack td.first::before { content: none; }
   .row input { width: 100%; flex: 1 1 130px; }
 }
+
+.meter { height: 8px; border-radius: 99px; background: var(--border); overflow: hidden; margin: 10px 0; }
+.meter i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), #5b8cff); animation: meter 1s var(--ease) both; transform-origin: right; }
+@keyframes meter { from { transform: scaleX(0); } to { transform: scaleX(1); } }

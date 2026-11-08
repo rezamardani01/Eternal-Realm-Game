@@ -145,6 +145,12 @@ async def test_dashboard_and_lists(client, auth, services, db):
     assert detail["level"] == 9 and detail["history"]
     assert (await client.get("/api/players/99999")).status == 400
     assert (await client.get("/api/groups")).status == 200 and (await client.get("/api/orders")).status == 200
+    assert await (await client.get("/api/clans")).json() == []
+    async with db.transaction() as tx:
+        await tx.execute("INSERT INTO clans (id, name, leader_id, created_at) VALUES (1, 'شیران', ?, 1)", (found["rows"][0]["id"],))
+        await tx.execute("INSERT INTO clan_members (player_id, clan_id, role, joined_at) VALUES (?, 1, 'leader', 1)", (found["rows"][0]["id"],))
+    clans = await (await client.get("/api/clans")).json()
+    assert clans[0]["name"] == "شیران" and clans[0]["members"] == 1 and clans[0]["leader"] == "سارا"
 
 
 async def test_admin_actions_change_the_game_and_are_logged(client, auth, services, db):

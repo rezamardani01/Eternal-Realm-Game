@@ -423,6 +423,16 @@ class AdminWeb:
         return _json([{"id": r["chat_id"], "title": r["title"] or "—", "enabled": bool(r["enabled"]),
                        "members": r["members"], "created": fmt(r["created_at"]), "seen": fmt(r["last_seen"])} for r in rows])
 
+    async def clans(self, request: web.Request) -> web.Response:
+        async with self.s.ctx.db.read() as tx:
+            rows = await tx.fetchall(
+                "SELECT c.id, c.name, c.open, c.treasury, c.donated, c.created_at, p.display_name AS leader, p.id AS leader_id,"
+                " (SELECT COUNT(*) FROM clan_members m WHERE m.clan_id = c.id) AS members"
+                " FROM clans c JOIN players p ON p.id = c.leader_id ORDER BY members DESC, c.donated DESC LIMIT 200")
+        return _json([{"id": r["id"], "name": r["name"], "open": bool(r["open"]), "treasury": r["treasury"], "donated": r["donated"],
+                       "leader": r["leader"], "leader_id": r["leader_id"], "members": r["members"], "created": fmt(r["created_at"])}
+                      for r in rows])
+
     async def orders(self, request: web.Request) -> web.Response:
         page = max(0, int(request.query.get("page", "0") or 0))
         async with self.s.ctx.db.read() as tx:
@@ -500,7 +510,7 @@ def build_app(services: Services, auth: WebAuth, bot: Any = None, secure_cookie:
         ("POST", "/api/groups/{id:-?\\d+}/event", panel.group_event),
         ("GET", "/api/membership", panel.membership_get), ("POST", "/api/membership", panel.membership_save),
         ("POST", "/api/membership/probe", panel.membership_probe),
-        ("GET", "/api/groups", panel.groups), ("GET", "/api/orders", panel.orders), ("GET", "/api/audit", panel.audit),
+        ("GET", "/api/groups", panel.groups), ("GET", "/api/clans", panel.clans),("GET", "/api/orders", panel.orders), ("GET", "/api/audit", panel.audit),
         ("POST", "/api/broadcast", panel.broadcast), ("POST", "/api/logout", panel.logout),
     ]
     for method, path, handler in api:
