@@ -96,3 +96,73 @@ class AdminService:
     async def log_action(self, admin_id: int, action: str, detail: str = "") -> None:
         async with self.ctx.db.transaction() as tx:
             await self._log(tx, admin_id, action, detail)
+
+    # --- grants and removals by player id (used by the owner's reply commands and the web panel) -----------
+    async def _by_id(self, tx, player_id: int) -> Player:  # noqa: ANN001
+        player = await player_repo.get(tx, player_id)
+        if player is None:
+            raise GameError("بازیکن پیدا نشد.")
+        return player
+
+    async def grant_ticket(self, admin_id: int, player_id: int, give: bool = True) -> bool:
+        """Give (or take back) this season's golden ticket. Returns whether anything changed."""
+        from ...db.repos import season as season_repo
+        from ..data.season import season_of
+
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            player = await self._by_id(tx, player_id)
+            if give:
+                changed = await season_repo.grant_ticket(tx, player.id, now)
+            else:
+                await tx.execute(
+                    "UPDATE season_progress SET premium = 0 WHERE player_id = ? AND season = ? AND premium = 1",
+                    (player.id, season_of(now)),
+                )
+                changed = tx.rowcount == 1
+            await self._log(tx, admin_id, "grant_ticket" if give else "revoke_ticket", f"{player.name} changed={changed}")
+            return changed
+
+    async def set_vip(self, admin_id: int, player_id: int, days: int) -> int:
+        """Add ``days`` of VIP (negative removes that much; ``0`` days with ``clear`` is done by passing -3650)."""
+        if not -3650 <= days <= 3650:
+            raise GameError("تعداد روز باید بین ۳٬۶۵۰- تا ۳٬۶۵۰ باشد.")
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            player = await self._by_id(tx, player_id)
+            base = max(player.vip_until, now)
+            until = base + days * 86400
+            until = 0 if until <= now else until
+            await tx.execute("UPDATE players SET vip_until = ? WHERE id = ?", (until, player.id))
+            await self._log(tx, admin_id, "set_vip", f"{player.name} days={days} until={until}")
+            return until
+
+    async def grant_pet(self, admin_id: int, player_id: int, pet_id: str, give: bool = True) -> bool:
+        from ..data.pets import PETS
+        from .pets import PetService
+
+        if pet_id not in {p.id for p in PETS}:
+            raise GameError("این حیوان خانگی وجود ندارد.")
+        async with self.ctx.db.transaction() as tx:
+            player = await self._by_id(tx, player_id)
+            if give:
+                changed = await PetService(self.ctx).grant(tx, player.id, pet_id)
+            else:
+                await tx.execute("DELETE FROM player_pets WHERE player_id = ? AND pet_id = ?", (player.id, pet_id))
+                changed = tx.rowcount == 1
+                left = await tx.fetchone("SELECT pet_id FROM player_pets WHERE player_id = ? LIMIT 1", (player.id,))
+                if left is not None:
+                    await tx.execute(
+                        "UPDATE player_pets SET active = 1 WHERE player_id = ? AND pet_id = ?"
+                        " AND NOT EXISTS (SELECT 1 FROM player_pets WHERE player_id = ? AND active = 1)",
+                        (player.id, left["pet_id"], player.id),
+                    )
+            await self._log(tx, admin_id, "grant_pet" if give else "revoke_pet", f"{player.name} {pet_id} changed={changed}")
+            return changed
+
+    async def give_currency_id(self, admin_id: int, player_id: int, *, gold: int = 0, crystal: int = 0) -> Player:
+        async with self.ctx.db.transaction() as tx:
+            player = await self._by_id(tx, player_id)
+            await wallet.apply(tx, player.id, gold=gold, crystal=crystal, reason="admin", now=self.ctx.now())
+            await self._log(tx, admin_id, "give_currency", f"{player.name} gold={gold} crystal={crystal}")
+            return player
