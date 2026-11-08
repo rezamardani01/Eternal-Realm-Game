@@ -66,9 +66,19 @@ async def run(settings: Settings) -> None:
             asyncio.create_task(offers.processor(bot, services), name="offer-processor"),
             asyncio.create_task(path_panel.processor(bot, services), name="path-notifier"),
         ]
+        web_runner = None
+        if settings.web_enabled:
+            from ..web.server import start_web
+
+            web_runner = await start_web(
+                services, services.web_auth, bot, settings.web_host, settings.web_port,
+                secure_cookie=settings.web_url.startswith("https://"),
+            )
         try:
             await dp.start_polling(bot, skip_updates=True)
         finally:
+            if web_runner is not None:
+                await web_runner.cleanup()
             for task in background:
                 task.cancel()
             for task in background:

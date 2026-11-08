@@ -86,6 +86,12 @@ class Settings:
     #: community links shown as buttons in the private main menu (empty = button hidden)
     group_url: str = ""
     channel_url: str = ""
+    #: the web admin panel (off unless [web] enabled = true)
+    web_enabled: bool = False
+    web_host: str = "0.0.0.0"
+    web_port: int = 8080
+    #: public address used in the login links, e.g. http://195.177.255.161:8080
+    web_url: str = ""
 
     def is_admin(self, user_id: int) -> bool:
         return user_id == self.owner_id or user_id in self.admin_ids
@@ -138,6 +144,10 @@ def parse_settings(data: dict[str, Any]) -> Settings:
         command_overrides=overrides,
         group_url=_link(data.get("links", {}).get("group", "")),
         channel_url=_link(data.get("links", {}).get("channel", "")),
+        web_enabled=bool(data.get("web", {}).get("enabled", False)),
+        web_host=str(data.get("web", {}).get("host", "0.0.0.0")),
+        web_port=int(data.get("web", {}).get("port", 8080)),
+        web_url=str(data.get("web", {}).get("public_url", "")).strip().rstrip("/"),
     )
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ..context import AppContext
 from ..game.services.activities import ActivityService
@@ -33,6 +33,7 @@ from ..game.services.quests import QuestService
 from ..game.services.rankings import RankingService
 from ..game.services.season import SeasonService
 from ..game.services.shop import ShopService
+from ..web.auth import WebAuth
 from .throttle import Throttle
 
 
@@ -69,6 +70,7 @@ class Services:
     groups: GroupService
     throttle: Throttle
     bot_username: str = ""
+    web_auth: WebAuth = field(default_factory=WebAuth)
 
     @classmethod
     def build(cls, ctx: AppContext) -> Services:
