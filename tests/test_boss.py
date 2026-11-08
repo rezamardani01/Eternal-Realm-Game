@@ -391,3 +391,43 @@ async def test_the_panel_button_summons_in_groups_only(h, services, db):
     assert await services.bosses.active(CHAT) is not None
     await h.say(10, "قلمرو")
     assert not any("باس گروه" in t for t in h.labels())
+
+
+async def test_a_lost_boss_comes_back_angrier_and_pays_more(services, db, clock):
+    players, view = await squad(services, db, 3)
+    assert not view.revenge and await services.bosses.revenge_boss(CHAT) is None
+    await services.bosses.start(view.id, players[0])
+    await edit_state(db, view.id, lambda s: s["boss"].update(hp=10**9, max_hp=10**9, atk=1))
+    await edit_state(db, view.id, lambda s: [x.update(hp=10**6, max_hp=10**6) for x in s["heroes"]])
+    clock.advance(services.ctx.balance.boss_fight_seconds + 1)
+    assert [u for u in await services.bosses.process_due() if u.kind == "final"][0].view.outcome == "fled"
+
+    owed = await services.bosses.revenge_boss(CHAT)
+    assert owed is not None and owed.id == view.type.id
+    clock.advance(services.ctx.balance.boss_cooldown_seconds + 1)
+    again = await services.bosses.summon(await services.players.require(players[0].platform_user_id), CHAT)
+    assert again.revenge and again.type.id == view.type.id
+    assert "انتقام" in boss_ui.text_for(services, again)
+    await services.bosses.join(again.id, await services.players.require(players[1].platform_user_id))
+    await services.bosses.join(again.id, await services.players.require(players[2].platform_user_id))
+    started = await services.bosses.start(again.id, await services.players.require(players[0].platform_user_id))
+    normal_hp = boss_max_hp(again.type, 3, started.level)
+    assert started.max_hp == round(normal_hp * 1.15)
+    # one rematch per defeat: when this one is lost too, the next summon is an ordinary boss again
+    await edit_state(db, again.id, lambda s: s["boss"].update(hp=10**9, max_hp=10**9, atk=1))
+    await edit_state(db, again.id, lambda s: [x.update(hp=10**6, max_hp=10**6) for x in s["heroes"]])
+    clock.advance(services.ctx.balance.boss_fight_seconds + 1)
+    await services.bosses.process_due()
+    assert await services.bosses.revenge_boss(CHAT) is None
+
+
+async def test_the_revenge_window_closes_after_a_day(services, db, clock):
+    players, view = await squad(services, db, 3)
+    await services.bosses.start(view.id, players[0])
+    await edit_state(db, view.id, lambda s: s["boss"].update(hp=10**9, max_hp=10**9, atk=1))
+    await edit_state(db, view.id, lambda s: [x.update(hp=10**6, max_hp=10**6) for x in s["heroes"]])
+    clock.advance(services.ctx.balance.boss_fight_seconds + 1)
+    await services.bosses.process_due()
+    assert await services.bosses.revenge_boss(CHAT) is not None
+    clock.advance(25 * 3600)
+    assert await services.bosses.revenge_boss(CHAT) is None

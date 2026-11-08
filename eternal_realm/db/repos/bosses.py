@@ -34,6 +34,13 @@ async def last_created(tx: Tx, chat_id: int) -> int:
     return int(await tx.scalar("SELECT MAX(created_at) FROM bosses WHERE chat_id = ?", (chat_id,), 0))
 
 
+async def last_ended(tx: Tx, chat_id: int) -> Row | None:
+    """The most recent boss of the chat that is over (won or lost)."""
+    return await tx.fetchone(
+        "SELECT * FROM bosses WHERE chat_id = ? AND status != 'active' ORDER BY id DESC LIMIT 1", (chat_id,)
+    )
+
+
 async def set_message(tx: Tx, boss_id: int, message_id: int) -> None:
     await tx.execute("UPDATE bosses SET message_id = ? WHERE id = ?", (message_id, boss_id))
 

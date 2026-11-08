@@ -59,7 +59,8 @@ async def start_in_group(ctx: CommandContext) -> None:
 @command("daily", ["جایزه", "روزانه", "جایزه روزانه", "daily"], "گنجینه‌ی روزانه", category="👤 شخصیت")
 async def daily(ctx: CommandContext) -> None:
     reward = await ctx.services.players.claim_daily(ctx.me.id)
-    streak = f"\n\n🔥 {fa(reward.streak)} روز پشت‌سرهم!" if reward.streak > 1 else ""
+    note = views.streak_note(reward)
+    streak = f"\n\n{note}" if note else ""
     await ctx.reply(
         f"🎁 {bold('گنجینه‌ی روزانه')}\n\n"
         f"فرمانده {ctx.who(ctx.me)} ، {bold(fa(reward.gold))} سکه به گنجینه‌تان آمد.{streak}"

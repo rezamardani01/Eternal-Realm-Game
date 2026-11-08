@@ -31,6 +31,19 @@ def welcome() -> str:
     )
 
 
+def streak_note(reward) -> str:  # noqa: ANN001 - DailyReward
+    """The «days in a row» lines of the daily reward: the streak, a chest when one was paid and what comes next."""
+    if reward.streak < 2 and not reward.chest:
+        return ""
+    from ..game.data.items import get_item
+
+    lines = [f"🔥 {fa(reward.streak)} روز پشت‌سرهم!"]
+    if reward.chest:
+        lines.append(f"🎁 پاداش زنجیره: {get_item(reward.chest).label}")
+    lines.append(f"⏳ تا صندوقچه‌ی بعدی: {fa(reward.next_chest_in)} روز (هر روز بیایید تا زنجیره نشکند)")
+    return "\n".join(lines)
+
+
 def pick_race() -> str:
     lines = [f"🧬 {bold('نژاد')} خود را انتخاب کنید:", ""]
     lines += [f"{r.emoji} {r.name} — {r.description}" for r in RACES.values()]
@@ -564,6 +577,7 @@ def boss_recruiting(v, min_players: int, max_players: int) -> str:  # noqa: ANN0
     return "\n".join(
         [
             f"{v.type.emoji} {bold(v.type.name + ' بیدار شده است!')}",
+            *(["🔥 انتقام! این باس پس از شکست قبلی خشمگین‌تر برگشته؛ قوی‌تر است ولی پاداش پیروزی ۱٫۵ برابر می‌شود."] if v.revenge else []),
             "",
             v.type.story,
             "فرمانده، متحدان خود را فرا بخوانید!",
@@ -643,6 +657,8 @@ def boss_final(v) -> str:  # noqa: ANN001 - BossView
         if p.card:
             entry.append(f"🃏 کارت تازه: {p.card}")
         blocks.append("\n".join(entry))
+    if v.outcome in ("lost", "fled"):
+        blocks.append("🔥 تا ۲۴ ساعت می‌توانید همین باس را دوباره احضار کنید؛ خشمگین‌تر برمی‌گردد ولی اگر شکستش دهید پاداش ۱٫۵ برابر است.")
     blocks.append("🪙 پاداش هر نفر در دکمه‌های زیر است 👇")
     return "\n\n".join(blocks)
 

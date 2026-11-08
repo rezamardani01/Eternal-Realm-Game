@@ -163,6 +163,9 @@ async def test_home_menu_uses_the_new_names(h, services, db):
     await h.say(11, "قلمرو", group=True)
     labels = " ".join(h.labels())
     for name in ("قهرمان من", "فروشگاه آیتم", "بازارچه", "تالار بزرگان", "کلکسیون کارت", "حیوان خانگی",
-                 "کوره آهنگری", "خزانه قلمرو", "راهنمایی"):
+                 "کوره آهنگری", "راهنمایی"):
         assert name in labels
     assert "🐱 حیوان خانگی" in h.labels()
+    assert "خزانه قلمرو" not in labels  # it only opens in private chat, so the group menu does not show it
+    await h.say(11, "/start")
+    assert "خزانه قلمرو" in " ".join(h.labels())

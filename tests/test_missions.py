@@ -79,6 +79,6 @@ async def test_glass_flow(h, services, db):
     kind = next(k for k in KINDS if k.id == first.kind_id)
     await do(db, services, p, kind.deed, kind.target)
     await h.say(4, "ماموریت‌های امروز", group=True)
-    assert "مأموریت‌های امروز" in h.session.sent()[-1]["text"]
+    assert "مأموریت‌ها" in h.session.sent()[-1]["text"]
     await h.tap(4, "دریافت پاداش", group=True)
     assert "گرفته شد" in h.session.sent("editMessageText")[-1]["text"]

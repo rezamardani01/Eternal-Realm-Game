@@ -140,7 +140,7 @@ async def home(c: Ctx) -> Screen:
         [c.btn("🏯 خاندان", "clan"), c.btn("📜 داستان‌ها", "quests")],
         [c.btn("🃏 کلکسیون کارت", "album"), c.btn("🐱 حیوان خانگی", "pets")],
         [c.btn("🕳️ سیاه‌چال", "dungeon"), c.btn("🔥 کوره آهنگری", "craft")],
-        [c.btn("💎 خزانه قلمرو", "premium"), c.btn("🎁 جایزه روزانه", "daily")],
+        [c.btn("💎 خزانه قلمرو", "premium"), c.btn("🎁 جایزه روزانه", "daily")] if not c.is_group else [c.btn("🎁 جایزه روزانه", "daily")],
         [c.btn("😴 استراحت", "rest"), c.btn("❓ راهنمایی", "help")],
     ]
     if c.is_group:
@@ -164,8 +164,13 @@ async def boss_panel(c: Ctx) -> Screen:
         return Screen(f"🐉 {bold('باس گروهی')}\n\nباس را در یک گروه احضار کنید و با دوستانتان بزنیدش!", [c.back("home")])
     if await c.services.bosses.active(c.chat_id) is not None:
         return Screen(None, toast="🐉 یک باس زنده است! پیامش را بالاتر ببینید یا «باس» را بنویسید.", alert=True)
+    owed = await c.services.bosses.revenge_boss(c.chat_id)
+    revenge = (
+        f"🔥 {bold('فرصت انتقام!')} {owed.emoji} {owed.name} از شما پیروز شد؛ احضار بعدی همان باس است، "
+        "خشمگین‌تر ولی با پاداش ۱٫۵ برابر.\n\n"
+    ) if owed else ""
     text = (
-        f"🐉 {bold('احضار باس')}\n\n"
+        f"🐉 {bold('احضار باس')}\n\n{revenge}"
         f"هزینه: {bold(fa(b.boss_summon_gold))} سکه\n"
         f"از سطح {fa(b.boss_min_level)} · هر گروه هر {duration(b.boss_cooldown_seconds)} یک باس\n\n"
         "همه‌ی اعضا می‌پیوندند، نبرد خودکار انجام می‌شود و پاداش به نسبت سهم هر نفر تقسیم می‌شود.\n\n"
@@ -209,9 +214,9 @@ async def help_section(c: Ctx) -> Screen:
 async def daily(c: Ctx) -> Screen:
     reward = await c.services.players.claim_daily(c.player.id)
     await c.refresh()
-    streak = f" ({fa(reward.streak)} روز پشت‌سرهم)" if reward.streak > 1 else ""
     shown = await home(c)
-    shown.toast, shown.alert = f"🎁 {fa(reward.gold)} سکه به گنجینه‌ی شما آمد{streak}", True
+    note = views.streak_note(reward)
+    shown.toast, shown.alert = f"🎁 {fa(reward.gold)} سکه به گنجینه‌ی شما آمد" + (f"\n\n{note}" if note else ""), True
     return shown
 
 
@@ -252,7 +257,7 @@ async def profile(c: Ctx) -> Screen:
         rows.append([c.btn("▫️▫️▫️▫️▫️▫️▫️", "noop")])
         rows.append([c.btn("🧰 تجهیزات", "gear"), c.btn("🎒 کوله‌پشتی", "inv")])
         rows.append([c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")])
-        rows.append([c.btn("📅 مأموریت‌های امروز", "missions"), c.btn("🕯️ محراب", "altar")])
+        rows.append([c.btn("📅 مأموریت‌ها", "missions"), c.btn("🕯️ محراب", "altar")])
         rows.append([c.btn("🐱 حیوان همراه من", "pets")])
         rows.append(c.back("home"))
     elif c.b == "cm":

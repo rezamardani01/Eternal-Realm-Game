@@ -126,3 +126,17 @@ def test_chatter_starting_with_a_keyword_does_not_trigger():
     r = make_registry()
     assert r.resolve("ماهی خیلی خوبه") is None
     assert r.resolve("مبارزه با اژدها").command.name == "duel"  # commands that take args still do
+
+
+async def test_streak_pays_a_chest_every_week(services, clock):
+    await services.players.register(10, "a", "آرش", "elf", "archer")
+    p = await services.players.require(10)
+    for day in range(1, 8):
+        reward = await services.players.claim_daily(p.id)
+        assert reward.streak == day
+        clock.advance(86_400 + 60)
+    assert reward.chest == "wooden_chest" and reward.next_chest_in == 7
+    async with services.ctx.db.read() as tx:
+        assert await tx.scalar("SELECT qty FROM inventory WHERE player_id = ? AND item_id = 'wooden_chest'", (p.id,), 0) == 1
+    clock.advance(3 * 86_400)  # missing days breaks the streak
+    assert (await services.players.claim_daily(p.id)).streak == 1

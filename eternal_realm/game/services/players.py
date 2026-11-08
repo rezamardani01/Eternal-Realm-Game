@@ -33,6 +33,21 @@ class LevelUp:
 class DailyReward:
     gold: int
     streak: int
+    #: the chest a streak milestone paid out today ("" when none)
+    chest: str = ""
+    #: days of streak until the next chest
+    next_chest_in: int = 0
+
+
+def streak_chest(streak: int) -> str:
+    """Streaks pay a chest every week, a better one every two weeks and a royal one every month."""
+    if streak % 30 == 0:
+        return "royal_chest"
+    if streak % 14 == 0:
+        return "magic_chest"
+    if streak % 7 == 0:
+        return "wooden_chest"
+    return ""
 
 
 class PlayerService:
@@ -199,7 +214,10 @@ class PlayerService:
                 tx, player_id, gold=gold, reason="daily", now=now, ref=f"daily:{player_id}:{now // DAY}"
             )
             await repo.set_daily(tx, player_id, now, streak)
+            chest = streak_chest(streak)
+            if chest:
+                await inv_repo.add_stack(tx, player_id, chest, 1)
             from ...db.repos import season as season_repo
 
             await season_repo.add_points(tx, player_id, "daily", now)
-            return DailyReward(gold, streak)
+            return DailyReward(gold, streak, chest, 7 - streak % 7)

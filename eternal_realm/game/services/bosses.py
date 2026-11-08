@@ -38,6 +38,10 @@ from .players import PlayerService
 
 MAX_CATCH_UP_ROUNDS = 3
 REPORT_LINES = 7
+#: a group that lost to a boss may summon the same one again within a day: it is angrier, but pays more
+REVENGE_WINDOW = 24 * 3600
+REVENGE_POWER = 1.15
+REVENGE_REWARD = 1.5
 
 
 @dataclass
@@ -88,6 +92,8 @@ class BossView:
     #: how a finished fight ended: won | lost | fled | cancelled
     outcome: str | None = None
     free: bool = False
+    #: the boss came back angrier after a lost fight (stronger, pays more when beaten)
+    revenge: bool = False
 
     @property
     def seconds_left(self) -> int:
@@ -140,12 +146,27 @@ class BossService:
                 for r in roster
             ],
             report=state.get("recent", []), payouts=payouts or [], outcome=outcome, free=bool(state.get("free")),
+            revenge=bool(state.get("revenge")),
         )
 
     async def active(self, chat_id: int) -> BossView | None:
         async with self.ctx.db.read() as tx:
             row = await repo.active_in_chat(tx, chat_id)
             return await self._view(tx, row) if row is not None else None
+
+    async def revenge_boss(self, chat_id: int):  # noqa: ANN201 - BossType | None
+        """The boss that beat this group within the last day and is still owed a rematch, if any."""
+        async with self.ctx.db.read() as tx:
+            return self._owed(await repo.last_ended(tx, chat_id), self.ctx.now())
+
+    def _owed(self, prev: Row | None, now: int):  # noqa: ANN202
+        if prev is None or prev["status"] != "expired" or not prev["ended_at"]:
+            return None
+        if json.loads(prev["state"] or "{}").get("revenge"):
+            return None  # one rematch per defeat, not an endless chain
+        if now - prev["ended_at"] > REVENGE_WINDOW:
+            return None
+        return boss_by_id(prev["boss_type"])
 
     async def attach_message(self, boss_id: int, message_id: int) -> None:
         async with self.ctx.db.transaction() as tx:
@@ -193,8 +214,12 @@ class BossService:
             if wait > 0:
                 raise GameError(f"⏳ باس بعدی این گروه تا {duration(wait)} دیگر آماده می‌شود. تا آن موقع قدرت جمع کنید!")
             await wallet.apply(tx, player.id, gold=-b.boss_summon_gold, reason="boss_summon", now=now)
-            kind = pick_boss(player.level, self.ctx.rng)
-            boss_id = await repo.create(tx, chat_id, kind.id, player.level, player.id, now, now + b.boss_recruit_seconds)
+            owed = self._owed(await repo.last_ended(tx, chat_id), now)
+            kind = owed or pick_boss(player.level, self.ctx.rng)
+            boss_id = await repo.create(
+                tx, chat_id, kind.id, player.level, player.id, now, now + b.boss_recruit_seconds,
+                json.dumps({"revenge": True}) if owed else "{}",
+            )
             await self._enlist(tx, boss_id, player)
             row = await repo.get(tx, boss_id)
             assert row is not None
@@ -248,14 +273,15 @@ class BossService:
             )
         avg_level = max(1, round(sum(r["level"] for r in roster) / len(roster)))
         kind = boss_by_id(row["boss_type"])
-        hp = boss_max_hp(kind, len(roster), avg_level)
+        revenge = bool(json.loads(row["state"] or "{}").get("revenge"))
+        hp = round(boss_max_hp(kind, len(roster), avg_level) * (REVENGE_POWER if revenge else 1))
         boss = Boss(
-            kind.name, hp, hp, boss_attack(kind, avg_level), boss_defense(avg_level),
+            kind.name, hp, hp, round(boss_attack(kind, avg_level) * (REVENGE_POWER if revenge else 1)), boss_defense(avg_level),
             special=kind.special, weak_class=kind.weak_class, behavior=behavior_of(kind)[0],
         )
         state = {"boss": asdict(boss), "heroes": [asdict(h) for h in heroes], "pending": [], "recent": [
             f"⚔️ نبرد با {kind.name} آغاز شد!"
-        ]}
+        ], **({"revenge": True} if revenge else {})}
         begun = await repo.begin_fight(
             tx, row["id"], avg_level, hp, json.dumps(state, ensure_ascii=False), now,
             now + b.boss_round_seconds, now + b.boss_fight_seconds,
@@ -360,7 +386,8 @@ class BossService:
         """Close the boss (once) and pay every fighter by contribution. A lost fight pays a consolation."""
         if not await repo.close(tx, row["id"], status, now):
             return []
-        factor = 1.0 if status == "defeated" else 0.25
+        revenge = bool(json.loads(row["state"] or "{}").get("revenge"))
+        factor = (REVENGE_REWARD if revenge else 1.0) if status == "defeated" else 0.25
         roster = await repo.fighters(tx, row["id"])
         weights = {r["player_id"]: r["damage"] + r["absorbed"] for r in roster}
         total = sum(weights.values()) or 1

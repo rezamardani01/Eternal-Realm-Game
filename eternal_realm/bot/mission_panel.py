@@ -10,7 +10,7 @@ from .panel import Ctx, Screen, _int, screen
 async def missions(c: Ctx) -> Screen:
     todays = await c.services.missions.today(c.player)
     lines = [
-        f"📅 {bold('مأموریت‌های امروز')}",
+        f"📅 {bold('مأموریت‌ها')}",
         "",
         "این مأموریت‌ها مخصوص خود شما انتخاب شده‌اند و هر شب نیمه‌شب عوض می‌شوند. شمارش از لحظه‌ی اولین باز کردن این صفحه در هر روز شروع می‌شود.",
         "",
