@@ -17,6 +17,7 @@ from baleropy.exceptions import BaleAPIError, SkipHandler
 from baleropy.fsm import FSMContext, State, StatesGroup
 from baleropy.types import CallbackQuery, InlineKeyboardButton, Message
 
+from ..game import item_info
 from ..game.data.chests import CHESTS
 from ..game.data.items import GEAR_KINDS, Item, Kind, get_item, item_value
 from ..game.data.stats import STAT_HELP, STAT_LABELS
@@ -416,6 +417,7 @@ async def _piece_screen(c: Ctx, gear_id: int, toast: str | None = None) -> Scree
     set_lines = await c.services.inventory.set_lines(c.player.id, p.item.id)
     if set_lines:
         lines += ["", *set_lines]
+    lines += item_info.info_lines(p.item)
     if p.origin:
         lines += ["", "📜 تاریخچه‌ی این تجهیزات", *p.origin.split("\n")]
     rows = [[c.btn("↩️ درآوردن" if p.slot else "🛡️ پوشیدن", "unequip" if p.slot else "equip", p.id,
@@ -482,13 +484,16 @@ async def upgrade(c: Ctx) -> Screen:
 
 # --- items and chests -------------------------------------------------------------------------
 def _describe(item: Item) -> list[str]:
+    """What the item does (its stats, if any), then what it is used for and where it comes from."""
     if item.kind is Kind.CONSUMABLE:
-        return [f"⚡ {fa(item.energy)} انرژی بازمی‌گرداند"]
-    if item.kind is Kind.CHEST:
-        return ["🎁 درونش گنجی پنهان است"]
-    if item.is_gear:
-        return item.stats.bonus_lines()
-    return ["📦 منبع؛ برای ارتقا، ساخت و معامله"]
+        head = [f"⚡ {fa(item.energy)} انرژی بازمی‌گرداند"]
+    elif item.kind is Kind.CHEST:
+        head = ["🎁 درونش گنجی پنهان است"]
+    elif item.is_gear:
+        head = item.stats.bonus_lines()
+    else:
+        head = ["📦 منبع"]
+    return head + item_info.info_lines(item)
 
 
 async def _stack_qty(c: Ctx, item_id: str) -> int:
