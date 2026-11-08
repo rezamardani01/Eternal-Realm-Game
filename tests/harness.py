@@ -19,6 +19,7 @@ class FakeSession(BaseSession):
         super().__init__()
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.chat_admins: set[int] = set()
+        self.member_count = 100  # what getChatMembersCount answers
         self.non_members: set[int] = set()  # users who have NOT joined the (forced) channel
         self._next_id = 1000
 
@@ -28,6 +29,8 @@ class FakeSession(BaseSession):
         self.calls.append((name, payload))
         if name == "getMe":
             result: Any = {"id": 1, "is_bot": True, "first_name": "bot", "username": "er_bot"}
+        elif name == "getChatMembersCount":
+            result = self.member_count
         elif name == "getChatMember":
             uid = int(payload["user_id"])
             result = {

@@ -308,3 +308,25 @@ async def test_event_buttons_work_through_the_glass_keyboard(h, services, db):
     view = await services.events.spawn(CHAT, "meteor")
     await h.click(1, f"e:collect:{view.id}:0", group=True)
     assert any("برداشتید" in x.get("text", "") for x in h.session.callback_answers())
+
+
+async def _bot_added(h, chat=CHAT):
+    h._update_id += 1
+    h._message_id += 1
+    await h.dp.feed_raw_update(h.bot, {"update_id": h._update_id, "message": {
+        "message_id": h._message_id, "from": h._user(1), "chat": {"id": chat, "type": "group", "title": "گروه کوچک"}, "date": 0,
+        "new_chat_members": [{"id": 1, "is_bot": True, "first_name": "bot", "username": "er_bot"}],
+    }})
+
+
+async def test_a_small_group_gets_a_friendly_note_when_the_bot_joins(h):
+    h.session.member_count = 8
+    await _bot_added(h)
+    text = h.session.last_text()
+    assert "۲۵ عضو" in text and "۸ نفر" in text
+
+
+async def test_a_big_group_gets_no_note(h):
+    h.session.member_count = 80
+    await _bot_added(h)
+    assert not h.session.sent("sendMessage")

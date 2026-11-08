@@ -121,12 +121,34 @@ async def alert_hunters(bot: Bot, services: Services, view) -> int:  # noqa: ANN
     return told
 
 
+#: groups smaller than this get a friendly note when the bot is added
+MIN_GROUP_MEMBERS = 25
+
+
+async def _small_group_notice(message: Message) -> None:
+    try:
+        count = int(await message.bot.get_chat_members_count(message.chat.id))
+    except (BaleAPIError, TypeError, ValueError):
+        return  # unknown size: say nothing rather than something wrong
+    if count >= MIN_GROUP_MEMBERS:
+        return
+    with contextlib.suppress(BaleAPIError):
+        await message.answer(headline(
+            f"👋 {bold('سلام! به قلمرو جاودان خوش آمدید')}\n\n"
+            f"برای اینکه بازی در گروه جذاب و پررقابت باشد، گروه باید دست‌کم {fa(MIN_GROUP_MEMBERS)} عضو داشته باشد "
+            f"(الان {fa(count)} نفر است).\n\n"
+            "با دعوت دوستانتان گروه را بزرگ‌تر کنید؛ هر چه بازیکن بیشتر باشد، باس‌ها، تهاجم‌ها و رویدادها هیجان‌انگیزترند 🏰"
+        ))
+
+
 @router.message(F.new_chat_members)
 async def on_join(message: Message, services: Services) -> None:
     """Greet newcomers: a known hero gets a fanfare, a stranger gets an invitation."""
     if str(getattr(message.chat.type, "value", message.chat.type)) == "private":
         return
     group = await services.groups.touch(message.chat.id, message.chat.title)
+    if any(u.is_bot and u.username and u.username == services.bot_username for u in message.new_chat_members or []):
+        await _small_group_notice(message)  # the bot itself was just added
     if not group.enabled:
         return
     for user in message.new_chat_members or []:
