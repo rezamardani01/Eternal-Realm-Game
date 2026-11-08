@@ -40,9 +40,11 @@ class Quest:
     summary: str
     level_req: int
     steps: dict[str, Step] = field(default_factory=dict)
+    #: 1-10 for the generated chapters, 0 for hand-written special stories
+    chapter: int = 0
 
 
-QUESTS: tuple[Quest, ...] = (
+_SPECIAL: tuple[Quest, ...] = (
     Quest(
         "lost_letter", "✉️", "نامه‌ی گمشده", "نامه‌ای خاک‌خورده در راه پیدا کرده‌اید؛ مال کیست؟", 1,
         {
@@ -144,6 +146,9 @@ QUESTS: tuple[Quest, ...] = (
     ),
 )
 
+from .story_gen import build_all  # noqa: E402 - needs the classes above
+
+QUESTS: tuple[Quest, ...] = (*_SPECIAL, *build_all())
 _BY_ID = {q.id: q for q in QUESTS}
 
 
