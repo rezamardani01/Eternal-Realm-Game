@@ -642,6 +642,7 @@ async def _confirm(
         text = (
             f"💸 {bold('موجودی کافی نیست')}\n\n{what}\n"
             f"بها: {fa(total)} {icon}\nموجودی شما: {fa(have)} {icon}\nکمبود: {bold(fa(total - have))} {icon}"
+            + (f"\n\n{extra}" if extra else "")
         )
         return Screen(text, [[undo]])
     text = (
