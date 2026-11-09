@@ -70,9 +70,9 @@ class Balance:
     boss_min_players: int = 3
     boss_max_players: int = 10
     boss_recruit_seconds: int = 120
-    boss_round_seconds: int = 5
-    boss_report_seconds: int = 15
-    boss_fight_seconds: int = 600
+    boss_round_seconds: int = 2
+    boss_report_seconds: int = 5
+    boss_fight_seconds: int = 240
     group_flood_window: int = 10
     group_flood_max: int = 25
 

@@ -154,7 +154,7 @@ async def home(c: Ctx) -> Screen:
         [c.btn("💎 خزانه قلمرو", "premium"), c.btn("🎁 جایزه روزانه", "daily")],
         [c.btn("🏰 فرمانروایی", "city", style="primary")],
         [c.btn("😴 استراحت", "rest"), c.btn("❓ راهنمایی", "help")],
-        [c.btn("💱 مرکز مبادله", "exch"), c.btn("🤝 دعوت از دوستان", "invite", style="success")],
+        [c.btn("🏦 مرکز مبادله", "exch"), c.btn("🤝 دعوت از دوستان", "invite", style="success")],
     ]
     shown = await c.services.admin.links()
     links = [Button.url(shown[key]["text"], shown[key]["url"]) for key in ("group", "channel") if shown[key]["url"]]

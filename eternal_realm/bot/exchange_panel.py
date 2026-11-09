@@ -14,7 +14,7 @@ async def exchange(c: Ctx) -> Screen:
     ex = c.services.exchange
     p = await c.refresh()
     text = "\n".join([
-        f"💱 {bold('مرکز مبادله')}",
+        f"🏦 {bold('مرکز مبادله')}",
         "",
         "اینجا سکه و کریستال را با هم عوض می‌کنید.",
         "",

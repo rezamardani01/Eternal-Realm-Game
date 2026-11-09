@@ -4,6 +4,7 @@ from eternal_realm.bot.services import Services
 from eternal_realm.config import Settings
 from eternal_realm.context import AppContext
 from eternal_realm.db.repos import wallet
+from eternal_realm.shared.errors import GameError
 
 from .harness import Harness
 
@@ -317,3 +318,41 @@ async def test_event_in_all_groups(h, services):
     assert "۲ گروه" in h.session.last_text()
     for chat in (CHAT, -600):
         assert any(v.kind == "meteor" for v in await services.events.active(chat))
+
+
+async def test_gifting_treasury_packs_by_hand(h, services, db):
+    from eternal_realm.game.data.packs import PACKS
+
+    await hero(services, 1, "ارباب")
+    target = await hero(services, 2, "آرش‌جان")
+    gold = target.gold
+    await h.panel(1, "admpc", str(target.id))
+    assert any("اهدا از خزانه" in x for x in h.labels())
+    await h.panel(1, "admtr", str(target.id))
+    labels = " ".join(h.labels())
+    assert "بسته‌های سکه" in labels and "گردونه شانس" in labels and "بسته‌های شانسی" in labels
+    await h.panel(1, "admtrs", str(target.id), "coins")
+    assert any("۵٬۰۰۰ سکه" in x for x in h.labels())
+    await h.panel(1, "admtrp", str(target.id), "coins_s")
+    assert {"×۱", "×۱۰"} <= set(h.labels())
+    await h.panel(1, "admtrq", str(target.id), "coins_s.2")
+    assert "تأیید اهدا" in h.session.last_text()
+    h.session.reset()
+    await h.panel(1, "admtrok", str(target.id), "coins_s.2")
+    assert (await services.players.require(2)).gold == gold + 2 * PACKS["coins_s"].gold
+    dm = [p for n, p in h.session.calls if n == "sendMessage" and p.get("chat_id") == 2]
+    assert dm and "پرداخت موفق بود" in dm[-1]["text"] and "تعداد: ۲" in dm[-1]["text"]
+    await h.panel(1, "admtrok", str(target.id), "wheel_5.1")
+    assert await services.wheel.spins(target.id) == 5
+    await h.panel(1, "admtrok", str(target.id), "lucky_s.1")
+    assert (await services.players.require(2)).gold > gold + 2 * PACKS["coins_s"].gold + 1_000
+    async with db.read() as tx:
+        assert await tx.scalar("SELECT COUNT(*) FROM admin_log WHERE action = 'gift_pack'", (), 0) == 3
+        assert await tx.scalar("SELECT COUNT(*) FROM orders", (), 0) == 0  # no sale is booked
+    before = (await services.players.require(2)).gold
+    await h.panel(2, "admtrok", str(target.id), "coins_s.5")  # a plain player gets nowhere
+    assert (await services.players.require(2)).gold == before
+    with pytest.raises(GameError):
+        await services.payments.gift(1, target.id, "coins_s", 0)
+    with pytest.raises(GameError):
+        await services.payments.gift(1, target.id, "nope", 1)

@@ -31,11 +31,14 @@ async def hero(services, uid=7):
 
 def test_the_table_is_sound():
     assert all(i in ITEMS for s in data.SLICES for i, _ in s.items)
-    empty = sum(share for s, share in data.odds() if s.empty)
-    assert 0 < empty < 0.2  # a few empty slices, never many
-    assert {s.id for s in data.SLICES} == {s.id for s in data.SLICES if s.empty or s.gold or s.crystal or s.items}
+    assert not any(s.empty for s in data.SLICES)  # every spin pays something
+    assert len({s.id for s in data.SLICES}) == len(data.SLICES)
+    small = sum(share for s, share in data.odds() if s.id in ("ore", "potion", "herb"))
+    assert 0.05 < small < 0.2  # the cheap prizes are a minority
+    strong = {"knight_sword", "knight_armor", "war_hammer", "storm_staff", "elven_bow", "fire_sword", "dragon_armor"}
+    assert strong <= {i for s in data.SLICES for i, _ in s.items}  # gear for high levels
     rng = random.Random(1)
-    assert {data.spin(rng).id for _ in range(3000)} >= {s.id for s in data.SLICES if s.weight >= 5}
+    assert {data.spin(rng).id for _ in range(5000)} >= {s.id for s in data.SLICES if s.weight >= 5}
 
 
 async def test_buying_a_pack_adds_spins_and_spinning_pays(services, db, h):
@@ -62,7 +65,7 @@ async def test_the_wheel_screens_and_the_spin(h, services, db):
     assert h.session.last_markup_rows()[0][0]["text"].endswith("گردونه شانس")  # the top row of the treasury
     await h.panel(7, "wheel")
     text = h.session.last_text()
-    assert "گردونه شانس" in text and "پوچ" in text and "۸٬۰۰۰ تومان" in text
+    assert "گردونه شانس" in text and "هیچ چرخشی پوچ نیست" in text and "۸٬۰۰۰ تومان" in text
     for line in text.splitlines():
         assert len(re.findall(EMOJI, line)) <= 1, line
     assert not any("بچرخان" in label for label in h.labels())

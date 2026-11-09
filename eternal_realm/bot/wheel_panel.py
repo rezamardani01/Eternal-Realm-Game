@@ -40,7 +40,6 @@ async def wheel(c: Ctx) -> Screen:
     p = await c.refresh()
     spins = await c.services.wheel.spins(p.id)
     enabled = c.services.ctx.settings.payments_enabled
-    empty = sum(share for s, share in data.odds() if s.empty)
     lines = [
         f"🎡 {bold('گردونه شانس')}",
         "",
@@ -49,9 +48,9 @@ async def wheel(c: Ctx) -> Screen:
         "🐉 فلس اژدها و پاره‌کریستال",
         "💎 تا ۱۵۰ کریستال",
         "🏦 تا ۱۵۰٬۰۰۰ سکه",
-        "🔥 سلاح و زره‌ی افسانه‌ای",
+        "🔥 سلاح و زره‌ی افسانه‌ای و سنگین برای قدرتمندان",
         "",
-        f"🍀 فقط {fa(round(empty * 100))}٪ چرخش‌ها پوچ است!",
+        "🍀 هیچ چرخشی پوچ نیست؛ هر بار جایزه می‌گیرید!",
         "",
         f"🎟️ فرصت‌های شما: {bold(fa(spins))}",
     ]
@@ -96,14 +95,11 @@ async def wheel_spin(c: Ctx) -> Screen:
         await _frame(c, title, _strip(rng.choice(data.SLICES).emoji, rng), factor)
     await _frame(c, "ایستاد!", _strip(prize.emoji, rng), 1.2)
     final = _strip(prize.emoji, rng)
-    if prize.empty:
-        verdict = ["💨 این بار پوچ شد؛ گردونه دوباره شانس می‌دهد!"]
-    else:
-        verdict = [
-            f"🎊 {bold('جکپات!!! جایزه‌ی بزرگ!')}" if prize.jackpot else f"🎉 {bold('تبریک فرمانده!')}",
-            f"🏆 جایزه: {bold(data.describe(prize))}",
-            "✅ به کیف شما رسید",
-        ]
+    verdict = [
+        f"🎊 {bold('جکپات!!! جایزه‌ی بزرگ!')}" if prize.jackpot else f"🎉 {bold('تبریک فرمانده!')}",
+        f"🏆 جایزه: {bold(data.describe(prize))}",
+        "✅ به کیف شما رسید",
+    ]
     lines = [f"🎡 {bold('گردونه شانس')}", "", final, "", *verdict, "", f"🎟️ فرصت باقی‌مانده: {fa(left)}"]
     rows = []
     if left:

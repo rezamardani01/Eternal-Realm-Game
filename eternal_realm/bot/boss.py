@@ -109,7 +109,7 @@ async def apply_updates(bot: Bot, services: Services, updates: list[BossUpdate])
             await _edit(bot, services, update.view)
 
 
-async def processor(bot: Bot, services: Services, interval: float = 3.0) -> None:
+async def processor(bot: Bot, services: Services, interval: float = 1.0) -> None:
     """The single central loop: every few seconds advance whichever fights are due."""
     while True:
         try:

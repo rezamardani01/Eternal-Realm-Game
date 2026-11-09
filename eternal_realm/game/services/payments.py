@@ -162,8 +162,30 @@ class PaymentService:
             order.status = "delivered"
             return Delivery(order, row["player_id"], granted=granted)
 
-    async def _deliver(self, tx, order: Order, pack: Pack, now: int) -> str:  # noqa: ANN001
+    async def gift(self, admin_id: int, player_id: int, pack_id: str, qty: int) -> tuple[Order, str]:
+        """An administrator switches treasury packs on for a hero by hand; no money moves, no order is booked."""
+        pack = PACKS.get(pack_id)
+        if pack is None:
+            raise GameError("چنین بسته‌ای در خزانه نیست.")
+        if not 1 <= qty <= 20:
+            raise GameError("تعداد باید بین ۱ تا ۲۰ باشد.")
+        now = self.ctx.now()
+        order = Order(0, player_id, pack, 0, "delivered", f"GIFT-{secrets.token_hex(6)}")
+        parts: list[str] = []
+        async with self.ctx.db.transaction() as tx:
+            for n in range(qty):
+                got = await self._deliver(tx, order, pack, now, ref_base=f"{order.payload}:{n}")
+                if got:
+                    parts.append(got)
+            await tx.execute(
+                "INSERT INTO admin_log (admin_id, action, detail, created_at) VALUES (?, 'gift_pack', ?, ?)",
+                (admin_id, f"player={player_id} pack={pack_id} x{qty}", now),
+            )
+        return order, "\n".join(parts)
+
+    async def _deliver(self, tx, order: Order, pack: Pack, now: int, *, ref_base: str | None = None) -> str:  # noqa: ANN001
         """Grant the goods; returns a description of what a lucky bundle contained."""
+        base = ref_base or f"order:{order.id}"
         if await player_repo.get(tx, order.player_id) is None:
             raise GameError("بازیکن پیدا نشد.")
         gold, crystal, items, granted = pack.gold, pack.crystal, dict(pack.items), ""
@@ -173,7 +195,7 @@ class PaymentService:
             granted = describe_haul(gold, crystal, items)
         await wallet.apply(
             tx, order.player_id, gold=gold, crystal=crystal, reason=f"order:{pack.id}",
-            now=now, ref=f"order:{order.id}",
+            now=now, ref=base,
         )
         for item_id, qty in items.items():
             await self.inventory.grant(tx, order.player_id, item_id, qty)
@@ -204,7 +226,7 @@ class PaymentService:
             if not await season_repo.grant_ticket(tx, order.player_id, now):
                 await wallet.apply(
                     tx, order.player_id, crystal=100, reason=f"order:{pack.id}:duplicate_ticket", now=now,
-                    ref=f"order:{order.id}:ticket",
+                    ref=f"{base}:ticket",
                 )
                 granted = "بلیط این فصل را داشتید؛ ۱۰۰ کریستال جایگزین شد."
         if pack.pet:
@@ -214,7 +236,7 @@ class PaymentService:
                 # bought twice in flight: pay it back in crystals instead of losing the money
                 await wallet.apply(
                     tx, order.player_id, crystal=20, reason=f"order:{pack.id}:duplicate_pet", now=now,
-                    ref=f"order:{order.id}:pet",
+                    ref=f"{base}:pet",
                 )
                 granted = "حیوان از قبل را داشتید؛ ۲۰ کریستال جایگزین شد."
         return granted

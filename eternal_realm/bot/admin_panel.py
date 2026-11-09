@@ -24,7 +24,7 @@ from ..shared.errors import GameError
 from ..shared.jalali import describe
 from ..shared.text import bold, fa, headline, to_int
 from . import events as events_ui
-from . import keyboards
+from . import keyboards, views
 from .commands.owner import OWNER_COMMANDS
 from .maintenance import make_backup
 from .commands.registry import REGISTRY
@@ -212,6 +212,7 @@ async def _card(c: Ctx, pid: int, note: str = "") -> Screen:
         [c.btn("🎒 آیتم", "admask", "item", p.id), c.btn("⭐ سطح", "admask", "level", p.id)],
         [c.btn("💠 VIP", "admask", "vip", p.id), c.btn("🎟️ بلیط طلایی", "admtk", p.id)],
         [c.btn("🐱 حیوان", "admpet", p.id), c.btn("🏷️ عنوان", "admask", "title", p.id)],
+        [c.btn("🎁 اهدا از خزانه", "admtr", p.id, style="success")],
         [c.btn("⚡ انرژی پر", "admen", p.id), c.btn("⏱️ ریست زمان‌ها", "admcd", p.id)],
         [c.btn("✉️ پیام به او", "admask", "pmsg", p.id), c.btn("✏️ تغییر نام", "admask", "rename", p.id)],
         [c.btn("✅ رفع مسدودی" if p.banned else "🚫 مسدود کردن", "admban", p.id, style="success" if p.banned else "danger")],
@@ -251,6 +252,108 @@ async def pet_choose(c: Ctx) -> Screen:
     rows = [[c.btn(f"{p.emoji} {p.name}", "admpet", pid, p.id)] for p in PETS]
     rows.append(_back(c, "admpc", "🔙 بازگشت", pid))
     return Screen(f"🐱 {bold('حیوان خانگی')}\n\nیکی را بزنید: اگر ندارد داده می‌شود و اگر دارد پس گرفته می‌شود 👇", rows)
+
+
+# --- gifting treasury packs by hand ------------------------------------------------------------------
+QTY_STEPS = (1, 2, 3, 5, 10)
+
+
+def _section_name(section: str) -> str:
+    from ..game.data.packs import SECTIONS
+
+    return SECTIONS.get(section) or views.SECTION_NAMES.get(section, section)
+
+
+@screen("admtr")
+async def treasury_sections(c: Ctx) -> Screen:
+    _guard(c)
+    from ..game.data.packs import PACKS
+
+    p = await _card_player(c, to_int(c.a) or 0)
+    sections = list(dict.fromkeys(x.section for x in PACKS.values()))
+    text = (
+        f"🎁 {bold('اهدا از خزانه قلمرو')}\n\n"
+        f"همان خزانه‌ی فروشی ربات را می‌بینید. هر بسته‌ای که انتخاب کنید برای {bold(p.name)} فعال می‌شود "
+        "و پیام «خرید موفق» برایش می‌رود؛ پولی جابه‌جا نمی‌شود.\n\nیک بخش را بزنید 👇"
+    )
+    rows = keyboards.grid([c.btn(_section_name(x), "admtrs", p.id, x) for x in sections], 2)
+    rows.append(_back(c, "admpc", "🔙 بازگشت", p.id))
+    return Screen(text, rows)
+
+
+@screen("admtrs")
+async def treasury_packs(c: Ctx) -> Screen:
+    _guard(c)
+    from ..game.data.packs import PACKS
+
+    pid = to_int(c.a) or 0
+    packs = [x for x in PACKS.values() if x.section == c.b]
+    if not packs:
+        raise GameError("این بخش بسته‌ای ندارد.")
+    rows = [[c.btn(f"{x.label} — {fa(x.price_toman)} تومان", "admtrp", pid, x.id)] for x in packs]
+    rows.append(_back(c, "admtr", "🔙 بازگشت", pid))
+    return Screen(f"{_section_name(c.b)}\n\nکدام بسته؟ 👇", rows)
+
+
+def _pack_of(pack_id: str):  # noqa: ANN202
+    from ..game.data.packs import PACKS
+
+    pack = PACKS.get(pack_id)
+    if pack is None:
+        raise GameError("چنین بسته‌ای در خزانه نیست.")
+    return pack
+
+
+@screen("admtrp")
+async def treasury_pack(c: Ctx) -> Screen:
+    _guard(c)
+    pid, pack = to_int(c.a) or 0, _pack_of(c.b)
+    p = await _card_player(c, pid)
+    text = (
+        f"{pack.emoji} {bold(pack.title)}\n\n{views.pack_description(pack, c.services.ctx.now())}\n\n"
+        f"برای {bold(p.name)} چند عدد فعال شود؟ 👇"
+    )
+    rows = keyboards.grid([c.btn(f"×{fa(n)}", "admtrq", pid, f"{pack.id}.{n}") for n in QTY_STEPS], 5)
+    rows.append(_back(c, "admtrs", "🔙 بازگشت", pid, pack.section))
+    return Screen(text, rows)
+
+
+def _split(arg: str):  # noqa: ANN202
+    pack_id, _, n = arg.rpartition(".")
+    count = to_int(n)
+    if not pack_id or count is None:
+        raise GameError("درخواست نامعتبر است.")
+    return _pack_of(pack_id), count
+
+
+@screen("admtrq")
+async def treasury_ask(c: Ctx) -> Screen:
+    _guard(c)
+    pid = to_int(c.a) or 0
+    pack, n = _split(c.b)
+    p = await _card_player(c, pid)
+    text = (
+        f"🎁 {bold('تأیید اهدا')}\n\n"
+        f"{pack.label} ×{fa(n)}\n{views.pack_description(pack, c.services.ctx.now())}\n\n"
+        f"برای: {bold(p.name)}\n\nفعال شود و پیام خرید موفق برایش برود؟"
+    )
+    return Screen(text, [[c.btn("✅ بله، فعال کن", "admtrok", pid, c.b, style="success"), c.btn("↩️ نه", "admtrp", pid, pack.id)]])
+
+
+@screen("admtrok")
+async def treasury_do(c: Ctx) -> Screen:
+    _guard(c)
+    pid = to_int(c.a) or 0
+    pack, n = _split(c.b)
+    p = await _card_player(c, pid)
+    order, granted = await c.services.payments.gift(c.owner, pid, pack.id, n)
+    note = views.delivery(order, granted) + (f"\n\n🎁 تعداد: {fa(n)}" if n > 1 else "")
+    sent = False
+    if c.message is not None:
+        with contextlib.suppress(BaleAPIError):
+            await c.message.bot.send_message(p.platform_user_id, note)
+            sent = True
+    return await _card(c, pid, f"🎁 {pack.label} ×{fa(n)} برای {p.name} فعال شد ✅" + ("" if sent else " (پیامش نرسید)"))
 
 
 @screen("admen")
