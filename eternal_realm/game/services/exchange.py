@@ -11,7 +11,8 @@ from ...shared.text import fa
 from ..models import Player
 
 #: the crystal amounts offered on the buttons
-STEPS = (1, 5, 10, 25, 50)
+#: the most crystals one trade may move
+MAX_TRADE = 1_000
 DAY = 24 * 3600
 
 
@@ -62,8 +63,8 @@ class ExchangeService:
 
     # --- trading --------------------------------------------------------------------------------
     def _check_amount(self, crystals: int) -> None:
-        if crystals not in STEPS:
-            raise GameError("این مقدار در مرکز مبادله نیست؛ یکی از دکمه‌ها را بزنید.")
+        if not 1 <= crystals <= MAX_TRADE:
+            raise GameError(f"هر مبادله از ۱ تا {fa(MAX_TRADE)} کریستال است.")
 
     async def buy(self, player: Player, crystals: int) -> Quote:
         """Gold in, crystals out."""

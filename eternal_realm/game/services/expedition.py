@@ -64,6 +64,14 @@ class ExpeditionService:
         async with self.ctx.db.transaction() as tx:
             if await tx.scalar("SELECT 1 FROM expeditions WHERE player_id = ?", (player.id,), 0):
                 raise GameError("قهرمان شما هم‌اکنون در اعزام است؛ اول گزارشش را بگیرید.")
+            if await tx.scalar(
+                "SELECT 1 FROM duels WHERE status IN ('pending', 'active') AND (challenger_id = ? OR target_id = ?)",
+                (player.id, player.id), 0,
+            ) or await tx.scalar(
+                "SELECT 1 FROM team_battle_members m JOIN team_battles b ON b.id = m.battle_id"
+                " WHERE m.player_id = ? AND (b.status = 'active' OR (b.status = 'lobby' AND b.expires_at > ?))", (player.id, now), 0,
+            ):
+                raise GameError("در یک مبارزه با بازیکنان دیگر هستید؛ اول آن را تمام کنید، بعد قهرمان را به اعزام بفرستید.")
             if not self.players.is_owner(player):
                 used = int(await tx.scalar("SELECT n FROM solo_daily WHERE player_id = ? AND day = ? AND key = 'expedition'", (player.id, day), 0))
                 if used >= data.DAILY_LIMIT:

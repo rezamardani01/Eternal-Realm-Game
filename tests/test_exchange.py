@@ -48,8 +48,10 @@ async def test_buying_and_selling_move_both_purses_and_log_the_fee(services, db)
     assert await services.exchange.fees_collected() == q.fee + q2.fee > 0
     with pytest.raises(GameError):  # no crystals left
         await services.exchange.sell(p, 1)
-    with pytest.raises(GameError, match="مقدار"):
-        await services.exchange.buy(p, 3)
+    with pytest.raises(GameError, match="۱ تا"):
+        await services.exchange.buy(p, 0)
+    with pytest.raises(GameError, match="۱ تا"):
+        await services.exchange.sell(p, 5_000)
 
 
 async def test_poor_heroes_and_the_daily_limit(services, db, clock):
@@ -87,3 +89,28 @@ async def test_the_screens(h, services, db):
     assert "تأیید فروش" in h.session.last_text()
     await h.panel(7, "exchsellok", "5")
     assert (await services.players.require(7)).crystal == 3
+
+
+async def test_the_amount_is_chosen_with_plus_and_minus_buttons(h, services, db):
+    await rich(services, db, crystal=40)
+    await h.panel(7, "exchbuy")
+    assert "می‌گیرید: *۱*" in h.session.last_text() or "۱ کریستال" in h.session.last_text()
+    plus = next(b for b in h.session.last_buttons() if b["text"] == "➕ ۱۰")
+    await h.click(7, plus["callback_data"])
+    assert "۱۱" in h.session.last_text() and "💎 ۱۱ کریستال" in h.labels()
+    minus = next(b for b in h.session.last_buttons() if b["text"] == "➖ ۱۰۰")
+    await h.click(7, minus["callback_data"])  # never below one
+    assert "💎 ۱ کریستال" in h.labels()
+    up = next(b for b in h.session.last_buttons() if b["text"] == "➕ ۱۰۰")
+    await h.click(7, up["callback_data"])
+    assert "💎 ۱۰۰ کریستال" in h.labels()  # the daily limit of a hundred is the top
+    await h.tap(7, "ادامه و تأیید")
+    assert "تأیید خرید" in h.session.last_text() and "۱۰۰" in h.session.last_text()
+    await h.tap(7, "بله")
+    assert (await services.players.require(7)).crystal == 40 + 100
+    # selling: the top is what you own
+    await h.panel(7, "exchsell", "900")
+    assert "💎 ۱۴۰ کریستال" in h.labels()
+    await h.tap(7, "ادامه و تأیید")
+    await h.tap(7, "بله")
+    assert (await services.players.require(7)).crystal == 0

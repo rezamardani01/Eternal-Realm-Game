@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from ..game.services.exchange import STEPS
+from ..game.services.exchange import MAX_TRADE
 from ..shared.errors import GameError
 from ..shared.text import bold, fa
-from . import keyboards
 from .panel import Ctx, Screen, _int, screen
 
 
@@ -36,27 +35,44 @@ async def exchange(c: Ctx) -> Screen:
     return Screen(text, rows)
 
 
+def _selector(c: Ctx, screen_name: str, amount: int, top: int, confirm_screen: str, label: str) -> list:
+    """The ➖ / ➕ rows that pick a number of crystals, and the confirm button."""
+
+    def go(delta: int):  # noqa: ANN202
+        return c.btn(("➕ " if delta > 0 else "➖ ") + fa(abs(delta)), screen_name, max(1, min(top, amount + delta)))
+
+    return [
+        [go(-100), go(-10), go(-1), go(1), go(10), go(100)],
+        [c.btn(f"💎 {fa(amount)} {label}", "noop")],
+        [c.btn("✅ ادامه و تأیید", confirm_screen, amount, style="success")],
+    ]
+
+
+def _amount(c: Ctx, top: int) -> int:
+    return max(1, min(top, _int(c.a))) if c.a else 1
+
+
 @screen("exchbuy")
 async def exchange_buy(c: Ctx) -> Screen:
     ex = c.services.exchange
     p = await c.refresh()
     left = await ex.left_today(p.id)
+    top = max(1, min(MAX_TRADE, left, p.gold // max(1, ex.buy_quote(1).gold)))
+    amount = _amount(c, top)
+    quote = ex.buy_quote(amount)
     text = "\n".join([
         f"🪙 {bold('تبدیل سکه به کریستال')}",
         "",
         f"🛒 هر کریستال {fa(ex.buy_quote(1).gold)} سکه (کارمزد داخلش است)",
         f"📅 تا پایان این شبانه‌روز می‌توانید {fa(left)} کریستال دیگر بخرید",
-        "",
         f"👛 کیف شما: {fa(p.gold)} سکه",
         "",
-        "چند کریستال می‌خواهید؟ 👇",
+        f"💎 می‌گیرید: {bold(fa(amount))} کریستال",
+        f"🪙 می‌پردازید: {bold(fa(quote.gold))} سکه",
+        "",
+        "با ➖ و ➕ تعداد را تنظیم کنید 👇",
     ])
-    buttons = [
-        c.btn(f"💎 {fa(n)} · {fa(ex.buy_quote(n).gold)} سکه", "exchbuyq", n,
-              style="success" if p.gold >= ex.buy_quote(n).gold and n <= left else None)
-        for n in STEPS
-    ]
-    rows = keyboards.grid(buttons, 2)
+    rows = _selector(c, "exchbuy", amount, top, "exchbuyq", "کریستال")
     rows.append(c.back("exch"))
     return Screen(text, rows)
 
@@ -65,8 +81,8 @@ async def exchange_buy(c: Ctx) -> Screen:
 async def exchange_buy_ask(c: Ctx) -> Screen:
     ex = c.services.exchange
     amount = _int(c.a)
-    if amount not in STEPS:
-        raise GameError("این مقدار در مرکز مبادله نیست؛ یکی از دکمه‌ها را بزنید.")
+    if not 1 <= amount <= MAX_TRADE:
+        raise GameError(f"هر مبادله از ۱ تا {fa(MAX_TRADE)} کریستال است.")
     quote = ex.buy_quote(amount)
     p = await c.refresh()
     left = await ex.left_today(p.id)
@@ -102,20 +118,21 @@ async def exchange_buy_do(c: Ctx) -> Screen:
 async def exchange_sell(c: Ctx) -> Screen:
     ex = c.services.exchange
     p = await c.refresh()
+    top = max(1, min(MAX_TRADE, p.crystal))
+    amount = _amount(c, top)
+    quote = ex.sell_quote(amount)
     text = "\n".join([
         f"💎 {bold('تبدیل کریستال به سکه')}",
         "",
         f"💰 هر کریستال {fa(ex.sell_quote(1).gold)} سکه (کارمزد کسر شده)",
-        "",
         f"👛 کیف شما: {fa(p.crystal)} کریستال",
         "",
-        "چند کریستال می‌فروشید؟ 👇",
+        f"💎 می‌دهید: {bold(fa(amount))} کریستال",
+        f"🪙 می‌گیرید: {bold(fa(quote.gold))} سکه",
+        "",
+        "با ➖ و ➕ تعداد را تنظیم کنید 👇",
     ])
-    buttons = [
-        c.btn(f"💎 {fa(n)} · {fa(ex.sell_quote(n).gold)} سکه", "exchsellq", n, style="success" if p.crystal >= n else None)
-        for n in STEPS
-    ]
-    rows = keyboards.grid(buttons, 2)
+    rows = _selector(c, "exchsell", amount, top, "exchsellq", "کریستال")
     rows.append(c.back("exch"))
     return Screen(text, rows)
 
@@ -124,8 +141,8 @@ async def exchange_sell(c: Ctx) -> Screen:
 async def exchange_sell_ask(c: Ctx) -> Screen:
     ex = c.services.exchange
     amount = _int(c.a)
-    if amount not in STEPS:
-        raise GameError("این مقدار در مرکز مبادله نیست؛ یکی از دکمه‌ها را بزنید.")
+    if not 1 <= amount <= MAX_TRADE:
+        raise GameError(f"هر مبادله از ۱ تا {fa(MAX_TRADE)} کریستال است.")
     quote = ex.sell_quote(amount)
     p = await c.refresh()
     lines = [

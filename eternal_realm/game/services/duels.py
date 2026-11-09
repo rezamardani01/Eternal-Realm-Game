@@ -84,6 +84,9 @@ class DuelService:
         if target.banned:
             raise GameError("این بازیکن از قلمرو تبعید شده و نمی‌شود با او کاری داشت.")
         async with self.ctx.db.transaction() as tx:
+            for pid in (challenger.id, target.id):
+                if await player_repo.is_away(tx, pid, now):
+                    raise GameError(player_repo.AWAY_MESSAGE if pid == challenger.id else "🏕️ این قهرمان در اعزام است و تا بازگشتش نمی‌شود با او مبارزه کرد.")
             pair = (challenger.id, target.id)
             await repo.expire_pending_for(tx, pair, now)
             if await repo.open_for(tx, pair) is not None:
@@ -160,6 +163,9 @@ class DuelService:
             challenger = await player_repo.get(tx, row["challenger_id"])
             target = await player_repo.get(tx, row["target_id"])
             assert challenger is not None and target is not None
+            for p in (challenger, target):
+                if await player_repo.is_away(tx, p.id, now):
+                    raise GameError(player_repo.AWAY_MESSAGE if p.id == by.id else f"🏕️ {p.name} در اعزام است و تا بازگشتش نمی‌شود با او مبارزه کرد.")
             fighters = [await self._fighter(tx, p) for p in (challenger, target)]
             ratio, strong = combat.level_field([[fighters[0]], [fighters[1]]])
             battle = Battle.start(fighters[0], fighters[1], b.duel_max_rounds, self.ctx.rng)

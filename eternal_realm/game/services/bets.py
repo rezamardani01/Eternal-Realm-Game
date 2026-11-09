@@ -257,6 +257,8 @@ class BetService:
             amount = 1
         self._validate(kind, item_id, amount)
         async with self.ctx.db.transaction() as tx:
+            if await tx.scalar("SELECT 1 FROM expeditions WHERE player_id = ? AND ends_at > ?", (player.id, now), 0):
+                raise GameError("🏕️ قهرمان در اعزام است و تا بازگشتش نمی‌تواند شرط ببندد.")
             if await tx.fetchone(
                 "SELECT 1 FROM bet_duels WHERE challenger_id = ? AND status IN ('open', 'active')", (player.id,)
             ):

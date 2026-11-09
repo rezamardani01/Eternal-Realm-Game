@@ -51,17 +51,19 @@ async def trip(c: Ctx) -> Screen:
     event = await c.services.solo.pending_event(c.player.id)
     lines = [
         f"🧭 {bold('سفر قهرمان')}", LINE,
-        "تنها هم می‌شود قهرمان بود! داستان را دنبال کنید، به دخمه‌ها بروید، با باس‌ها بجنگید یا در میدان بات‌ها تمرین کنید.",
-        "همه‌ی این نبردها با قدرت، تجهیزات و مهارت خودتان انجام می‌شود و برای ادامه به هیچ بازیکن دیگری نیاز ندارید.",
+        "تنها هم می‌شود قهرمان بود؛ همه‌ی این بخش‌ها با قدرت و تجهیزات خودتان است و به هیچ بازیکن دیگری نیاز ندارد.",
+        "",
+        "📖 داستان: ۲۰ مرحله با انتخاب راه؛ سکه، تجربه، صندوقچه و کریستال",
+        "🏚️ دخمه‌ها: هر روز سه دخمه‌ی پنج‌طبقه؛ طبقه‌به‌طبقه پاداش",
+        "🐉 باس‌ها: پنج باس با ترفند؛ کریستال و صندوقچه‌ی هر روز",
+        "🥊 میدان بات‌ها: تمرین بی‌دغدغه در چهار سطح سختی",
+        "♾️ هزارتو: ۳۰ طبقه‌ی همیشه تازه؛ برکت، نفرین و پاداش ماندگار",
+        "🎲 گشت‌زنی: اتفاق‌های راه؛ گنج، راهزن و تاجر مرموز",
+        "🏕️ اعزام: قهرمان را بفرستید و در غیبتتان پاداش بگیرید",
+        "🌍 جهان زنده: رویداد جهانی و تاریکی مناطق",
         LINE, await _energy_line(c),
     ]
     rows = []
-    tips = await c.services.advisor.for_player(c.player)
-    if tips:
-        lines += ["", f"💡 {bold('پیشنهاد فرمانده')}"]
-        for tip in tips:
-            lines.append(f"{tip.emoji} {tip.text}")
-            rows.append([c.btn(f"{tip.emoji} {tip.text}"[:60], tip.screen, tip.arg)])
     if fight is not None:
         lines += ["", f"⚔️ نبرد نیمه‌کاره: {fight.info.get('title', '')}"]
         rows.append([c.btn("⚔️ ادامه‌ی نبرد", "sfight", style="danger")])
@@ -71,7 +73,7 @@ async def trip(c: Ctx) -> Screen:
     rows += [
         [c.btn("📖 داستان سرزمین فراموش‌شده", "story"), c.btn("🏚️ دخمه‌های روزانه", "dng")],
         [c.btn("🐉 باس‌های تک‌نفره", "sbosses"), c.btn("🥊 میدان بات‌ها", "arena")],
-        [c.btn("♾️ هزارتوی ابدی", "maze", style="primary"), c.btn(f"🎲 گشت‌زنی · {fa(data.ENERGY['wander'])}⚡", "wander")],
+        [c.btn("♾️ هزارتوی ابدی", "maze", style="primary"), c.btn("🎲 گشت‌زنی", "wanderq")],
         [c.btn("🏕️ اعزام قهرمان (در غیبتتان)", "expd"), c.btn("🌍 جهان زنده", "world", style="primary")],
         c.back("home"),
     ]
@@ -189,9 +191,14 @@ async def arena(c: Ctx) -> Screen:
     done = (await c.services.solo.overview(p.id)).get("today:arena", 0)
     lines = [
         f"🥊 {bold('میدان بات‌ها')}", LINE,
-        "حریفان ساخته‌ی ربات با مهارت‌های گوناگون؛ بی‌انتظار هر وقت خواستید بجنگید.",
+        "حریفان ساخته‌ی ربات با مهارت‌های گوناگون؛ هر وقت خواستید می‌جنگید و سکه و تجربه می‌گیرید.",
         f"🏅 {fa(data.ARENA_FULL_WINS)} برد اول هر روز پاداش کامل دارد و بعدش یک‌سوم.",
-        f"📅 بردهای امروز: {fa(done)}", await _energy_line(c), "", "سطح حریف را انتخاب کنید 👇",
+        "",
+        "🌱 تازه‌کار: حریفی ملایم برای گرم شدن",
+        "⚔️ جنگجو: نبردی هم‌شأن",
+        "🔥 قهرمان: حریفی سرسخت با پاداش بیشتر",
+        "👑 افسانه‌ای: سخت‌ترین؛ پاداش دو و نیم برابر",
+        "", f"📅 بردهای امروز: {fa(done)}", await _energy_line(c), "", "سطح حریف را انتخاب کنید 👇",
     ]
     rows = []
     for tier_id, name, _, reward, need in data.TIERS:
@@ -219,6 +226,8 @@ async def story(c: Ctx) -> Screen:
     lines = [
         f"📖 {bold('داستان سرزمین فراموش‌شده')}", LINE,
         "تاریکی از شرق می‌خزد و کسی جز شما نمانده تا جلویش بایستد. در هر مرحله راهتان را انتخاب می‌کنید و نتیجه‌اش را می‌بینید.",
+        "", "🎁 هر مرحله سکه و تجربه می‌دهد؛ باس هر فصل صندوقچه و پایان فصل کریستال.",
+        "🏅 هر چه با جان بیشتر ببرید، درجه‌ی طلایی و کریستال بیشتر.",
         "", f"📈 پیشرفت: {fa(cleared)} از {fa(len(data.STAGES))} مرحله", await _energy_line(c), "",
     ]
     rows = []
@@ -326,7 +335,7 @@ async def dungeons(c: Ctx) -> Screen:
             rows.append([c.btn(f"⬇️ ادامه‌ی {d.name} · طبقه‌ی {fa(floor)}", "dngnext", style="success")])
     for d in today:
         best = progress.get(f"dng:{d.id}", 0)
-        lines.append(f"{d.emoji} {d.name} · رکورد شما: طبقه‌ی {fa(best)}")
+        lines.append(f"{d.emoji} {d.name} — {d.blurb} (رکورد شما: طبقه‌ی {fa(best)})")
         rows.append([c.btn(f"{d.emoji} {d.name}", "dngv", d.id)])
     rows.append(c.back("trip", "🧭 سفر قهرمان"))
     return Screen("\n".join(lines), rows)
@@ -381,7 +390,10 @@ async def solo_bosses(c: Ctx) -> Screen:
         locked = p.level < boss.min_level
         taken = progress.get(f"today:boss:{boss.foe}", 0)
         kills = progress.get(f"boss:{boss.foe}", 0)
-        lines.append(f"{foe.emoji} {foe.name} · سطح {fa(boss.min_level)}" + (f" · {fa(kills)} پیروزی" if kills else "") + (" · امروز زده‌اید" if taken else ""))
+        lines.append(
+            f"{foe.emoji} {foe.name} · از سطح {fa(boss.min_level)} · ضربه‌ی ویژه: {foe.skill[0]}"
+            + (f" · {fa(kills)} پیروزی" if kills else "") + (" · امروز زده‌اید" if taken else "")
+        )
         rows.append([c.btn(f"{'🔒' if locked else foe.emoji} {foe.name}", "sbossv", boss.foe)])
     rows.append(c.back("trip", "🧭 سفر قهرمان"))
     return Screen("\n".join(lines), rows)
@@ -582,7 +594,21 @@ async def expedition_kind(c: Ctx) -> Screen:
         kind = ed.get_kind(c.a)
     except KeyError:
         raise GameError("چنین اعزامی نیست.") from None
-    lines = [f"{kind.emoji} {bold(kind.name)}", LINE, kind.about, "", "چند ساعت؟ 👇"]
+    from ..game.data.items import get_item
+    from ..game.engine import loot
+
+    level = (await c.refresh()).level
+    gives = []
+    if kind.gold:
+        gives.append(f"🪙 حدود {fa(round(kind.gold * loot.level_scale(level)))} سکه در هر ساعت")
+    if kind.xp:
+        gives.append(f"⭐ حدود {fa(round(kind.xp * loot.xp_scale(level)))} تجربه در هر ساعت")
+    gives += [
+        f"{get_item(i).emoji} {get_item(i).name}: " + (f"حدود {fa(round(q))} عدد در هر ساعت" if q >= 1 else f"حدود ۱ عدد در هر {fa(round(1 / q))} ساعت")
+        for i, q, _ in kind.items
+    ]
+    lines = [f"{kind.emoji} {bold(kind.name)}", LINE, kind.about, "", f"🎁 {bold('چه چیزی برمی‌گرداند')}", *gives,
+             "", "چند ساعت؟ 👇"]
     rows = [[c.btn(f"⏳ {fa(h)} ساعت", "expdgo", kind.id, h)] for h in ed.HOURS]
     rows.append(c.back("expd"))
     return Screen("\n".join(lines), rows)
@@ -657,3 +683,19 @@ async def world_go(c: Ctx) -> Screen:
     fight = await c.services.solo.start_world_fight(c.player)
     await c.refresh()
     return _start(c, fight)
+
+
+@screen("wanderq")
+async def wander_intro(c: Ctx) -> Screen:
+    _guard(c)
+    if await c.services.solo.pending_event(c.player.id) is not None:
+        return await wander(c)
+    lines = [
+        f"🎲 {bold('گشت‌زنی')}", LINE,
+        "در جاده‌ها قدم می‌زنید و هر بار اتفاقی پیش می‌آید: مسافری زخمی، صندوقی کهنه، راهزنی کمین‌کرده، تاجری مرموز، مسیری مخفی یا غریبه‌ای با درخواستی عجیب.",
+        "",
+        "برای هر اتفاق دو راه دارید؛ کمک یا غارت، معامله یا گذشتن، جنگ یا باج دادن.",
+        "🎁 سرانجام می‌تواند سکه، تجربه، آیتم، کریستال یا یک نبرد باشد.",
+        "", await _energy_line(c), f"⚡ هزینه: {fa(data.ENERGY['wander'])} انرژی",
+    ]
+    return Screen("\n".join(lines), [[c.btn("🎲 بزن بریم", "wander", style="success")], c.back("trip", "🧭 سفر قهرمان")])

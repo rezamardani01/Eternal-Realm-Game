@@ -607,3 +607,86 @@ async def test_the_world_screen(h, services, db):
         if "پیروزی!" in h.session.last_text():
             break
     assert any("دوباره با نگهبان" in x for x in h.labels()) and "سهم شما در رویداد جهانی" in h.session.last_text()
+
+
+async def test_the_hub_has_no_suggestion_buttons_and_every_section_explains_itself(h, services, db):
+    await hero(services, db)
+    await h.panel(1, "trip")
+    text = h.session.last_text()
+    for part in ("داستان:", "دخمه‌ها:", "باس‌ها:", "میدان بات‌ها:", "هزارتو:", "گشت‌زنی:", "اعزام:", "جهان زنده:"):
+        assert part in text, part
+    assert "پیشنهاد فرمانده" not in text
+    assert not any(b["text"].startswith(("🏅", "🎡", "📅", "🧰", "🏗️")) for b in h.session.last_buttons())
+    await h.panel(1, "wanderq")
+    assert "کمک یا غارت" in h.session.last_text() and "هزینه" in h.session.last_text()
+    assert await services_event(services, 1) is None  # reading about it costs nothing
+    await h.panel(1, "arena")
+    assert "تازه‌کار:" in h.session.last_text() and "افسانه‌ای:" in h.session.last_text()
+    await h.panel(1, "dng")
+    assert "رکورد شما" in h.session.last_text() and "—" in h.session.last_text()
+    await h.panel(1, "sbosses")
+    assert "ضربه‌ی ویژه" in h.session.last_text()
+    await h.panel(1, "expdk", "mine")
+    assert "چه چیزی برمی‌گرداند" in h.session.last_text() and "سنگ آهن" in h.session.last_text()
+    for screen_name, arg in [("trip", ""), ("wanderq", ""), ("arena", ""), ("dng", ""), ("sbosses", ""), ("expdk", "mine"), ("story", "")]:
+        await h.panel(1, screen_name, arg)
+        for line in h.session.last_text().splitlines():
+            assert len(re.findall(EMOJI, line)) <= 1, (screen_name, line)
+
+
+async def services_event(services, pid):
+    return await services.solo.pending_event(pid)
+
+
+async def test_tips_come_as_one_message_a_day_and_never_at_night(h, services, db, clock):
+    from eternal_realm.bot import notifier
+
+    await hero(services, db, level=3)
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET energy_at = ? WHERE id = 1", (services.ctx.now(),))
+    hour = ((services.ctx.now() + 12600) % 86400) // 3600
+    h_bot = Harness(services).bot
+    if hour >= 23 or hour < 8:  # the night is silent: nothing is queued, and in the morning the tip comes
+        await notifier.deliver(h_bot, services)
+        async with db.read() as tx:
+            assert await tx.scalar("SELECT COUNT(*) FROM player_alerts WHERE key LIKE 'tip:%'", (), 0) == 0
+        clock.advance(((8 - hour) % 24) * 3600 + 700)
+    sent_before = await notifier.deliver(h_bot, services)
+    async with db.read() as tx:
+        n = await tx.scalar("SELECT COUNT(*) FROM player_alerts WHERE key LIKE 'tip:%'", (), 0)
+    assert n == 1 and sent_before >= 1
+    clock.advance(700)
+    await notifier.deliver(h_bot, services)  # the same day: no second tip
+    async with db.read() as tx:
+        assert await tx.scalar("SELECT COUNT(*) FROM player_alerts WHERE key LIKE 'tip:%'", (), 0) == 1
+        text = await tx.scalar("SELECT text FROM player_alerts WHERE key LIKE 'tip:%'", (), "")
+    assert "پیشنهاد فرمانده" in text
+    clock.advance(86400)
+    await notifier.deliver(h_bot, services)
+    async with db.read() as tx:
+        assert await tx.scalar("SELECT COUNT(*) FROM player_alerts WHERE key LIKE 'tip:%'", (), 0) == 2
+
+
+async def test_a_hero_away_on_an_expedition_cannot_fight_other_players(h, services, db, clock):
+    a = await hero(services, db, 1, name="دورافتاده")
+    b = await hero(services, db, 2, name="رقیب‌جان")
+    await services.expeditions.start(a, "mine", 4)
+    with pytest.raises(GameError, match="اعزام"):
+        await services.duels.challenge(-500, a, b)
+    with pytest.raises(GameError, match="اعزام"):
+        await services.duels.challenge(-500, b, a)
+    with pytest.raises(GameError, match="اعزام"):
+        await services.bets.create(a, -500, "gold", "", 100)
+    with pytest.raises(GameError, match="اعزام"):
+        await services.teams.create(-500, a)
+    lobby = await services.teams.create(-500, b)
+    with pytest.raises(GameError, match="اعزام"):
+        await services.teams.sit(lobby.id, a, 1, 0)
+    await h.say(1, "مبارزه", group=True, reply_to=h.message_of(2))
+    assert "اعزام" in h.session.last_text()
+    clock.advance(4 * 3600 + 1)  # back home: even before the report is collected the duels are open again
+    duel = await services.duels.challenge(-500, a, b)
+    assert duel.id
+    await services.expeditions.claim(a)  # and a hero with an open duel cannot leave again
+    with pytest.raises(GameError, match="مبارزه"):
+        await services.expeditions.start(a, "mine", 1)

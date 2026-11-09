@@ -142,7 +142,7 @@ class Services:
             achievements=achievements,
             exchange=ExchangeService(ctx),
             city=city,
-            alerts=AlertService(ctx),
+            alerts=AlertService(ctx, players),
             solo=solo,
             advisor=advisor,
             expeditions=ExpeditionService(ctx, players, inventory),

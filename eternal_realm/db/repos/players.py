@@ -81,3 +81,11 @@ async def set_daily(tx: Tx, player_id: int, at: int, streak: int) -> None:
 
 async def count(tx: Tx) -> int:
     return int(await tx.scalar("SELECT COUNT(*) FROM players", default=0))
+
+
+AWAY_MESSAGE = "🏕️ قهرمان در اعزام است و تا بازگشتش نمی‌تواند با بازیکنان دیگر مبارزه کند."
+
+
+async def is_away(tx: Tx, player_id: int, now: int) -> bool:
+    """The hero is on an expedition that has not ended yet."""
+    return bool(await tx.scalar("SELECT 1 FROM expeditions WHERE player_id = ? AND ends_at > ?", (player_id, now), 0))
