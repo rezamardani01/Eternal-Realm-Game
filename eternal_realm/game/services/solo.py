@@ -18,6 +18,7 @@ from ...shared.errors import GameError
 from ...shared.text import fa
 from ..data import maze as maze_data
 from ..data import solo as data
+from ..data import world as world_data
 from ..engine import combat, loot
 from ..engine.combat import Action, Battle, Fighter
 from ..models import Player
@@ -25,6 +26,7 @@ from .characters import CharacterService
 from .inventory import InventoryService
 from .pets import PetService
 from .players import LevelUp, PlayerService
+from .world import WorldService
 
 MAX_ROUNDS = 25
 LOSS_SHARE = 0.25
@@ -93,11 +95,15 @@ class EventResult:
 
 
 class SoloService:
-    def __init__(self, ctx: AppContext, players: PlayerService, characters: CharacterService, inventory: InventoryService) -> None:
+    def __init__(
+        self, ctx: AppContext, players: PlayerService, characters: CharacterService, inventory: InventoryService,
+        world: WorldService,
+    ) -> None:
         self.ctx = ctx
         self.players = players
         self.characters = characters
         self.inventory = inventory
+        self.world = world
 
     # --- progress -------------------------------------------------------------------------------------------------
     async def _progress(self, tx: Tx, pid: int, key: str) -> int:
@@ -207,10 +213,11 @@ class SoloService:
         if player.level < need:
             raise GameError(f"این سطح از میدان از سطح {fa(need)} باز می‌شود.")
         bot_id = bot_id if bot_id in data.ARENA_BOTS else self.ctx.rng.choice(data.ARENA_BOTS)
-        foe = data.get_foe(bot_id).fighter(player.level, mult)
-        gold, xp = self._scale(player.level, 60 * reward, 55 * reward)
-        info = {"title": f"میدان بات‌ها · {name}", "tier": tier_id, "gold": gold, "xp": xp, "foe": bot_id}
         async with self.ctx.db.transaction() as tx:
+            fm, rm = await self.world.effect(tx, world_data.ARENA_REGION)  # a darker region fights harder and pays more
+            foe = data.get_foe(bot_id).fighter(player.level, mult * fm)
+            gold, xp = self._scale(player.level, 60 * reward * rm, 55 * reward * rm)
+            info = {"title": f"میدان بات‌ها · {name}", "tier": tier_id, "gold": gold, "xp": xp, "foe": bot_id, "region": world_data.ARENA_REGION}
             return await self._begin(tx, player, "arena", foe, info, data.ENERGY["arena"])
 
     async def start_stage(self, player: Player, number: int, style: str) -> SoloFight:
@@ -228,16 +235,19 @@ class SoloService:
             if number > cleared + 1:
                 raise GameError("اول مرحله‌های پیشین را به پایان برسانید.")
             effect = data.STYLES[style]
-            foe = data.get_foe(stage.foe).fighter(player.level, chapter_mult * (1.05 if stage.boss else 1.0))
+            region = world_data.STORY_REGION[stage.chapter]
+            fm, rm = await self.world.effect(tx, region)
+            foe = data.get_foe(stage.foe).fighter(player.level, chapter_mult * (1.05 if stage.boss else 1.0) * fm)
             foe.max_hp = foe.hp = round(foe.max_hp * effect["foe_hp"])
             foe.atk = round(foe.atk * effect["foe_atk"])
             base_gold, base_xp = data.stage_reward(stage)
-            gold, xp = self._scale(player.level, base_gold * effect["gold"], base_xp * effect["xp"])
+            gold, xp = self._scale(player.level, base_gold * effect["gold"] * rm, base_xp * effect["xp"] * rm)
             replay = number <= cleared
             if replay:  # a stage already told pays a third
                 gold, xp = round(gold / 3), round(xp / 3)
             info = {
                 "title": f"داستان · {stage.title}", "stage": number, "gold": gold, "xp": xp, "replay": replay, "foe": stage.foe,
+                "region": region,
                 "chest": ("magic_chest" if stage.boss and not replay else ""),
             }
             return await self._begin(tx, player, "story", foe, info, data.ENERGY["story"], shield=bool(effect["shield"]))
@@ -260,11 +270,14 @@ class SoloService:
 
     async def _floor(self, tx: Tx, player: Player, dungeon: data.Dungeon, floor: int, energy: int) -> SoloFight:
         foe_id = data.floor_foe(dungeon, floor)
-        foe = data.get_foe(foe_id).fighter(player.level, data.floor_mult(floor))
-        gold, xp = self._scale(player.level, *data.floor_reward(floor))
+        region = world_data.DUNGEON_REGION[dungeon.id]
+        fm, rm = await self.world.effect(tx, region)
+        foe = data.get_foe(foe_id).fighter(player.level, data.floor_mult(floor) * fm)
+        base_gold, base_xp = data.floor_reward(floor)
+        gold, xp = self._scale(player.level, base_gold * rm, base_xp * rm)
         info = {
             "title": f"{dungeon.name} · طبقه‌ی {fa(floor)}", "dungeon": dungeon.id, "floor": floor, "gold": gold, "xp": xp,
-            "foe": foe_id, "chest": ("wooden_chest" if floor == data.FLOORS else ""),
+            "foe": foe_id, "chest": ("wooden_chest" if floor == data.FLOORS else ""), "region": region,
         }
         return await self._begin(tx, player, "dungeon", foe, info, energy)
 
@@ -346,6 +359,8 @@ class SoloService:
         info, pid, kind = fight.info, player.id, fight.kind
         if kind == "maze":
             return await self._maze_fought(tx, player, fight, won)
+        if kind == "world":
+            return await self._world_fought(tx, player, fight, won)
         if not won:
             if kind == "dungeon":
                 await self._set_progress(tx, pid, "run", 0)
@@ -395,6 +410,8 @@ class SoloService:
                 notes.append("این باس را امروز زده‌اید؛ پاداش ویژه فقط روزی یک بار است.")
             kills = await self._progress(tx, pid, f"boss:{info['boss']}")
             await self._set_progress(tx, pid, f"boss:{info['boss']}", kills + 1)
+        if info.get("region"):  # a win pushes the region's darkness back a little
+            await self.world.relieve(tx, info["region"], 1 if kind == "arena" else 2)
         pay = await self._pay(tx, pid, gold, xp, crystal, items)
         pay.notes = notes
         if kind == "story":
@@ -412,6 +429,28 @@ class SoloService:
                 raise GameError("نبرد فعالی ندارید.")
             await self._set_progress(tx, player.id, "run", 0)
             await tx.execute("DELETE FROM maze_runs WHERE player_id = ?", (player.id,))
+
+    # --- world events ----------------------------------------------------------------------------------------------
+    async def start_world_fight(self, player: Player) -> SoloFight:
+        """Fight the guardian of the world event in progress; whatever damage is done counts for everybody."""
+        event = await self.world.active(player.id)
+        if event is None:
+            raise GameError("الان رویداد جهانی فعالی نیست؛ کمی بعد دوباره سر بزنید.")
+        foe = data.get_foe(event.kind.foe).fighter(player.level, 0.95)
+        gold, xp = self._scale(player.level, 80, 90)
+        info = {"title": f"رویداد جهانی · {event.kind.title}", "event": event.id, "gold": gold, "xp": xp, "foe": event.kind.foe}
+        async with self.ctx.db.transaction() as tx:
+            return await self._begin(tx, player, "world", foe, info, world_data.ENERGY)
+
+    async def _world_fought(self, tx: Tx, player: Player, fight: SoloFight, won: bool) -> Payout:
+        info, foe = fight.info, fight.battle.fighters[1]
+        removed = 0.0 if fight.status == "fled" else 1 - max(0, foe.hp) / max(1, foe.max_hp)
+        points = round(100 * removed * (1 + player.level / 50) * (1.2 if won else 1.0))
+        points = max(5, points) if fight.status != "fled" else 0
+        notes = await self.world.contribute(tx, info["event"], player.id, points) if points else ["فرار کردید و سهمی ثبت نشد."]
+        pay = await self._pay(tx, player.id, info["gold"] if won else 0, info["xp"] if won else round(info["xp"] * LOSS_SHARE))
+        pay.notes = notes
+        return pay
 
     # --- the eternal maze ----------------------------------------------------------------------------------------
     async def maze_run(self, player_id: int) -> MazeRun | None:

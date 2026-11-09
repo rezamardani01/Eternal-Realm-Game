@@ -776,6 +776,32 @@ MIGRATIONS: list[str] = [
         hours      INTEGER NOT NULL
     );
     """,
+    # 52: the living world (region darkness, world events and each hero's share)
+    """
+    CREATE TABLE world_regions (
+        id       TEXT PRIMARY KEY,
+        darkness REAL    NOT NULL,
+        calc     INTEGER NOT NULL
+    );
+    CREATE TABLE world_events (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind       TEXT    NOT NULL,
+        region     TEXT    NOT NULL,
+        foe        TEXT    NOT NULL,
+        max_points INTEGER NOT NULL,
+        points     INTEGER NOT NULL DEFAULT 0,
+        starts_at  INTEGER NOT NULL,
+        ends_at    INTEGER NOT NULL,
+        status     TEXT    NOT NULL
+    );
+    CREATE INDEX idx_world_events_status ON world_events (status, id);
+    CREATE TABLE world_contrib (
+        event_id  INTEGER NOT NULL REFERENCES world_events (id),
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        points    INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (event_id, player_id)
+    );
+    """,
 ]
 
 

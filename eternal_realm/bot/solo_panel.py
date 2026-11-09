@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ..game.data import maze as maze_data
 from ..game.data import solo as data
+from ..game.data import world as world_data
 from ..game.engine.combat import Action, Fighter
 from ..game.services.solo import SoloFight, SoloUpdate
 from ..shared.errors import GameError
@@ -71,7 +72,7 @@ async def trip(c: Ctx) -> Screen:
         [c.btn("📖 داستان سرزمین فراموش‌شده", "story"), c.btn("🏚️ دخمه‌های روزانه", "dng")],
         [c.btn("🐉 باس‌های تک‌نفره", "sbosses"), c.btn("🥊 میدان بات‌ها", "arena")],
         [c.btn("♾️ هزارتوی ابدی", "maze", style="primary"), c.btn(f"🎲 گشت‌زنی · {fa(data.ENERGY['wander'])}⚡", "wander")],
-        [c.btn("🏕️ اعزام قهرمان (در غیبتتان)", "expd")],
+        [c.btn("🏕️ اعزام قهرمان (در غیبتتان)", "expd"), c.btn("🌍 جهان زنده", "world", style="primary")],
         c.back("home"),
     ]
     return Screen("\n".join(lines), rows)
@@ -165,6 +166,8 @@ def _after(c: Ctx, update: SoloUpdate) -> Screen:
             rows.append([c.btn("🏚️ دخمه‌ها", "dng")])
     elif kind == "boss":
         rows.append([c.btn("🐉 باس‌ها", "sbosses")])
+    elif kind == "world":
+        rows.append([c.btn("⚔️ دوباره با نگهبان", "worldgo", style="danger"), c.btn("🌍 جهان", "world")])
     elif kind == "maze":
         if update.won and info["floor"] < maze_data.FLOORS:
             rows.append([c.btn("➡️ ادامه‌ی هزارتو", "maze", style="success")])
@@ -609,3 +612,48 @@ async def expedition_claim(c: Ctx) -> Screen:
     if report.level_up:
         lines.append(f"🎉 به سطح {fa(report.level_up.new)} رسیدید!")
     return Screen("\n".join(lines), [[c.btn("🏕️ اعزام دوباره", "expd", style="success")], c.back("trip", "🧭 سفر قهرمان")])
+
+
+# --- the living world ---------------------------------------------------------------------------------------------------------------------------
+@screen("world")
+async def world(c: Ctx) -> Screen:
+    _guard(c)
+    from ..shared.text import duration
+
+    now = c.services.ctx.now()
+    event = await c.services.world.active(c.player.id)
+    lines = [
+        f"🌍 {bold('جهان زنده')}", LINE,
+        "جهان بی‌توجه به حضور شما هم می‌چرخد: تاریکی مناطق کم‌کم زیاد می‌شود و هر پیروزی شما آن را عقب می‌راند.",
+        "منطقه‌ی تاریک‌تر دشمنان قوی‌تری دارد، اما پاداشش بیشتر است.", "",
+    ]
+    for r in await c.services.world.regions():
+        lines.append(f"{r.region.emoji} {r.region.name} — {r.status} · {bar(round(r.darkness), 100, 6)} {fa(round(r.darkness))}٪")
+    rows = []
+    if event is not None:
+        left = event.ends_at - now
+        lines += [
+            LINE, f"📢 {bold('خبر فوری قلمرو')}", f"{event.kind.emoji} {bold(event.kind.title)}", event.kind.text, "",
+            f"⏳ زمان باقی‌مانده: {duration(left)}",
+            f"📊 پیشرفت: {bar(event.points, event.max_points, 10)} {fa(min(100, round(100 * event.points / event.max_points)))}٪",
+            "برای مشارکت، با نگهبان رویداد بجنگید؛ هر چه آسیب بیشتر، سهم بیشتر.",
+            f"🧮 سهم شما: {fa(event.mine)} امتیاز",
+        ]
+        if event.top:
+            lines += ["", f"🏆 {bold('برترین مشارکت‌کنندگان')}"] + [f"{fa(i + 1)}. {n} — {fa(p)}" for i, (n, p) in enumerate(event.top)]
+        rows.append([c.btn(f"⚔️ نبرد با نگهبان رویداد · {fa(world_data.ENERGY)}⚡", "worldgo", style="danger")])
+    else:
+        lines += [LINE, "الان رویداد جهانی فعالی نیست. چند ساعت دیگر خبر تازه‌ای می‌رسد."]
+    last = await c.services.world.last_result()
+    if last is not None:
+        lines += ["", f"📜 آخرین رویداد: {last.kind.title} — {'با موفقیت دفع شد' if last.status == 'won' else 'دفع نشد'}"]
+    rows.append(c.back("trip", "🧭 سفر قهرمان"))
+    return Screen("\n".join(lines), rows)
+
+
+@screen("worldgo")
+async def world_go(c: Ctx) -> Screen:
+    _guard(c)
+    fight = await c.services.solo.start_world_fight(c.player)
+    await c.refresh()
+    return _start(c, fight)

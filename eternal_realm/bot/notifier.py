@@ -13,11 +13,12 @@ from .services import Services
 
 log = logging.getLogger("eternal_realm.notifier")
 
-BUTTON_LABELS = {"achf": "🎁 دریافت پاداش", "premium": "💎 خزانه قلمرو", "citytroops": "⚔️ ارتش", "city": "🏰 فرمانروایی", "expd": "📜 گزارش اعزام"}
+BUTTON_LABELS = {"achf": "🎁 دریافت پاداش", "premium": "💎 خزانه قلمرو", "citytroops": "⚔️ ارتش", "city": "🏰 فرمانروایی", "expd": "📜 گزارش اعزام", "world": "🌍 جهان زنده"}
 
 
 async def deliver(bot, services: Services) -> int:  # noqa: ANN001
     """Send everything that is due once; returns how many messages went out."""
+    await services.world.tick()
     await services.alerts.sweep()
     sent = 0
     for alert in await services.alerts.pending():

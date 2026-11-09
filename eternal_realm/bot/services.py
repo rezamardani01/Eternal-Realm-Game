@@ -32,6 +32,7 @@ from ..game.services.alerts import AlertService
 from ..game.services.city import CityService
 from ..game.services.expedition import ExpeditionService
 from ..game.services.solo import SoloService
+from ..game.services.world import WorldService
 from ..game.services.exchange import ExchangeService
 from ..game.services.missions import MissionService
 from ..game.services.wheel import WheelService
@@ -81,6 +82,7 @@ class Services:
     solo: SoloService
     advisor: AdvisorService
     expeditions: ExpeditionService
+    world: WorldService
     wheel: WheelService
     teams: TeamBattleService
     gdungeon: GroupDungeonService
@@ -105,7 +107,8 @@ class Services:
         offers = OfferService(ctx)
         bosses = BossService(ctx, players, inventory, characters, cards)
         duels = DuelService(ctx, players, characters)
-        solo = SoloService(ctx, players, characters, inventory)
+        world = WorldService(ctx, players, inventory)
+        solo = SoloService(ctx, players, characters, inventory, world)
         wheel = WheelService(ctx, inventory)
         city = CityService(ctx)
         achievements = AchievementService(ctx, inventory)
@@ -143,6 +146,7 @@ class Services:
             solo=solo,
             advisor=advisor,
             expeditions=ExpeditionService(ctx, players, inventory),
+            world=world,
             wheel=wheel,
             teams=TeamBattleService(ctx, players, characters),
             gdungeon=GroupDungeonService(ctx, players, characters, inventory),

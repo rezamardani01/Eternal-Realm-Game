@@ -490,3 +490,120 @@ async def test_a_hero_back_from_an_expedition_is_told_and_reads_the_report(h, se
     for line in h.session.last_text().splitlines():
         assert len(re.findall(EMOJI, line)) <= 1, line
     assert await services.expeditions.current(p.id) is None
+
+
+# --- the living world ---------------------------------------------------------------------------------------------------
+async def darkness_of(db, region):
+    async with db.read() as tx:
+        return await tx.scalar("SELECT darkness FROM world_regions WHERE id = ?", (region,), -1)
+
+
+async def test_regions_grow_dark_by_themselves_and_wins_push_the_darkness_back(services, db, clock):
+    from eternal_realm.game.data import world as wd
+
+    regions = await services.world.regions()
+    assert {r.region.id for r in regions} == {r.id for r in wd.REGIONS} and all(r.darkness == wd.START_DARKNESS for r in regions)
+    clock.advance(10 * 3600)
+    grown = {r.region.id: r.darkness for r in await services.world.regions()}
+    assert all(v == pytest.approx(wd.START_DARKNESS + 8) for v in grown.values())
+    clock.advance(500 * 3600)
+    assert all(r.darkness == 100 for r in await services.world.regions())  # it never passes the top
+    assert wd.status_of(10) == "عادی" and wd.status_of(40) == "جنگی" and wd.status_of(70) == "نفرین‌شده" and wd.status_of(95) == "متروکه"
+    assert wd.effect_of(0) == (1.0, 1.0) and wd.effect_of(100) == (1.15, 1.3)
+    p = await hero(services, db, level=10)
+    base = None
+    for dark in (0, 100):
+        async with db.transaction() as tx:
+            await tx.execute("UPDATE world_regions SET darkness = ?, calc = ? WHERE id = ?", (dark, services.ctx.now(), wd.ARENA_REGION))
+        fight = await services.solo.start_arena(p, "normal", "bot_swordsman")
+        await services.solo.abandon(p)
+        if base is None:
+            base = fight
+    assert fight.info["gold"] > base.info["gold"] and fight.battle.fighters[1].max_hp > base.battle.fighters[1].max_hp
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE world_regions SET darkness = 50, calc = ? WHERE id = ?", (services.ctx.now(), wd.ARENA_REGION))
+    await services.solo.start_arena(p, "easy")
+    await finish(services, db, p)
+    assert await darkness_of(db, wd.ARENA_REGION) == pytest.approx(49, abs=0.1)
+
+
+async def test_a_world_event_is_opened_fought_over_and_paid_to_everyone_who_took_part(services, db, clock):
+    from eternal_realm.bot import notifier
+    from eternal_realm.game.data import world as wd
+
+    a = await hero(services, db, 1, level=10)
+    b = await hero(services, db, 2, level=10)
+    assert await services.world.active() is not None and await services.world.active() is not None  # opened once
+    async with db.read() as tx:
+        assert await tx.scalar("SELECT COUNT(*) FROM world_events", (), 0) == 1
+    event = await services.world.active(a.id)
+    fight = await services.solo.start_world_fight(a)
+    assert fight.kind == "world" and fight.info["event"] == event.id
+    await rig(db, a.id, foe_hp=1)
+    first = await finish(services, db, a, win=False)
+    assert first.won and any("سهم شما" in n for n in first.payout.notes)
+    mine = (await services.world.active(a.id)).mine
+    assert mine >= 5
+    await services.solo.start_world_fight(b)
+    fled = await services.solo.act(b, Action.SURRENDER)
+    assert fled.fled and any("فرار" in n for n in fled.payout.notes)
+    assert (await services.world.active(b.id)).mine == 0
+    # make the event nearly full: the next fight completes it and pays at once
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE world_events SET max_points = points + 10 WHERE id = ?", (event.id,))
+    gold_a, crystal_a = (await services.players.require(1)).gold, (await services.players.require(1)).crystal
+    await services.solo.start_world_fight(b)
+    done = await finish(services, db, b)
+    assert any("پایان رسید" in n for n in done.payout.notes)
+    assert (await services.players.require(1)).crystal > crystal_a and (await services.players.require(1)).gold > gold_a
+    async with db.read() as tx:
+        assert await tx.scalar("SELECT status FROM world_events WHERE id = ?", (event.id,), "") == "won"
+        assert await tx.scalar("SELECT qty FROM inventory WHERE player_id = 1 AND item_id = 'magic_chest'", (), 0) >= 1 or \
+            await tx.scalar("SELECT qty FROM inventory WHERE player_id = 2 AND item_id = 'magic_chest'", (), 0) >= 1
+    h_bot = Harness(services).bot
+    sent = await notifier.deliver(h_bot, services)
+    assert sent >= 2
+    # nothing opens until the gap has passed, and the next event is a different one
+    assert await services.world.active() is None
+    clock.advance(wd.GAP_HOURS * 3600 + 5)
+    nxt = await services.world.active()
+    assert nxt is not None and nxt.kind.id != event.kind.id
+
+
+async def test_an_event_nobody_finished_fails_pays_a_little_and_darkens_the_region(services, db, clock):
+    from eternal_realm.game.data import world as wd
+
+    p = await hero(services, db, level=10)
+    event = await services.world.active(p.id)
+    await services.solo.start_world_fight(p)
+    await rig(db, p.id, foe_hp=40)  # a little damage only
+    await finish(services, db, p, win=False)
+    before = await darkness_of(db, event.kind.region)
+    gold = (await services.players.require(1)).gold
+    clock.advance(wd.EVENT_HOURS * 3600 + 10)
+    await services.world.tick()
+    async with db.read() as tx:
+        assert await tx.scalar("SELECT status FROM world_events WHERE id = ?", (event.id,), "") == "lost"
+    assert (await services.players.require(1)).gold > gold
+    assert await darkness_of(db, event.kind.region) > before
+    last = await services.world.last_result()
+    assert last is not None and last.status == "lost"
+
+
+async def test_the_world_screen(h, services, db):
+    p = await hero(services, db, level=10)
+    await h.panel(1, "trip")
+    assert any("جهان زنده" in x for x in h.labels())
+    await h.panel(1, "world")
+    text = h.session.last_text()
+    assert "خبر فوری قلمرو" in text and "سهم شما" in text and "جنگل سیاه" in text and "زمان باقی‌مانده" in text
+    for line in text.splitlines():
+        assert len(re.findall(EMOJI, line)) <= 1, line
+    await h.panel(1, "worldgo")
+    assert "نوبت شماست" in h.session.last_text()
+    await rig(db, p.id)
+    for _ in range(30):
+        await h.panel(1, "sact", "attack")
+        if "پیروزی!" in h.session.last_text():
+            break
+    assert any("دوباره با نگهبان" in x for x in h.labels()) and "سهم شما در رویداد جهانی" in h.session.last_text()
