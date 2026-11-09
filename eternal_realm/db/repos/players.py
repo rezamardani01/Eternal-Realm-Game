@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ...game.models import Player
+from ...shared.text import fa
 from ..database import Tx
 
 
@@ -83,9 +84,18 @@ async def count(tx: Tx) -> int:
     return int(await tx.scalar("SELECT COUNT(*) FROM players", default=0))
 
 
-AWAY_MESSAGE = "🏕️ قهرمان در اعزام است و تا بازگشتش نمی‌تواند با بازیکنان دیگر مبارزه کند."
+async def is_away(tx: Tx, player_id: int, now: int) -> int:
+    """Seconds until the hero is back from an expedition (0 when not away)."""
+    ends = await tx.scalar("SELECT ends_at FROM expeditions WHERE player_id = ? AND ends_at > ?", (player_id, now), 0)
+    return max(0, int(ends) - now) if ends else 0
 
 
-async def is_away(tx: Tx, player_id: int, now: int) -> bool:
-    """The hero is on an expedition that has not ended yet."""
-    return bool(await tx.scalar("SELECT 1 FROM expeditions WHERE player_id = ? AND ends_at > ?", (player_id, now), 0))
+def away_text(left: int, who: str | None = None) -> str:
+    """The refusal shown to someone whose hero (or opponent) is away, with the exact time left."""
+    hours, rest = divmod(left, 3600)
+    minutes, seconds = divmod(rest, 60)
+    units = [(hours, "ساعت"), (minutes, "دقیقه"), (seconds, "ثانیه")]
+    parts = " و ".join(f"{fa(n)} {unit}" for i, (n, unit) in enumerate(units) if n or any(v for v, _ in units[:i]) or i == 2)
+    if who is None:
+        return f"🏕️ *قهرمان شما در اعزام است* و تا بازگشتش نمی‌تواند با بازیکنان دیگر مبارزه کند.\n\n⏳ {parts} دیگر برمی‌گردد."
+    return f"🏕️ *{who}* در اعزام است و تا بازگشتش نمی‌شود با او مبارزه کرد.\n\n⏳ {parts} دیگر برمی‌گردد."

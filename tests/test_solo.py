@@ -690,3 +690,11 @@ async def test_a_hero_away_on_an_expedition_cannot_fight_other_players(h, servic
     await services.expeditions.claim(a)  # and a hero with an open duel cannot leave again
     with pytest.raises(GameError, match="مبارزه"):
         await services.expeditions.start(a, "mine", 1)
+
+
+def test_the_away_refusal_tells_the_exact_time_left():
+    from eternal_realm.db.repos.players import away_text
+
+    text = away_text(2 * 3600 + 5 * 60 + 9)
+    assert "۲ ساعت و ۵ دقیقه و ۹ ثانیه" in text
+    assert "۴۵ ثانیه" in away_text(45, "آرش")
