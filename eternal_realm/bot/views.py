@@ -571,6 +571,8 @@ def pack_description(pack, now: int | None = None) -> str:  # noqa: ANN001 - Pac
             f"شامل: {fa(tier.guaranteed_gold)} سکه‌ی تضمینی + {fa(tier.rolls)} جایزه‌ی تصادفی "
             f"از تم «{theme.name}»"
         )
+    if pack.spins:
+        return f"شامل: {fa(pack.spins)} فرصت چرخش گردونه شانس با جایزه‌های ارزشمند"
     parts = []
     if pack.gold:
         parts.append(f"{fa(pack.gold)} سکه")
@@ -620,7 +622,7 @@ def delivery(order, granted: str = "") -> str:  # noqa: ANN001 - Order
 SECTION_NAMES = {
     "coins": "بسته‌ی سکه", "crystals": "بسته‌ی کریستال", "bundles": "بسته‌ی ویژه",
     "materials": "منابع", "lucky": "بسته‌ی شانسی روزانه", "deal": "تخفیف روز", "boost": "بوست دو برابر",
-    "xp": "بسته‌ی تجربه",
+    "xp": "بسته‌ی تجربه", "wheel": "گردونه شانس",
 }
 
 

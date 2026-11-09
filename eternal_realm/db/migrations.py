@@ -585,6 +585,16 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_exchange_player ON exchange_log (player_id, direction, at);
     """,
+    # 42: wheel of fortune spins and what they paid
+    """
+    ALTER TABLE players ADD COLUMN wheel_spins INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE wheel_log (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        slice     TEXT    NOT NULL,
+        at        INTEGER NOT NULL
+    );
+    """,
 ]
 
 

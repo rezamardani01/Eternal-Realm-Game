@@ -31,6 +31,8 @@ class Pack:
     boost_hours: int = 0
     #: experience the pack gives (applied to the buyer's current level)
     xp: int = 0
+    #: spins of the wheel of fortune the pack adds
+    spins: int = 0
 
     @property
     def price_toman(self) -> int:
@@ -53,6 +55,7 @@ SECTIONS = {
     "vip": "💠 اشتراک VIP",
     "boost": "🚀 بوست دو برابر",
     "xp": "⭐ بسته‌های تجربه",
+    "wheel": "🎡 گردونه شانس",
 }
 
 #: experience packs stop working above this level, and each player may buy this many a week
@@ -109,6 +112,10 @@ PACKS: dict[str, Pack] = {
         Pack("svc_rename", "🏷️", "برگه‌ی تغییر نام", 40_000, items={"rename_ticket": 1}, section="services"),
         Pack("svc_race", "🧬", "برگه‌ی تغییر نژاد", 100_000, items={"race_ticket": 1}, section="services"),
         Pack("svc_class", "⚔️", "برگه‌ی تغییر کلاس", 100_000, items={"class_ticket": 1}, section="services"),
+        Pack("wheel_1", "🎡", "۱ فرصت گردونه شانس", 80_000, spins=1, section="wheel"),
+        Pack("wheel_2", "🎡", "۲ فرصت گردونه شانس", 150_000, spins=2, section="wheel"),
+        Pack("wheel_5", "🎡", "۵ فرصت گردونه شانس", 350_000, spins=5, section="wheel"),
+        Pack("wheel_10", "🎡", "۱۰ فرصت گردونه شانس", 650_000, spins=10, section="wheel"),
         Pack("lucky_s", "🎲", "بسته شانسی کوچک", 60_000, section="lucky", lucky=True),
         Pack("lucky_m", "🎲", "بسته شانسی متوسط", 200_000, section="lucky", lucky=True),
         Pack("lucky_l", "🎲", "بسته شانسی بزرگ", 600_000, section="lucky", lucky=True),

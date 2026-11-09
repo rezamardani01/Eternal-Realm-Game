@@ -190,6 +190,9 @@ class PaymentService:
             granted = f"⭐ {fa(pack.xp)} تجربه به شما رسید\n" + (
                 f"🎉 از سطح {fa(buyer.level)} به سطح {fa(level)} رسیدید" if gained else "هنوز به سطح بعد نرسیده‌اید؛ ادامه بدهید"
             )
+        if pack.spins:
+            await tx.execute("UPDATE players SET wheel_spins = wheel_spins + ? WHERE id = ?", (pack.spins, order.player_id))
+            granted = f"🎡 {fa(pack.spins)} فرصت گردونه شانس به شما رسید؛ همین حالا بچرخانید!"
         if pack.vip_days:
             await tx.execute(
                 "UPDATE players SET vip_until = MAX(vip_until, ?) + ? WHERE id = ?",

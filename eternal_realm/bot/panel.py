@@ -1070,6 +1070,7 @@ async def premium(c: Ctx) -> Screen:
         "👇 یک بخش را انتخاب کنید",
     ])
     rows = [
+        [c.btn("🎡 گردونه شانس", "wheel", style="success")],
         [c.btn("🪙 خرید سکه", "prem", "coins"), c.btn("💎 خرید کریستال", "prem", "crystals")],
         [c.btn("🎁 خرید بسته", "prem", "bundles"), c.btn("📦 خرید صندوق", "prem", "chests")],
         [c.btn("⛓️ خرید منابع", "prem", "materials"), c.btn("🐱 حیوان خانگی", "prem", "pets")],

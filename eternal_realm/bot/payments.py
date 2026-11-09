@@ -10,7 +10,7 @@ from baleropy.exceptions import BaleAPIError
 from baleropy.types import CallbackQuery, LabeledPrice, Message, PreCheckoutQuery
 
 from ..shared.errors import GameError
-from . import views
+from . import keyboards, views
 from .callbacks import BuyCb
 from .services import Services
 
@@ -70,7 +70,10 @@ async def on_successful_payment(message: Message, services: Services, bot: Bot) 
     if delivery.duplicate:
         await message.answer("ℹ️ این پرداخت پیش‌تر ثبت شده و کالایتان را گرفته‌اید؛ نگران نباشید، پولی دوباره کم نشد.")
         return
-    await message.answer(views.delivery(delivery.order, delivery.granted))
+    spin_button = (
+        [[keyboards.panel_button("🎡 رفتن به گردونه شانس", "wheel", user.id)]] if delivery.order.pack.spins else None
+    )
+    await message.answer(views.delivery(delivery.order, delivery.granted), buttons=spin_button)
     with contextlib.suppress(BaleAPIError):
         buyer = await services.players.get(delivery.player_id)
         totals = await services.admin.stats()

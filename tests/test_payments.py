@@ -28,7 +28,7 @@ def test_pack_catalogue_is_valid():
 
     for pack in PACKS.values():
         assert len(pack.title) <= 32 and pack.price_rial > 0 and pack.price_rial % 10 == 0
-        assert pack.gold or pack.crystal or pack.items or pack.lucky or pack.pet or pack.season or pack.vip_days or pack.boost_hours or pack.xp
+        assert pack.gold or pack.crystal or pack.items or pack.lucky or pack.pet or pack.season or pack.vip_days or pack.boost_hours or pack.xp or pack.spins
         assert all(item in ITEMS for item in pack.items)
 
 
@@ -104,7 +104,7 @@ async def test_invoice_flow_through_the_bot(h, services):
     await h.say(10, "/start")
     await h.panel(10, "premium")
     assert "خزانه قلمرو" in h.session.last_text()
-    assert len(h.labels()) == 13  # twelve sections (boost and experience included) and a back button
+    assert len(h.labels()) == 14  # the wheel, twelve sections (boost and experience included) and a back button
     await h.tap(10, "خرید کریستال")
     assert any("تومان" in b["text"] for b in h.session.last_buttons())  # the prices are on the buttons
     await h.click(10, h.button_data("۲۰ کریستال"))
