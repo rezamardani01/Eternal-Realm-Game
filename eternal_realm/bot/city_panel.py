@@ -858,8 +858,8 @@ def _troop_lines(units: dict[str, int]) -> list[str]:
 async def city_go(c: Ctx) -> Screen:
     found = await c.services.city.current_target(c.player)
     name = found[0].city.name if found else "دشمن"
+    result = await c.services.city.attack(c.player)  # first: a refused march must leave the buttons in place
     await c.show(f"⚔️ {bold('لشکر به راه افتاد…')}\n\nپرچم‌ها بالا رفتند و طبل‌ها به صدا درآمدند، به سوی شهر {name}!")
-    result = await c.services.city.attack(c.player)
     for i in range(0, len(result.log), 2):
         await c.show(f"⚔️ {bold('گزارش نبرد – شهر ' + result.defender_city)}\n\nنبرد در جریان…\n\n" + "\n".join(result.log[: i + 2]))
     text = _result_text(result, c.services.ctx.now())

@@ -94,12 +94,18 @@ def week_of(now: int) -> int:
 
 async def add_war_points(tx: Tx, player_id: int, points: int, now: int) -> None:
     member = await membership(tx, player_id)
-    if member is None or points <= 0:
+    if member is not None:
+        await add_clan_points(tx, member["clan_id"], points, now)
+
+
+async def add_clan_points(tx: Tx, clan_id: int, points: int, now: int) -> None:
+    """Points of a clan in this week's league."""
+    if points <= 0:
         return
     await tx.execute(
         "INSERT INTO clan_war (week, clan_id, points) VALUES (?, ?, ?)"
         " ON CONFLICT (week, clan_id) DO UPDATE SET points = points + excluded.points",
-        (week_of(now), member["clan_id"], points),
+        (week_of(now), clan_id, points),
     )
 
 

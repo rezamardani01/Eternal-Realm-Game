@@ -26,7 +26,7 @@ from ..game.models import Player
 from ..game.services.inventory import InventoryView, Piece
 from ..game.services.shop import shop_items
 from ..shared.errors import GameError
-from ..shared.text import bold, duration, fa, headline, to_int
+from ..shared.text import bar, bold, duration, fa, headline, to_int
 from . import keyboards, views
 from ..game.data.packs import PACKS
 from .callbacks import BuyCb, PanelCb
@@ -185,15 +185,29 @@ async def noop(c: Ctx) -> Screen:
     return Screen(None)
 
 
+def _greeting(now: int) -> str:
+    """A greeting for the hour of the day in Tehran."""
+    hour = (now + 12600) % 86400 // 3600
+    if 5 <= hour < 11:
+        return "صبح قلمرو به‌خیر"
+    if 11 <= hour < 16:
+        return "آفتاب قلمرو بلند است"
+    if 16 <= hour < 20:
+        return "غروب قلمرو به‌خیر"
+    return "شب قلمرو آرام"
+
+
 @screen("home")
 async def home(c: Ctx) -> Screen:
     p = c.player
-    top = c.services.characters.max_energy(p)
+    top, need = c.services.characters.max_energy(p), c.services.characters.xp_needed(p)
     text = (
-        f"🏰 فرمانده {c.who(p) if c.is_group else bold(p.name)} ، به قلمرو خوش آمدید!\n"
+        f"🏰 {_greeting(c.services.ctx.now())}، فرمانده {c.who(p) if c.is_group else bold(p.name)}!\n"
         f"سطح {fa(p.level)} · {p.race.name} · {p.char_class.name}\n\n"
-        f"⚡ انرژی {fa(p.energy)} / {fa(top)}\n🪙 {fa(p.gold)} سکه · 💎 {fa(p.crystal)} کریستال\n\n"
-        "امروز به کجا حمله می‌کنید؟"
+        f"⭐ {bar(p.xp, need)} {fa(p.xp)} / {fa(need)}\n"
+        f"⚡ {bar(p.energy, top)} {fa(p.energy)} / {fa(top)}\n"
+        f"🪙 {fa(p.gold)} سکه · 💎 {fa(p.crystal)} کریستال\n\n"
+        "دروازه‌های قلمرو باز است؛ امروز پرچمتان را کجا می‌کوبید؟"
     )
     if c.is_group:  # a short menu in groups: play and fight here, manage things in the private chat
         rows = [
@@ -1382,7 +1396,13 @@ async def on_panel(
         services, player, callback_data.o, callback_data.a or "", callback_data.b or "",
         _is_group(message), message.chat.id, state, message,
     )
-    shown = await handler(ctx)
+    try:
+        shown = await handler(ctx)
+    except KeyError:
+        # a button that names something the game no longer has (an old message, a removed item)
+        log.warning("stale panel button %s a=%r b=%r", callback_data.s, callback_data.a, callback_data.b, exc_info=True)
+        await query.answer("این دکمه قدیمی است؛ منو را دوباره باز کنید.", show_alert=True)
+        return
     if shown.text is not None:
         await _show(message, shown)
     await query.answer((shown.toast or "")[:190] or None, show_alert=shown.alert)

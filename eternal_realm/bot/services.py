@@ -12,6 +12,7 @@ from ..game.services.bets import BetService
 from ..game.services.cards import CardService
 from ..game.services.characters import CharacterService
 from ..game.services.chests import ChestService
+from ..game.services.clan_wars import ClanWarService
 from ..game.services.clans import ClanService
 from ..game.services.contests import ContestService
 from ..game.services.crafting import CraftingService
@@ -67,6 +68,7 @@ class Services:
     bosses: BossService
     events: EventService
     clans: ClanService
+    clan_wars: ClanWarService
     quests: QuestService
     cards: CardService
     pets: PetService
@@ -131,6 +133,7 @@ class Services:
             bosses=bosses,
             events=EventService(ctx, inventory, bosses),
             clans=ClanService(ctx, inventory),
+            clan_wars=ClanWarService(ctx, players, characters, inventory),
             quests=QuestService(ctx, players, inventory),
             cards=cards,
             pets=PetService(ctx),

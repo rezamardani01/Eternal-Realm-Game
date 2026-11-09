@@ -50,8 +50,9 @@ async def altar_ask(c: Ctx) -> Screen:
 
 @screen("altarpray")
 async def altar_pray(c: Ctx) -> Screen:
-    await c.show(f"🕯️ {bold('دعا')}\n\nشعله‌ی محراب می‌لرزد...")
-    effect = await c.services.effects.pray(c.player)
+    effect = await c.services.effects.pray(c.player)  # first: a refused prayer must leave the buttons in place
+    await c.show(f"🕯️ {bold('دعا')}\n\nزانو می‌زنید و شعله‌ی محراب می‌لرزد...")
+    await c.show(f"🌫️ {bold('پاسخ خدایان')}\n\nدود بخور بالا می‌رود و صدایی از دل سنگ برمی‌خیزد...")
     kind = "برکت" if effect.blessing else "نفرین"
     lines = [f"{effect.emoji} {bold(kind + ' ' + effect.name)}", "", effect.story, "", *effect.lines(), "", f"⏳ {duration(effect.minutes * 60)}"]
     return Screen("\n".join(lines), [[c.btn("🕯️ محراب", "altar"), c.btn("🔙 منو", "home")]])

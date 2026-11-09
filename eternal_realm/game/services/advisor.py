@@ -75,5 +75,5 @@ class AdvisorService:
         async with self.ctx.db.read() as tx:
             in_clan = await tx.scalar("SELECT 1 FROM clan_members WHERE player_id = ?", (player.id,), 0)
         if in_clan:
-            out.append(Suggestion("🏯", "با خاندانتان در جنگ هفتگی امتیاز بگیرید", "clanwar"))
+            out.append(Suggestion("🏯", "با خاندانتان در لیگ هفتگی امتیاز بگیرید", "clanwar"))
         return out[:limit]

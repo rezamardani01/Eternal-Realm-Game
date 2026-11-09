@@ -57,8 +57,9 @@ async def craft_ask(c: Ctx) -> Screen:
 
 @screen("craftdo")
 async def craft_do(c: Ctx) -> Screen:
-    await c.show(f"🔥 {bold('کوره روشن شد')}\n\nفلز سرخ می‌شود و پتک بر سندان می‌کوبد...")
-    made = await c.services.crafting.craft(c.player, c.a)
+    made = await c.services.crafting.craft(c.player, c.a)  # first: a refused craft must leave the buttons in place
+    await c.show(f"🔥 {bold('کوره روشن شد')}\n\nدَم می‌دمد و فلز کم‌کم سرخ می‌شود...")
+    await c.show(f"⚒️ {bold('پتک بر سندان')}\n\nجرقه‌ها می‌پرند؛ ضربه‌ی آخر در راه است...")
     text = (
         f"🔨 {bold('ساخته شد!')}\n\n{made.label}\n{made.rarity_label}\n\n"
         + "\n".join(made.stats.bonus_lines())

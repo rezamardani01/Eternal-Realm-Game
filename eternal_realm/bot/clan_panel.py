@@ -76,7 +76,8 @@ async def clan(c: Ctx) -> Screen:
         return Screen(text, rows)
     rows = [
         [c.btn("👥 اعضا", "clanmembers", "0", style="primary"), c.btn("💰 کمک به خزانه", "clandonate")],
-        [c.btn("🏆 برترین خاندان‌ها", "clantop"), c.btn("⚔️ جنگ خاندان‌ها", "clanwar")],
+        [c.btn("⚔️ جنگ خاندان‌ها", "cwar", style="danger"), c.btn("🏅 لیگ هفتگی", "clanwar")],
+        [c.btn("🏆 برترین خاندان‌ها", "clantop")],
     ]
     shop_row = [c.btn("🛒 فروشگاه خاندان", "clanshop")]
     if role_power(mine.my_role or "member") >= 2:
@@ -545,10 +546,10 @@ async def clan_war(c: Ctx) -> Screen:
     view = await c.services.clans.war(c.player)
     medals = ["🥇", "🥈", "🥉"]
     lines = [
-        f"⚔️ {bold('جنگ خاندان‌ها')}",
+        f"🏅 {bold('لیگ هفتگی خاندان‌ها')}",
         "",
-        "هر هفته خاندان‌ها با هم رقابت می‌کنند. امتیاز از برد دوئل (۱۰ امتیاز) و از باس‌های گروهی "
-        "(بر اساس سهم هر عضو) به خاندانتان می‌رسد.",
+        "هر هفته خاندان‌ها بر سر جایگاه نخست رقابت می‌کنند. امتیاز از برد دوئل (۱۰ امتیاز)، باس‌های گروهی "
+        "(بر اساس سهم هر عضو) و ستاره‌های «جنگ خاندان‌ها» به خاندانتان می‌رسد.",
         "",
         f"⏳ تا پایان این هفته: {duration(view.seconds_left)}",
         "",
@@ -563,6 +564,7 @@ async def clan_war(c: Ctx) -> Screen:
     if view.prize:
         lines += [f"🎁 خاندان شما هفته‌ی پیش جایگاه {fa(view.last_place)} را گرفت! جایزه‌ی شما {fa(view.prize)} سکه است."]
         rows.append([c.btn(f"🎁 دریافت {fa(view.prize)} سکه", "clanprize", style="success")])
+    rows.append([c.btn("⚔️ جنگ خاندان‌ها", "cwar")])
     rows.append(c.back("clan"))
     return Screen("\n".join(lines).strip(), rows)
 
@@ -571,7 +573,7 @@ async def clan_war(c: Ctx) -> Screen:
 async def clan_prize(c: Ctx) -> Screen:
     gold = await c.services.clans.claim_war(c.player)
     shown = await clan_war(c)
-    shown.toast, shown.alert = f"🎁 {fa(gold)} سکه، کریستال و بوست ۲۴ ساعته‌ی جایزه‌ی جنگ به کیفتان رسید!", True
+    shown.toast, shown.alert = f"🎁 {fa(gold)} سکه، کریستال و بوست ۲۴ ساعته‌ی جایزه‌ی لیگ به کیفتان رسید!", True
     return shown
 
 
@@ -583,7 +585,7 @@ async def clan_shop(c: Ctx) -> Screen:
         f"🛒 {bold('فروشگاه خاندان')}",
         "",
         f"🎖️ خان‌پوینت شما: {bold(fa(points))}",
-        "خان‌پوینت را از دوئل با اعضای خاندان‌های دیگر و جایزه‌ی جنگ هفتگی خاندان‌ها می‌گیرید.",
+        "خان‌پوینت را از جنگ خاندان‌ها، دوئل با اعضای خاندان‌های دیگر و جایزه‌ی لیگ هفتگی می‌گیرید.",
         "کالاها هر روز عوض می‌شوند و هر کالا را روزی یک بار می‌توانید بخرید.",
         "",
     ]
@@ -604,9 +606,9 @@ async def clan_shop_ask(c: Ctx) -> Screen:
     from ..game.data.khan_shop import get_offer
 
     offers, points = await c.services.clans.shop(c.player)
-    offer = get_offer(c.a)
-    if offer.id not in {o.id for o, bought in offers if not bought}:
+    if c.a not in {o.id for o, bought in offers if not bought}:
         raise GameError("این کالا را امروز خریده‌اید یا در فروشگاه نیست.")
+    offer = get_offer(c.a)
     lines = [
         f"🛒 {bold('تأیید خرید')}",
         "",

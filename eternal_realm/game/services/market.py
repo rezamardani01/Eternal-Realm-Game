@@ -148,7 +148,6 @@ class MarketService:
                 await inv_repo.transfer_gear(tx, row["gear_id"], buyer.id)
             else:
                 await self.inventory.grant(tx, buyer.id, row["item_id"], row["qty"])
-            from ...shared.text import fa
             from ..notify import queue
 
             sold = get_item(row["item_id"])

@@ -20,6 +20,14 @@ async def clan(ctx: CommandContext) -> None:
 
 
 @command(
+    "clan_war", ["جنگ خاندان", "جنگ خاندان‌ها", "جنگ خاندان ها"], "جنگ خاندان‌ها: اعلام جنگ، حمله به دژها و جدول ستاره‌ها",
+    category="🏯 خاندان", points=0,
+)
+async def clan_war(ctx: CommandContext) -> None:
+    await panel.send(ctx.message, ctx.services, ctx.me, "cwar", reply=True)
+
+
+@command(
     "clan_create", ["ساخت خاندان", "بساز خاندان"], "ساخت خاندان: ساخت خاندان نام‌دلخواه", category="🏯 خاندان",
     takes_args=True, points=0,
 )

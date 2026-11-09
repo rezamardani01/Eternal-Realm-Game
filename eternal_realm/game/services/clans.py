@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from ...context import AppContext
 from ...db.database import Row, Tx
+from ...db.repos import clan_wars as war_repo
 from ...db.repos import clans as repo
 from ...db.repos import players as player_repo
 from ...db.repos import wallet
@@ -209,7 +210,7 @@ class ClanService:
                         "شما مالک هستید و نمی‌توانید خاندان را وسط راه رها کنید. "
                         "اول مالکیت را به یکی از اعضا بدهید (از بخش اعضا)."
                     )
-                await repo.delete(tx, clan["id"])
+                await self._close(tx, clan["id"])
                 return "disbanded"
             fine = clan["exit_fine"]
             if fine:
@@ -223,7 +224,14 @@ class ClanService:
             member, clan = await self._mine(tx, player.id)
             if member["role"] != "leader":
                 raise GameError("فقط مالک می‌تواند خاندان را منحل کند.")
-            await repo.delete(tx, clan["id"])
+            await self._close(tx, clan["id"])
+
+    @staticmethod
+    async def _close(tx: Tx, clan_id: int) -> None:
+        """Delete a clan; never in the middle of a war (an unanswered challenge is withdrawn)."""
+        if not await war_repo.release_clan(tx, clan_id):
+            raise GameError("خاندان وسط جنگ است؛ تا پایان جنگ نمی‌شود آن را بست.")
+        await repo.delete(tx, clan_id)
 
     # --- managing --------------------------------------------------------------------------------
     async def kick(self, actor: Player, target_id: int) -> str:
@@ -260,6 +268,8 @@ class ClanService:
             target = await self._target(tx, me, target_id)
             if me["role"] != "leader":
                 raise GameError("فقط مالک می‌تواند مالکیت را به دیگری بدهد.")
+            if target_id == actor.id:
+                raise GameError("شما همین حالا مالک خاندان هستید.")
             await repo.set_role(tx, target_id, "leader")
             await repo.set_role(tx, actor.id, "deputy")
             await repo.set_leader(tx, clan["id"], target["player_id"])
@@ -397,7 +407,6 @@ class ClanService:
             if done:
                 view.prize = 0
         return view
-
 
     async def claim_war(self, player: Player) -> int:
         view = await self.war(player)

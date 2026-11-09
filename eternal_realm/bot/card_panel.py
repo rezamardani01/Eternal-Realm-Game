@@ -144,8 +144,9 @@ async def pack_ask(c: Ctx) -> Screen:
 
 @screen("cpack")
 async def pack_open(c: Ctx) -> Screen:
-    await c.show(f"🃏 {bold('در حال بازکردن بسته...')}\n\nکارت‌ها یکی‌یکی رو می‌شوند ✨")
-    result = await c.services.cards.buy_pack(c.player)
+    result = await c.services.cards.buy_pack(c.player)  # first: a refused purchase must leave the buttons in place
+    await c.show(f"🃏 {bold('مُهر بسته شکست')}\n\nبوی کاغذ کهنه و جوهر جادویی بلند می‌شود...")
+    await c.show(f"✨ {bold('کارت‌ها رو می‌شوند')}\n\nیکی... دو تا... نفس‌ها در سینه حبس است!")
     lines = [f"🃏 {bold('کارت‌های بسته‌ی شما')}", ""]
     for k, new in result.cards:
         lines += [f"{k.emoji} {k.name}" + (" · تازه!" if new else " · تکراری"), f"   {RARITY_NAMES[k.rarity]}", ""]

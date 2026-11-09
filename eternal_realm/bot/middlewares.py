@@ -12,9 +12,8 @@ from baleropy.types import CallbackQuery, Message
 
 from ..game.services.expedition import ExpeditionService
 from ..shared.errors import AwayError, GameError
-from ..shared.text import fa
+from ..shared.text import fa, headline
 from . import keyboards
-from ..shared.text import headline
 
 log = logging.getLogger("eternal_realm.bot")
 

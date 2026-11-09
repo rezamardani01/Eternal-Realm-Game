@@ -802,6 +802,35 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (event_id, player_id)
     );
     """,
+    # 53: declared wars between two clans (the clan names are copied, a clan may be gone when the war is read later)
+    """
+    CREATE TABLE clan_wars (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        attacker_id   INTEGER NOT NULL,
+        defender_id   INTEGER NOT NULL,
+        attacker_name TEXT    NOT NULL,
+        defender_name TEXT    NOT NULL,
+        stake         INTEGER NOT NULL DEFAULT 0,
+        status        TEXT    NOT NULL,
+        winner_id     INTEGER NOT NULL DEFAULT 0,
+        created_at    INTEGER NOT NULL,
+        starts_at     INTEGER NOT NULL DEFAULT 0,
+        ends_at       INTEGER NOT NULL
+    );
+    CREATE INDEX idx_clan_wars_status ON clan_wars (status, ends_at);
+    CREATE TABLE clan_war_attacks (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        war_id        INTEGER NOT NULL REFERENCES clan_wars (id),
+        clan_id       INTEGER NOT NULL,
+        attacker_id   INTEGER NOT NULL,
+        attacker_name TEXT    NOT NULL,
+        target_id     INTEGER NOT NULL,
+        target_name   TEXT    NOT NULL,
+        stars         INTEGER NOT NULL,
+        at            INTEGER NOT NULL
+    );
+    CREATE INDEX idx_clan_war_attacks_war ON clan_war_attacks (war_id, clan_id);
+    """,
 ]
 
 

@@ -302,7 +302,7 @@ def help_pages(balance) -> dict[str, tuple[str, str]]:  # noqa: ANN001 - Balance
         "clan": ("🏯 خاندان", page(
             f"🏯 {bold('خاندان')}",
             "🏗️ بنویسید «ساخت خاندان نام‌دلخواه» یا به یک خاندان باز بپیوندید.",
-            "💰 اعضا به خزانه‌ی مشترک کمک می‌کنند و خاندان بالا می‌رود.\n⚔️ دوئل و باس برای «جنگ خاندان‌ها» امتیاز می‌آورد.",
+            "💰 اعضا به خزانه‌ی مشترک کمک می‌کنند و خاندان بالا می‌رود.\n⚔️ به خاندان‌های دیگر اعلام جنگ کنید و دژهایشان را بگیرید.\n🏅 دوئل، باس و ستاره‌های جنگ برای «لیگ هفتگی» امتیاز می‌آورد.",
             "👑 مالک و قائم‌مقام‌ها عضو می‌پذیرند؛ از پنل خاندان همه‌چیز با دکمه است.",
         )),
         "progress": ("📅 مأموریت و مسیر", page(
@@ -397,8 +397,8 @@ def activity_result(name: str, result) -> str:  # noqa: ANN001 - ActivityResult
 def hunt_frames(name: str, r) -> list[str]:  # noqa: ANN001 - HuntResult
     """Short story told one edit at a time: searching, meeting the monster, the first blows."""
     frames = [
-        f"🌲 {bold('در حال شکار')}\nفرمانده {name} در سرزمین‌های وحشی می‌گردد 👣",
-        f"{r.monster.emoji} {bold(r.monster.name + ' پیدا شد!')}\nنبرد شروع می‌شود...",
+        f"🌲 {bold('در حال شکار')}\nفرمانده {name} ردّ پاها را در سرزمین‌های وحشی دنبال می‌کند 👣",
+        f"{r.monster.emoji} {bold(r.monster.name + ' پیدا شد!')}\nبوته‌ها کنار می‌روند و شمشیرها بیرون می‌آید...",
     ]
     for count in (2, 4):
         if len(r.log) >= count:
@@ -532,7 +532,7 @@ def chest_odds(item, odds) -> str:  # noqa: ANN001
 
 
 def chest_opening(item) -> str:  # noqa: ANN001
-    return f"🗝️ {bold('در حال باز کردن ' + item.name)}\n\nقفل می‌شکند... لطفاً صبر کنید ✨"
+    return f"🗝️ {bold('در حال باز کردن ' + item.name)}\n\nکلید در قفل می‌چرخد و نوری از لای درز بیرون می‌زند... کمی صبر کنید ✨"
 
 
 def lucky_odds(theme) -> str:  # noqa: ANN001 - Theme
@@ -556,7 +556,7 @@ def lucky_odds(theme) -> str:  # noqa: ANN001 - Theme
 
 
 def upgrade_working() -> str:
-    return f"🔨 {bold('آهنگر در کار است')}\n\nچکش بالا می‌رود... لطفاً صبر کنید ✨"
+    return f"🔨 {bold('آهنگر در کار است')}\n\nفلز در کوره سرخ شده و چکش بالا می‌رود... جرقه‌ها می‌پرند ✨"
 
 
 def chest_opened(name: str, opened) -> str:  # noqa: ANN001 - Opened

@@ -57,6 +57,19 @@ class Balance:
     clan_photo_gold: int = 3000
     clan_fine_max: int = 50_000
     clan_min_level_max: int = 100
+    #: a declared war between two clans: hours to answer the challenge, hours of fighting, attacks per member,
+    #: members a clan needs, hours of peace between the same two clans after a war, rounds of one attack
+    clan_war_accept_hours: int = 12
+    clan_war_hours: int = 24
+    clan_war_attacks: int = 2
+    clan_war_min_members: int = 2
+    clan_war_truce_hours: int = 24
+    clan_war_max_rounds: int = 20
+    #: what one attack pays per star, and what every fighter of the winning / losing clan gets at the end
+    clan_war_star_gold: int = 60
+    clan_war_star_xp: int = 40
+    clan_war_win_gold: int = 500
+    clan_war_lose_gold: int = 150
     second_class_level: int = 15
     second_class_gold: int = 3000
     awaken_level: int = 20

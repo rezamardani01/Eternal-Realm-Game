@@ -16,13 +16,14 @@ log = logging.getLogger("eternal_realm.notifier")
 BUTTON_LABELS = {
     "sfight": "⚔️ ادامه‌ی نبرد", "ach": "🏅 دستاوردها", "wheel": "🎡 گردونه شانس", "missions": "📅 مأموریت‌ها", "daily": "🎁 جایزه روزانه",
     "arenago": "🥊 میدان بات‌ها", "stage": "📖 داستان", "adv": "🗺️ ماجراجویی", "sbossv": "🐉 باس امروز", "citybuild": "🏗️ ساختمان‌ها",
-    "clanwar": "🏯 جنگ خاندان‌ها","achf": "🎁 دریافت پاداش", "premium": "💎 خزانه قلمرو", "citytroops": "⚔️ ارتش", "city": "🏰 فرمانروایی", "expd": "📜 گزارش اعزام", "world": "🌍 جهان زنده"}
+    "clanwar": "🏅 لیگ خاندان‌ها", "cwar": "⚔️ جنگ خاندان‌ها", "achf": "🎁 دریافت پاداش", "premium": "💎 خزانه قلمرو", "citytroops": "⚔️ ارتش", "city": "🏰 فرمانروایی", "expd": "📜 گزارش اعزام", "world": "🌍 جهان زنده"}
 
 
 async def deliver(bot, services: Services) -> int:  # noqa: ANN001
     """Send everything that is due once; returns how many messages went out."""
     await services.world.tick()
     await services.alerts.sweep()
+    await services.clan_wars.sweep()
     await services.alerts.tips(services.advisor)
     sent = 0
     for alert in await services.alerts.pending():

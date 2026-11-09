@@ -73,8 +73,8 @@ async def enter(c: Ctx) -> Screen:
 
 @screen("dgo")
 async def go(c: Ctx) -> Screen:
-    await c.show(f"🚪 {bold('در حال باز کردن در')}\n\nآرام آرام وارد اتاق بعدی می‌شوید...")
-    v = await c.services.dungeon.advance(c.player)
+    v = await c.services.dungeon.advance(c.player)  # first: a refused step must leave the buttons in place
+    await c.show(f"🚪 {bold('درِ سنگی می‌غرّد')}\n\nمشعل را بالا می‌گیرید و آرام‌آرام وارد اتاق بعدی می‌شوید...")
     lines = [f"{v.emoji} {bold(v.title)}", "", *v.lines, ""]
     if v.status == "active":
         lines += _status(v)
