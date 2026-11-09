@@ -10,7 +10,10 @@ from baleropy.dispatcher import BaseMiddleware
 from baleropy.exceptions import BaleAPIError, CancelHandler, SkipHandler
 from baleropy.types import CallbackQuery, Message
 
-from ..shared.errors import GameError
+from ..game.services.expedition import ExpeditionService
+from ..shared.errors import AwayError, GameError
+from ..shared.text import fa
+from . import keyboards
 from ..shared.text import headline
 
 log = logging.getLogger("eternal_realm.bot")
@@ -26,6 +29,8 @@ class ErrorMiddleware(BaseMiddleware):
             return await handler(event, data)
         except (SkipHandler, CancelHandler):
             raise  # flow control of the framework, not an error
+        except AwayError as error:
+            await self._tell(event, error.message, self._recall_buttons(event, error))
         except GameError as error:
             await self._tell(event, error.message)
         except BaleAPIError:
@@ -36,17 +41,32 @@ class ErrorMiddleware(BaseMiddleware):
         return None
 
     @staticmethod
-    async def _tell(event: Any, text: str) -> None:
+    def _recall_buttons(event: Any, error: AwayError) -> list | None:
+        """The glass button under the «your hero is away» notice: bring the hero back at once for crystals."""
+        user = getattr(event, "from_user", None)
+        if user is None or error.left <= 0:
+            return None
+        cost = ExpeditionService.recall_cost(error.left)
+        return [[keyboards.panel_button(f"⏪ احضار سریع ({fa(cost)} کریستال)", "awayq", user.id)]]
+
+    @staticmethod
+    async def _tell(event: Any, text: str, buttons: list | None = None) -> None:
         try:
             if isinstance(event, CallbackQuery):
-                if len(text) <= 190:
+                if len(text) <= 190 and not buttons:
                     await event.answer(text, show_alert=True)
                 else:
                     await event.answer("⚠️ پیام را در گفتگو بخوانید 👇", show_alert=False)
                     if event.message is not None:
-                        await event.message.answer(text)
+                        if buttons:
+                            await event.message.answer(text, buttons=buttons)
+                        else:
+                            await event.message.answer(text)
             elif isinstance(event, Message):
-                await event.reply(headline(text))
+                if buttons:
+                    await event.reply(headline(text), buttons=buttons)
+                else:
+                    await event.reply(headline(text))
         except BaleAPIError:
             log.warning("could not deliver an error message", exc_info=True)
 

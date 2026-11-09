@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ...game.models import Player
+from ...shared.errors import AwayError
 from ...shared.text import fa
 from ..database import Tx
 
@@ -103,3 +104,7 @@ def away_text(left: int, who: str | None = None) -> str:
     if who is None:
         return f"🏕️ *قهرمان شما در اعزام است* و تا بازگشتش نمی‌تواند با بازیکنان دیگر مبارزه کند.\n\n⏳ {parts} دیگر برمی‌گردد."
     return f"🏕️ *{who}* در اعزام است و تا بازگشتش نمی‌شود با او مبارزه کرد.\n\n⏳ {parts} دیگر برمی‌گردد."
+
+
+def away_error(left: int, who: str | None = None, extra: str = "") -> AwayError:
+    return AwayError(away_text(left, who) + extra, left if who is None else 0)

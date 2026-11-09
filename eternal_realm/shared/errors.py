@@ -11,6 +11,14 @@ class GameError(Exception):
         self.message = message
 
 
+class AwayError(GameError):
+    """The hero is on an expedition; ``left`` is the seconds still to go when it is the player's own hero (0 otherwise)."""
+
+    def __init__(self, message: str, left: int = 0) -> None:
+        super().__init__(message)
+        self.left = left
+
+
 class NotRegistered(GameError):
     def __init__(self) -> None:
         super().__init__("ای ماجراجوی ناشناس! هنوز نامی از شما در دفتر قلمرو نیست. به پیام خصوصی ربات بروید، /start را بزنید و قهرمان خود را بسازید؛ بعد برگردید و ماجراجویی را شروع کنید.")

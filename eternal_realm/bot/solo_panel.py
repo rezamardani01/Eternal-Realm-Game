@@ -575,7 +575,7 @@ async def expedition(c: Ctx) -> Screen:
         ]
         cost = c.services.expeditions.recall_cost(trip.ends_at - now)
         return Screen("\n".join(lines), [
-            [c.btn("🔄 تازه‌سازی", "expd"), c.btn(f"⏪ برگرداندن قهرمان · {fa(cost)}💎", "expdback", style="danger")],
+            [c.btn("🔄 تازه‌سازی", "expd"), c.btn(f"⏪ برگرداندن قهرمان · {fa(cost)}💎", "awayq", style="danger")],
             c.back("trip", "🧭 سفر قهرمان"),
         ])
     lines += [
@@ -589,34 +589,44 @@ async def expedition(c: Ctx) -> Screen:
     return Screen("\n".join(lines), rows)
 
 
-@screen("expdback")
-async def expedition_recall_confirm(c: Ctx) -> Screen:
-    _guard(c)
+@screen("awayq")
+async def recall_confirm(c: Ctx) -> Screen:
+    """Works in groups too: the notice that a hero is away carries a button to this page."""
     now = c.services.ctx.now()
     trip = await c.services.expeditions.current(c.player.id)
     if trip is None or trip.ends_at <= now:
-        return await expedition(c)
+        return Screen(f"🏕️ {bold('قهرمان شما برگشته است')}\n\nدیگر چیزی برای احضار نیست؛ گزارش اعزام را در پیوی ربات بگیرید.", [])
     from ..shared.text import duration
 
     cost = c.services.expeditions.recall_cost(trip.ends_at - now)
     p = await c.refresh()
     lines = [
-        f"⏪ {bold('برگرداندن قهرمان')}", LINE,
-        f"⏳ {duration(trip.ends_at - now)} تا بازگشت طبیعی مانده است.",
-        f"💎 با پرداخت {fa(cost)} کریستال همین حالا برمی‌گردد و پاداش کامل اعزام را می‌گیرید.",
-        f"👛 کریستال شما: {fa(p.crystal)}",
+        f"⏪ {bold('احضار سریع قهرمان')}", "",
+        "می‌خواهید قهرمانتان سریع‌تر برگردد؟", "",
+        f"⏳ زمان باقی‌مانده: {duration(trip.ends_at - now)}",
+        f"💎 هزینه: {fa(cost)} کریستال (هر چه زمان کمتر، کریستال کمتر)",
+        f"👛 کریستال شما: {fa(p.crystal)}", "",
+        "با احضار، پاداش کامل اعزام را هم می‌گیرید.",
     ]
-    rows = [[c.btn(f"✅ پرداخت {fa(cost)} کریستال", "expdbackgo", style="success")], c.back("expd")]
-    return Screen("\n".join(lines), rows)
+    return Screen("\n".join(lines), [[c.btn("✅ تأیید", "awayok", style="success"), c.btn("❌ انصراف", "awayno", style="danger")]])
 
 
-@screen("expdbackgo")
-async def expedition_recall(c: Ctx) -> Screen:
-    _guard(c)
+@screen("awayok")
+async def recall_apply(c: Ctx) -> Screen:
     cost = await c.services.expeditions.recall(c.player)
-    shown = await expedition(c)
-    shown.toast = f"⏪ قهرمان برگشت · {fa(cost)} کریستال"
-    return shown
+    lines = [
+        f"🏕️ {bold('قهرمان شما احضار شد!')}", "",
+        "فرمان شما در دشت و کوه پیچید و قهرمانتان شتابان به قلمرو بازگشت.", "",
+        f"💎 {fa(cost)} کریستال پرداخت شد.",
+        "🎁 گزارش و پاداش اعزام آماده است؛ در پیوی ربات، بخش «سفر قهرمان» بگیریدش.", "",
+        "⚔️ اکنون هر نبردی که می‌خواهید در پیش است!",
+    ]
+    return Screen("\n".join(lines), [])
+
+
+@screen("awayno")
+async def recall_cancel(c: Ctx) -> Screen:
+    return Screen(f"👌 {bold('انصراف دادید')}\n\nقهرمان به اعزامش ادامه می‌دهد.", [])
 
 
 @screen("expdk")

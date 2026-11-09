@@ -259,7 +259,7 @@ class BetService:
         async with self.ctx.db.transaction() as tx:
             left = await player_repo.is_away(tx, player.id, now)
             if left is not None:
-                raise GameError(player_repo.away_text(left))
+                raise player_repo.away_error(left)
             if await tx.fetchone(
                 "SELECT 1 FROM bet_duels WHERE challenger_id = ? AND status IN ('open', 'active')", (player.id,)
             ):
@@ -339,7 +339,7 @@ class BetService:
             for pid in (player.id, row["challenger_id"]):
                 left = await player_repo.is_away(tx, pid, now)
                 if left is not None:
-                    raise GameError(player_repo.away_text(left, None if pid == player.id else "حریف شرط"))
+                    raise player_repo.away_error(left, None if pid == player.id else "حریف شرط")
             bet = Bet.from_row(row)
             if bet.kind == "gear":
                 kind, amount, gear_id = await self._pay_for_gear(tx, bet, player, pay, now)

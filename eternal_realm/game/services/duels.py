@@ -87,7 +87,7 @@ class DuelService:
             for pid in (challenger.id, target.id):
                 left = await player_repo.is_away(tx, pid, now)
                 if left is not None:
-                    raise GameError(player_repo.away_text(left, None if pid == challenger.id else target.name))
+                    raise player_repo.away_error(left, None if pid == challenger.id else target.name)
             pair = (challenger.id, target.id)
             await repo.expire_pending_for(tx, pair, now)
             if await repo.open_for(tx, pair) is not None:
@@ -167,7 +167,7 @@ class DuelService:
             for p in (challenger, target):
                 left = await player_repo.is_away(tx, p.id, now)
                 if left is not None:
-                    raise GameError(player_repo.away_text(left, None if p.id == by.id else p.name))
+                    raise player_repo.away_error(left, None if p.id == by.id else p.name)
             fighters = [await self._fighter(tx, p) for p in (challenger, target)]
             ratio, strong = combat.level_field([[fighters[0]], [fighters[1]]])
             battle = Battle.start(fighters[0], fighters[1], b.duel_max_rounds, self.ctx.rng)

@@ -92,7 +92,7 @@ class TeamBattleService:
     async def _ensure_free(self, tx: Tx, player_id: int, now: int) -> None:
         left = await player_repo.is_away(tx, player_id, now)
         if left is not None:
-            raise GameError(player_repo.away_text(left))
+            raise player_repo.away_error(left)
         busy = await tx.fetchone(
             "SELECT b.id FROM team_battles b JOIN team_battle_members m ON m.battle_id = b.id"
             " WHERE m.player_id = ? AND (b.status = 'active' OR (b.status = 'lobby' AND b.expires_at > ?)) LIMIT 1",
@@ -196,7 +196,7 @@ class TeamBattleService:
             for _, _, member in lobby.members:
                 left = await player_repo.is_away(tx, member.id, now)
                 if left is not None:
-                    raise GameError(player_repo.away_text(left, member.name) + "\nجایگاهش را خالی کنید.")
+                    raise player_repo.away_error(left, member.name, "\nجایگاهش را خالی کنید.")
             if not any(t == 0 for t, _, _ in lobby.members) or not any(t == 1 for t, _, _ in lobby.members):
                 raise GameError("هر دو تیم دست‌کم یک جنگجو لازم دارند؛ منتظر بمانید تا جایگاه‌ها پر شوند.")
             fighters, teams = [], []

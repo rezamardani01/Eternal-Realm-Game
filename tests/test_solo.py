@@ -711,10 +711,23 @@ async def test_a_hero_can_be_called_back_for_crystals(h, services, db, clock):
         await tx.execute("UPDATE players SET crystal = 10 WHERE id = ?", (p.id,))
     await h.panel(1, "expd")
     assert any("برگرداندن قهرمان" in x for x in h.labels())
-    await h.panel(1, "expdback")
+    await h.panel(1, "awayq")
     assert "۴ کریستال" in h.session.last_text()
-    await h.panel(1, "expdbackgo")
-    assert "گرفتن گزارش" in " ".join(h.labels())
+    await h.panel(1, "awayok")
+    assert "احضار شد" in h.session.last_text()
     assert (await services.players.require(1)).crystal == 6
     report = await services.expeditions.claim(await services.players.require(1))
     assert report.hours == 4
+
+
+async def test_the_away_notice_in_a_group_carries_the_recall_button(h, services, db, clock):
+    a = await hero(services, db, 1, name="دورافتاده")
+    await hero(services, db, 2, name="رقیب‌جان")
+    await services.expeditions.start(a, "mine", 4)
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET crystal = 10 WHERE id = ?", (a.id,))
+    await h.say(1, "مبارزه", group=True, reply_to=h.message_of(2))
+    assert "احضار سریع (۴ کریستال)" in " ".join(h.labels())
+    clock.advance(3 * 3600)
+    await h.say(1, "مبارزه", group=True, reply_to=h.message_of(2))
+    assert "احضار سریع (۱ کریستال)" in " ".join(h.labels())
