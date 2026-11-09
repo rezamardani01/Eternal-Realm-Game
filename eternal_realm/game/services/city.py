@@ -483,7 +483,7 @@ class CityService:
             return city
 
     def _pay(self, city: City, cost: dict[str, int]) -> None:
-        short = [r for r, v in cost.items() if v > city.res[r]]
+        short = [r for r, v in cost.items() if v > int(city.res[r])]
         if short:
             lines = [f"{d.RES_INFO[r][0]} {d.RES_INFO[r][1]}: دارید {fa(int(city.res[r]))} · لازم است {fa(cost[r])}" for r in short]
             raise GameError("منابع شهر کافی نیست:\n" + "\n".join(lines))

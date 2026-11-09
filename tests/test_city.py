@@ -559,3 +559,73 @@ async def test_the_special_is_on_the_soldier_screen_and_losses_on_both_reports(h
     after = await services.city.mine(dp, visit=False)
     assert after.res["gold"] < 40_000 + 700  # what the raid took is really gone from the victim
     assert (await services.city.mine(p)).troops["sword"] < 100  # and some of the raiders never came home
+
+
+def test_a_storehouse_can_always_hold_the_next_upgrade():
+    """The bug: a castle of level 6 needs 47 thousand gold for level 7, yet a small storehouse held 22 thousand."""
+    for castle in range(1, 11):
+        cap = d.storage_cap(0, castle)  # even with no warehouse at all
+        for b in d.BUILDINGS:
+            if b.id == "castle":
+                if castle >= d.MAX_CASTLE:
+                    continue
+                level = castle
+            else:
+                level = max(0, min(b.max_level, castle) - 1)
+            cost = d.build_cost(b, level)
+            assert max(cost["wood"], cost["stone"], cost["iron"]) <= cap, (castle, b.id)
+            assert cost["gold"] <= cap * 2, (castle, b.id)
+
+
+async def test_castle_six_to_seven_works_with_the_resources_the_city_can_actually_keep(services, db, clock):
+    p, city = await make_city(services, db, 1, "آذرگان")
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE city_buildings SET level = 6 WHERE city_id = ? AND kind = 'castle'", (city.id,))
+        await tx.execute("UPDATE cities SET gold = 0, wood = 0, stone = 0, iron = 0 WHERE id = ?", (city.id,))
+    cost = d.build_cost(d.get_building("castle"), 6)
+    cap = (await services.city.mine(p)).storage
+    assert cap >= max(cost["wood"], cost["stone"], cost["iron"])  # storage is no longer smaller than the price
+    # fill every store to the brim and the upgrade starts
+    async with db.transaction() as tx:
+        await tx.execute(
+            "UPDATE cities SET gold = ?, wood = ?, stone = ?, iron = ? WHERE id = ?",
+            (cap * 2, cap, cap, cap, city.id),
+        )
+    c, level, _ = await services.city.build(p, "castle")
+    assert level == 7 and c.builds
+    # a shortage is reported with the exact missing resource, not a general complaint
+    poor, poor_city = await make_city(services, db, 2, "کم‌منبع")
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE city_buildings SET level = 6 WHERE city_id = ? AND kind = 'castle'", (poor_city.id,))
+        await tx.execute("UPDATE cities SET gold = 100000, wood = 100, stone = 100000, iron = 100000 WHERE id = ?", (poor_city.id,))
+    with pytest.raises(GameError, match="چوب"):
+        await services.city.build(poor, "castle")
+
+
+async def test_the_word_realm_shows_a_whole_city_for_you_or_the_hero_you_reply_to(h, services, db):
+    a, ca = await make_city(services, db, 1, "آذرگان")
+    b, cb = await make_city(services, db, 2, "شیرکوه")
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE city_troops SET qty = 0 WHERE city_id = ?", (cb.id,))
+    await give(db, cb.id, sword=40, archer=15)
+    await h.say(1, "فرمانروایی", group=True)
+    text = h.session.last_text()
+    for part in ("شهر آذرگان", "فرمانروا", "سطح قلعه", "جمعیت", "رضایت", "قابل سربازگیری", "منابع و آذوقه", "مصرف غذا",
+                 "تعداد سربازان", "قدرت ارتش", "قدرت دفاعی", "ساختمان‌ها", "سپر"):
+        assert part in text, part
+    assert "[قهرمان1](uid:1)" in text
+    assert any("url" in b_ for row in h.session.last_markup_rows() for b_ in row)  # an «open my panel» button for yourself
+    await h.say(1, "فرمانروایی", group=True, reply_to=h.message_of(2))
+    text = h.session.last_text()
+    assert "شهر شیرکوه" in text and "شمشیرزن: ۴۰" in text and "کماندار: ۱۵" in text and "تعداد سربازان: ۵۵" in text
+    for line in text.splitlines():
+        if "uid:" not in line:
+            assert len(re.findall(EMOJI, line)) <= 1, line
+    nobody = await hero(services, db, 3, "بی‌شهر")
+    await h.say(3, "فرمانروایی", group=True)
+    assert "هنوز شهری ندارید" in h.session.last_text()
+    await h.say(1, "فرمانروایی", group=True, reply_to=h.message_of(3))
+    assert "بی شهر هنوز شهری" in h.session.last_text() or "هنوز شهری" in h.session.last_text()
+    await h.say(1, "فرمانروایی")  # in the private chat the same word opens the realm menu
+    assert any("شهر من" in x for x in h.labels())
+    del nobody

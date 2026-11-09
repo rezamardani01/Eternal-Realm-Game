@@ -1122,3 +1122,48 @@ async def city_flag_set(c: Ctx) -> Screen:
     shown = await city_settings(c)
     shown.toast = f"{d.FLAGS[index][0]} پرچم شهر عوض شد"
     return shown
+
+
+# --- the full city card, for the «فرمانروایی» word in a group ------------------------------------------------------------------------
+def city_card_text(city: City, now: int) -> str:
+    """Everything about a city on one page: ruler, people, food, soldiers, power, shield and buildings."""
+    league = d.league_of(city.trophies)
+    boost = 2.0 if city.boost_until > now else 1.0
+    prod, eaten = city.rates(boost)
+    net_food = prod["food"] - eaten
+    mood = "شاد و آرام" if city.happiness >= 70 else "ناراضی" if city.happiness >= 30 else "در آستانه‌ی شورش"
+    owner = f"[{city.owner_name}](uid:{city.owner_uid})" if city.owner_uid else city.owner_name
+    lines = [
+        f"🏰 {bold('شهر ' + city.name)}",
+        LINE,
+        f"{city.flag} پرچم شهر",
+        f"👑 فرمانروا: {owner}",
+        f"🛡️ خاندان: {city.clan or 'ندارد'}",
+        f"🏛️ سطح قلعه: {fa(city.castle)}",
+        f"{league[0]} لیگ {league[1]} · {fa(city.trophies)} جام",
+        _sign(city, now),
+        LINE,
+        f"👥 {bold('مردم')}",
+        f"🏘️ جمعیت: {fa(int(city.pop))} از {fa(city.pop_cap)}",
+        f"😊 رضایت: {bar(round(city.happiness), 100, 8)} {fa(round(city.happiness))}٪ ({mood})",
+        f"⚒️ شاغل: {fa(city.employed)} · بیکار: {fa(city.unemployed)}",
+        f"🎖️ قابل سربازگیری: {fa(city.recruitable)}",
+        LINE,
+        f"📦 {bold('منابع و آذوقه')}",
+        *[_res_line(r, city.amount(r)) for r in d.RES],
+        f"🍞 مصرف غذا: {fa(round(eaten))} در ساعت · تولید {fa(round(prod['food']))}",
+    ]
+    if net_food < 0:
+        lines.append(f"⏳ غذا تا {duration(int(city.res['food'] / -net_food * 3600))} دیگر تمام می‌شود")
+    lines += [LINE, f"⚔️ {bold('ارتش')}", f"🗡️ تعداد سربازان: {fa(city.army)}"]
+    lines += [f"{t.emoji} {t.name}: {fa(n)}" for t in d.TROOPS if (n := city.troops.get(t.id, 0))]
+    lines += [
+        f"⚔️ قدرت ارتش: {fa(city.army_power)}",
+        f"🧱 قدرت دفاعی: {fa(city.defense_power)}",
+        f"🪤 تله‌ها: {fa(sum(city.traps.values()))} شارژ",
+        LINE,
+        "🏗️ ساختمان‌ها: " + "، ".join(
+            f"{d.get_building(b).name} {fa(lv)}" for b, lv in sorted(city.levels.items(), key=lambda x: -x[1]) if lv
+        ),
+    ]
+    return "\n".join(lines)

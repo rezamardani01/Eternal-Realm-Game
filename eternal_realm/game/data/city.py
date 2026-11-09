@@ -132,8 +132,25 @@ def slots_for(castle_level: int) -> int:
     return 5 + (castle_level - 1)
 
 
+def storage_floor(castle: int) -> int:
+    """The least a storehouse can hold: always enough for the most expensive upgrade this castle level allows.
+
+    Without it a castle of level 6 (47 thousand gold for the next level) and a small storehouse made the upgrade
+    impossible for good, since production stops at the storage limit."""
+    best = 0
+    for b in BUILDINGS:
+        if b.id == "castle":
+            if castle >= MAX_CASTLE:
+                continue
+            level = castle
+        else:
+            level = max(0, min(b.max_level, castle) - 1)
+        best = max(best, max(build_cost(b, level).values()))
+    return -(-best * 5 // 4)
+
+
 def storage_cap(warehouse: int, castle: int) -> int:
-    return 5_000 + 4_000 * warehouse + 1_000 * castle
+    return max(5_000 + 4_000 * warehouse + 1_000 * castle, storage_floor(castle))
 
 
 def population_cap(castle: int) -> int:
