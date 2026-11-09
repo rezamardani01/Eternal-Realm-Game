@@ -16,6 +16,7 @@ from ...db.database import Tx
 from ...db.repos import wallet
 from ...shared.errors import GameError
 from ...shared.text import fa
+from ..data import maze as maze_data
 from ..data import solo as data
 from ..engine import combat, loot
 from ..engine.combat import Action, Battle, Fighter
@@ -63,6 +64,25 @@ class SoloUpdate:
     won: bool = False
     fled: bool = False
     payout: Payout = field(default_factory=Payout)
+
+
+@dataclass
+class MazeRun:
+    floor: int
+    hp: float
+    buffs: dict[str, float]
+    gold: int
+    xp: int
+    options: list[str]
+
+
+@dataclass
+class MazeStep:
+    lines: list[str]
+    run: MazeRun | None
+    fight: SoloFight | None = None
+    payout: Payout = field(default_factory=Payout)
+    ended: bool = False
 
 
 @dataclass
@@ -140,7 +160,8 @@ class SoloService:
 
     # --- starting ---------------------------------------------------------------------------------------------------
     async def _begin(
-        self, tx: Tx, player: Player, kind: str, foe: Fighter, info: dict, energy: int, *, shield: bool = False
+        self, tx: Tx, player: Player, kind: str, foe: Fighter, info: dict, energy: int, *, shield: bool = False,
+        hp_frac: float = 1.0, buffs: dict[str, float] | None = None,
     ) -> SoloFight:
         if await tx.scalar("SELECT 1 FROM solo_fights WHERE player_id = ? AND status = 'active'", (player.id,), 0):
             raise GameError("یک نبرد نیمه‌کاره دارید! اول آن را تمام کنید (از «سفر قهرمان» ادامه بدهید).")
@@ -148,6 +169,14 @@ class SoloService:
             await self.players.spend_energy(tx, player.id, energy)
         hero = await self._hero(tx, player)
         hero.shield = shield
+        for stat, amount in (buffs or {}).items():  # temporary powers (and curses) of a maze run
+            if stat == "atk":
+                hero.atk, hero.magic = max(1, round(hero.atk * (1 + amount))), max(1, round(hero.magic * (1 + amount)))
+            elif stat == "def":
+                hero.defense = round(hero.defense * (1 + amount))
+            elif stat == "hp":
+                hero.max_hp = round(hero.max_hp * (1 + amount))
+        hero.hp = max(1, round(hero.max_hp * hp_frac)) if hp_frac < 1.0 else hero.max_hp
         battle = Battle.start(hero, foe, MAX_ROUNDS, self.ctx.rng)
         info = {**info, "kind": kind}
         now = self.ctx.now()
@@ -315,6 +344,8 @@ class SoloService:
 
     async def _settle(self, tx: Tx, player: Player, fight: SoloFight, won: bool) -> Payout:
         info, pid, kind = fight.info, player.id, fight.kind
+        if kind == "maze":
+            return await self._maze_fought(tx, player, fight, won)
         if not won:
             if kind == "dungeon":
                 await self._set_progress(tx, pid, "run", 0)
@@ -380,6 +411,161 @@ class SoloService:
             if tx.rowcount == 0:
                 raise GameError("نبرد فعالی ندارید.")
             await self._set_progress(tx, player.id, "run", 0)
+            await tx.execute("DELETE FROM maze_runs WHERE player_id = ?", (player.id,))
+
+    # --- the eternal maze ----------------------------------------------------------------------------------------
+    async def maze_run(self, player_id: int) -> MazeRun | None:
+        async with self.ctx.db.read() as tx:
+            return await self._run(tx, player_id)
+
+    async def _run(self, tx: Tx, player_id: int) -> MazeRun | None:
+        row = await tx.fetchone("SELECT * FROM maze_runs WHERE player_id = ?", (player_id,))
+        if row is None:
+            return None
+        return MazeRun(row["floor"], row["hp"], json.loads(row["buffs"]), row["gold"], row["xp"], json.loads(row["options"]))
+
+    async def _save_run(self, tx: Tx, player_id: int, run: MazeRun) -> None:
+        await tx.execute(
+            "UPDATE maze_runs SET floor = ?, hp = ?, buffs = ?, gold = ?, xp = ?, options = ? WHERE player_id = ?",
+            (run.floor, run.hp, json.dumps(run.buffs), run.gold, run.xp, json.dumps(run.options), player_id),
+        )
+
+    def _options(self, floor: int) -> list[str]:
+        if floor in maze_data.BOSS_FLOORS:
+            return ["guardian"]
+        return ["war", "rest" if floor % maze_data.CAMPFIRE_EVERY == 0 else "gold", "magic"]
+
+    async def maze_start(self, player: Player) -> MazeRun:
+        async with self.ctx.db.transaction() as tx:
+            if await self._run(tx, player.id) is not None:
+                raise GameError("یک هزارتوی نیمه‌کاره دارید؛ ادامه‌اش بدهید یا با غنیمت بیرون بیایید.")
+            await self.players.spend_energy(tx, player.id, maze_data.ENERGY)
+            run = MazeRun(1, 1.0, {}, 0, 0, self._options(1))
+            await tx.execute(
+                "INSERT INTO maze_runs (player_id, floor, hp, buffs, gold, xp, options, started) VALUES (?, 1, 1.0, '{}', 0, 0, ?, ?)",
+                (player.id, json.dumps(run.options), self.ctx.now()),
+            )
+            return run
+
+    async def maze_pick(self, player: Player, index: int) -> MazeStep:
+        rng = self.ctx.rng
+        async with self.ctx.db.transaction() as tx:
+            run = await self._run(tx, player.id)
+            if run is None:
+                raise GameError("هزارتویی در جریان ندارید.")
+            if await tx.scalar("SELECT 1 FROM solo_fights WHERE player_id = ? AND status = 'active'", (player.id,), 0):
+                raise GameError("اول نبرد نیمه‌کاره را تمام کنید.")
+            if not 0 <= index < len(run.options):
+                raise GameError("این مسیر وجود ندارد.")
+            path, floor = run.options[index], run.floor
+            if path in ("war", "guardian"):
+                foe_id = maze_data.BOSS_FLOORS.get(floor) or rng.choice(maze_data.pool_for(floor))
+                mult = maze_data.floor_mult(floor) * (1.1 if path == "war" else 1.0)
+                foe = data.get_foe(foe_id).fighter(player.level, mult)
+                gold, xp = self._scale(player.level, *(v * (3 if path == "guardian" else 1.5) for v in maze_data.floor_reward(floor)))
+                info = {"title": f"هزارتوی ابدی · طبقه‌ی {fa(floor)}", "floor": floor, "path": path, "gold": gold, "xp": xp, "foe": foe_id}
+                fight = await self._begin(tx, player, "maze", foe, info, 0, hp_frac=run.hp, buffs=run.buffs)
+                return MazeStep([f"{data.get_foe(foe_id).emoji} {data.get_foe(foe_id).name} راهتان را بسته است!"], run, fight=fight)
+            lines: list[str] = []
+            gold, xp = self._scale(player.level, *maze_data.floor_reward(floor))
+            payout = Payout()
+            if path == "gold":
+                if rng.random() < 0.7:
+                    run.gold += gold
+                    lines.append(f"💎 صندوقی کهنه یافتید: {fa(gold)} سکه به غنیمت‌تان اضافه شد.")
+                    if rng.random() < 0.35:
+                        item, qty = rng.choice([("iron_ore", 4), ("herb", 5), ("crystal_shard", 1), ("monster_fang", 2)])
+                        payout = await self._pay(tx, player.id, 0, 0, 0, {item: qty})
+                        lines.append("🎁 چیزی هم لای گنج بود و همین حالا به کولهتان رفت.")
+                else:
+                    run.hp = max(0.05, run.hp - 0.25)
+                    lines.append("🪤 تله فعال شد! یک‌چهارم جانتان را از دست دادید.")
+            elif path == "magic":
+                roll = rng.random()
+                if roll < 0.55:
+                    key = rng.choice(list(maze_data.BLESSINGS))
+                    label, stat, amount = maze_data.BLESSINGS[key]
+                    run.buffs[stat] = round(run.buffs.get(stat, 0.0) + amount, 3)
+                    if stat == "hp":
+                        run.hp = min(1.0, run.hp + 0.3)
+                    lines.append(f"🔮 برکت! {label} (تا پایان این هزارتو).")
+                elif roll < 0.8:
+                    label, stat, amount = maze_data.CURSE
+                    run.buffs[stat] = round(run.buffs.get(stat, 0.0) + amount, 3)
+                    run.gold += gold
+                    lines.append(f"🔮 {label}؛ اما سکه‌ای از جادو برایتان ماند ({fa(gold)}).")
+                else:
+                    lines.append("🔮 نجوایی مبهم شنیدید و چیزی نشد؛ هزارتو بی‌تفاوت است.")
+            elif path == "rest":
+                run.hp = min(1.0, run.hp + maze_data.CAMPFIRE_HEAL)
+                lines.append("🔥 کنار آتش آرام گرفتید و نیمی از جانتان برگشت.")
+            run.floor += 1
+            run.options = self._options(run.floor)
+            await self._save_run(tx, player.id, run)
+            return MazeStep(lines, run, payout=payout)
+
+    async def _maze_fought(self, tx: Tx, player: Player, fight: SoloFight, won: bool) -> Payout:
+        pid, info = player.id, fight.info
+        run = await self._run(tx, pid)
+        if run is None:
+            return Payout()
+        floor = info["floor"]
+        hero = fight.battle.fighters[0]
+        if not won:
+            pay = await self._finish_run(tx, pid, run, maze_data.DEFEAT_SHARE)
+            pay.notes.insert(0, f"هزارتو شما را در طبقه‌ی {fa(floor)} بلعید؛ نیمی از غنیمت‌تان ماند.")
+            return pay
+        run.gold += info["gold"]
+        run.xp += info["xp"]
+        run.hp = max(0.05, hero.hp / max(1, hero.max_hp))
+        notes: list[str] = []
+        items: dict[str, int] = {}
+        if info["path"] == "war" and self.ctx.rng.random() < 0.12:
+            gear = self._gear_for(player.level)
+            if gear:
+                items[gear] = 1
+                notes.append("سلاح یا زرهی از دشمن به یغما رفت!")
+        crystal = 0
+        if floor in maze_data.MILESTONES and not await self._progress(tx, pid, f"maze:milestone:{floor}"):
+            await self._set_progress(tx, pid, f"maze:milestone:{floor}", 1)
+            crystal, chest = maze_data.MILESTONES[floor]
+            items[chest] = items.get(chest, 0) + 1
+            notes.append(f"نخستین بار به طبقه‌ی {fa(floor)} رسیدید: جایزه‌ی ماندگار!")
+        if floor > await self._progress(tx, pid, "maze:best"):
+            await self._set_progress(tx, pid, "maze:best", floor)
+            notes.append(f"رکورد تازه‌ی هزارتو: طبقه‌ی {fa(floor)}")
+        if floor >= maze_data.FLOORS:
+            pay = await self._finish_run(tx, pid, run, 1.0)
+            pay.notes = notes + ["هزارتو را فتح کردید! همه‌ی غنیمت‌تان با شماست."]
+            extra = await self._pay(tx, pid, 0, 0, crystal, items)
+            pay.crystal, pay.items = extra.crystal, extra.items
+            return pay
+        run.floor = floor + 1
+        run.options = self._options(run.floor)
+        await self._save_run(tx, pid, run)
+        pay = await self._pay(tx, pid, 0, 0, crystal, items)
+        pay.notes = notes
+        return pay
+
+    def _gear_for(self, level: int) -> str:
+        from ..data.items import ITEMS
+
+        pool = [i.id for i in ITEMS.values() if i.is_gear and i.buy > 0 and i.level_req <= level and i.rarity <= 3]
+        return self.ctx.rng.choice(pool) if pool else ""
+
+    async def _finish_run(self, tx: Tx, pid: int, run: MazeRun, share: float) -> Payout:
+        await tx.execute("DELETE FROM maze_runs WHERE player_id = ?", (pid,))
+        return await self._pay(tx, pid, round(run.gold * share), round(run.xp * share))
+
+    async def maze_retreat(self, player: Player) -> Payout:
+        """Leave with everything gathered so far."""
+        async with self.ctx.db.transaction() as tx:
+            run = await self._run(tx, player.id)
+            if run is None:
+                raise GameError("هزارتویی در جریان ندارید.")
+            if await tx.scalar("SELECT 1 FROM solo_fights WHERE player_id = ? AND status = 'active'", (player.id,), 0):
+                raise GameError("اول نبرد نیمه‌کاره را تمام کنید.")
+            return await self._finish_run(tx, player.id, run, 1.0)
 
     # --- events on the road ---------------------------------------------------------------------------------------
     async def wander(self, player: Player) -> data.RoadEvent:

@@ -753,6 +753,19 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (player_id, day, key)
     );
     """,
+    # 50: the eternal maze (one run in progress per hero)
+    """
+    CREATE TABLE maze_runs (
+        player_id INTEGER PRIMARY KEY REFERENCES players (id),
+        floor     INTEGER NOT NULL,
+        hp        REAL    NOT NULL,
+        buffs     TEXT    NOT NULL,
+        gold      INTEGER NOT NULL DEFAULT 0,
+        xp        INTEGER NOT NULL DEFAULT 0,
+        options   TEXT    NOT NULL,
+        started   INTEGER NOT NULL
+    );
+    """,
 ]
 
 

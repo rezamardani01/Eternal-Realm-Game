@@ -303,3 +303,130 @@ async def test_the_advisor_reads_the_real_situation(services, db, clock):
     assert any(t.screen == "daily" for t in await services.advisor.for_player(await services.players.require(1), 10))
     big = await hero(services, db, uid=2, level=30)
     assert any(t.screen == "sbossv" for t in await services.advisor.for_player(big, 10))
+
+
+async def maze_win(services, db, player):
+    await rig(db, player.id)
+    for _ in range(40):
+        update = await services.solo.act(player, Action.ATTACK)
+        if update.finished:
+            return update
+    raise AssertionError("maze fight did not end")
+
+
+async def war_step(services, db, player):
+    run = await services.solo.maze_run(player.id)
+    step = await services.solo.maze_pick(player, run.options.index("war") if "war" in run.options else run.options.index("guardian"))
+    assert step.fight is not None
+    return step
+
+
+async def test_the_maze_run_floors_paths_and_what_each_does(services, db):
+    from eternal_realm.game.data import maze as md
+
+    p = await hero(services, db, level=12)
+    energy = (await services.players.require(1)).energy
+    run = await services.solo.maze_start(p)
+    assert (await services.players.require(1)).energy <= energy - md.ENERGY + 1
+    assert run.floor == 1 and run.options == ["war", "gold", "magic"] and run.hp == 1.0
+    with pytest.raises(GameError, match="نیمه‌کاره"):
+        await services.solo.maze_start(p)
+    with pytest.raises(GameError, match="مسیر"):
+        await services.solo.maze_pick(p, 7)
+    seen = set()
+    for _ in range(12):  # treasure and magic floors: every outcome keeps the run alive and moves on
+        async with db.transaction() as tx:
+            await tx.execute("UPDATE maze_runs SET floor = 3, hp = 0.6, options = ? WHERE player_id = ?", (json.dumps(["war", "gold", "magic"]), p.id))
+        step = await services.solo.maze_pick(p, 1 + (len(seen) % 2))
+        assert step.run.floor == 4 and step.run.hp >= 0.05 and step.lines
+        seen.add(step.lines[0][0])
+    assert seen & {"💎", "🪤", "🔮"}
+    # a campfire floor heals and a guardian floor leaves no choice
+    assert (await services.solo.maze_run(p.id)).options == ["war", "gold", "magic"]
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE maze_runs SET floor = 7, hp = 0.3, options = ? WHERE player_id = ?", (json.dumps(["war", "rest", "magic"]), p.id))
+    step = await services.solo.maze_pick(p, 1)
+    assert step.run.hp == pytest.approx(0.8) and step.run.floor == 8
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE maze_runs SET floor = 10, options = ? WHERE player_id = ?", (json.dumps(["guardian"]), p.id))
+    assert services.solo._options(10) == ["guardian"] and services.solo._options(7)[1] == "rest" and services.solo._options(9)[1] == "gold"
+    await services.solo.maze_retreat(p)
+
+
+async def test_a_maze_win_moves_down_keeps_health_and_pays_only_on_exit_or_milestones(services, db):
+    from eternal_realm.game.data import maze as md
+
+    p = await hero(services, db, level=12)
+    await services.solo.maze_start(p)
+    gold = (await services.players.require(1)).gold
+    await war_step(services, db, p)
+    update = await maze_win(services, db, p)
+    assert update.won and update.payout.gold == 0  # nothing is paid until the run ends
+    run = await services.solo.maze_run(p.id)
+    assert run.floor == 2 and run.gold > 0 and run.xp > 0 and 0.05 <= run.hp <= 1.0
+    assert (await services.solo.overview(p.id))["maze:best"] == 1
+    assert (await services.players.require(1)).gold == gold
+    pool = run.gold
+    paid = await services.solo.maze_retreat(p)
+    assert paid.gold >= pool and (await services.players.require(1)).gold >= gold + pool
+    assert await services.solo.maze_run(p.id) is None
+    with pytest.raises(GameError, match="جریان"):
+        await services.solo.maze_retreat(p)
+    # the first arrival on floor 10 pays crystals and a chest for good, a second one does not
+    crystals = (await services.players.require(1)).crystal
+    for round_ in (1, 2):
+        await services.solo.maze_start(p)
+        async with db.transaction() as tx:
+            await tx.execute("UPDATE maze_runs SET floor = 10, options = ? WHERE player_id = ?", (json.dumps(["guardian"]), p.id))
+        await war_step(services, db, p)
+        update = await maze_win(services, db, p)
+        if round_ == 1:
+            assert update.payout.crystal == md.MILESTONES[10][0] and update.payout.items == {md.MILESTONES[10][1]: 1}
+            assert any("جایزه‌ی ماندگار" in n for n in update.payout.notes)
+        else:
+            assert update.payout.crystal == 0 and not update.payout.items
+        await services.solo.maze_retreat(p)
+    assert (await services.players.require(1)).crystal >= crystals + md.MILESTONES[10][0]
+    assert (await services.solo.overview(p.id))["maze:best"] == 10
+
+
+async def test_a_maze_defeat_ends_the_run_and_pays_half(services, db):
+    p = await hero(services, db, level=12)
+    await services.solo.maze_start(p)
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE maze_runs SET gold = 1000, xp = 400 WHERE player_id = ?", (p.id,))
+    await war_step(services, db, p)
+    gold = (await services.players.require(1)).gold
+    update = await services.solo.act(p, Action.SURRENDER)
+    assert update.fled and update.payout.gold >= 500 and update.payout.gold <= 700
+    assert (await services.players.require(1)).gold == gold + update.payout.gold
+    assert await services.solo.maze_run(p.id) is None
+    assert any("بلعید" in n for n in update.payout.notes)
+
+
+async def test_the_maze_screens(h, services, db):
+    p = await hero(services, db, level=12)
+    await h.panel(1, "maze")
+    assert "هزارتوی ابدی" in h.session.last_text() and "ورود به هزارتو" in " ".join(h.labels())
+    await h.panel(1, "mazego")
+    assert "طبقه‌ی ۱ از ۳۰" in h.session.last_text() and {"⚔️ مسیر جنگجو", "💎 مسیر گنج", "🔮 مسیر جادو"} <= set(h.labels())
+    for line in h.session.last_text().splitlines():
+        assert len(re.findall(EMOJI, line)) <= 1, line
+    await h.panel(1, "mazepick", "1")
+    assert "در راه چه گذشت" in h.session.last_text()
+    for line in h.session.last_text().splitlines():
+        assert len(re.findall(EMOJI, line)) <= 1, line
+    await h.panel(1, "mazepick", "0")  # a war path starts a real fight
+    assert "نوبت شماست" in h.session.last_text()
+    await rig(db, p.id)
+    for _ in range(30):
+        await h.panel(1, "sact", "attack")
+        if "پیروزی!" in h.session.last_text():
+            break
+    assert any("ادامه‌ی هزارتو" in x for x in h.labels())
+    await h.panel(1, "maze")
+    assert "غنیمت تا اینجا" in h.session.last_text()
+    await h.panel(1, "mazeoutq")
+    assert "بیرون آمدن" in h.session.last_text()
+    await h.panel(1, "mazeout")
+    assert "غنیمت" in h.session.last_text() and await services.solo.maze_run(p.id) is None
