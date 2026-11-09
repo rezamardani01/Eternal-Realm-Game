@@ -86,7 +86,7 @@ class DuelService:
         async with self.ctx.db.transaction() as tx:
             for pid in (challenger.id, target.id):
                 left = await player_repo.is_away(tx, pid, now)
-                if left:
+                if left is not None:
                     raise GameError(player_repo.away_text(left, None if pid == challenger.id else target.name))
             pair = (challenger.id, target.id)
             await repo.expire_pending_for(tx, pair, now)
@@ -166,7 +166,7 @@ class DuelService:
             assert challenger is not None and target is not None
             for p in (challenger, target):
                 left = await player_repo.is_away(tx, p.id, now)
-                if left:
+                if left is not None:
                     raise GameError(player_repo.away_text(left, None if p.id == by.id else p.name))
             fighters = [await self._fighter(tx, p) for p in (challenger, target)]
             ratio, strong = combat.level_field([[fighters[0]], [fighters[1]]])

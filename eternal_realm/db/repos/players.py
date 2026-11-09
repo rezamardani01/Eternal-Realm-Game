@@ -84,16 +84,20 @@ async def count(tx: Tx) -> int:
     return int(await tx.scalar("SELECT COUNT(*) FROM players", default=0))
 
 
-async def is_away(tx: Tx, player_id: int, now: int) -> int:
-    """Seconds until the hero is back from an expedition (0 when not away)."""
-    ends = await tx.scalar("SELECT ends_at FROM expeditions WHERE player_id = ? AND ends_at > ?", (player_id, now), 0)
-    return max(0, int(ends) - now) if ends else 0
+async def is_away(tx: Tx, player_id: int, now: int) -> int | None:
+    """Seconds until the hero is back from an expedition (0 once back but the report is not collected); None when not away."""
+    ends = await tx.scalar("SELECT ends_at FROM expeditions WHERE player_id = ?", (player_id,), None)
+    return None if ends is None else max(0, int(ends) - now)
 
 
 def away_text(left: int, who: str | None = None) -> str:
     """The refusal shown to someone whose hero (or opponent) is away, with the exact time left."""
     hours, rest = divmod(left, 3600)
     minutes, seconds = divmod(rest, 60)
+    if left <= 0:
+        if who is None:
+            return "🏕️ *قهرمان شما* از اعزام برگشته ولی گزارشش را هنوز نگرفته است.\n\n🎁 اول گزارش اعزام را بگیرید، بعد می‌شود مبارزه کرد."
+        return f"🏕️ *{who}* هنوز گزارش اعزامش را نگرفته و تا آن موقع نمی‌شود با او مبارزه کرد."
     units = [(hours, "ساعت"), (minutes, "دقیقه"), (seconds, "ثانیه")]
     parts = " و ".join(f"{fa(n)} {unit}" for i, (n, unit) in enumerate(units) if n or any(v for v, _ in units[:i]) or i == 2)
     if who is None:

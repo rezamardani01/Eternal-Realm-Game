@@ -257,8 +257,9 @@ class BetService:
             amount = 1
         self._validate(kind, item_id, amount)
         async with self.ctx.db.transaction() as tx:
-            if await tx.scalar("SELECT 1 FROM expeditions WHERE player_id = ? AND ends_at > ?", (player.id, now), 0):
-                raise GameError("🏕️ قهرمان در اعزام است و تا بازگشتش نمی‌تواند شرط ببندد.")
+            left = await player_repo.is_away(tx, player.id, now)
+            if left is not None:
+                raise GameError(player_repo.away_text(left))
             if await tx.fetchone(
                 "SELECT 1 FROM bet_duels WHERE challenger_id = ? AND status IN ('open', 'active')", (player.id,)
             ):
@@ -335,6 +336,10 @@ class BetService:
                 raise GameError("این شرط دیگر باز نیست؛ یا قبول شده یا مهلتش تمام شده است.")
             if row["challenger_id"] == player.id:
                 raise GameError("شرطی را که خودتان بسته‌اید نمی‌توانید قبول کنید؛ منتظر یک حریف بمانید.")
+            for pid in (player.id, row["challenger_id"]):
+                left = await player_repo.is_away(tx, pid, now)
+                if left is not None:
+                    raise GameError(player_repo.away_text(left, None if pid == player.id else "حریف شرط"))
             bet = Bet.from_row(row)
             if bet.kind == "gear":
                 kind, amount, gear_id = await self._pay_for_gear(tx, bet, player, pay, now)
