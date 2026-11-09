@@ -204,7 +204,7 @@ async def home(c: Ctx) -> Screen:
             rows.append(keyboards.open_panel_button(c.services.bot_username))
         return Screen(text, rows)
     rows = [
-        [c.btn("🗺️ ماجراجویی", "adv", style="primary")],
+        [c.btn("🗺️ ماجراجویی", "adv", style="primary"), c.btn("🧭 سفر قهرمان", "trip", style="primary")],
         [c.btn("👤 قهرمان من", "profile"), c.btn("🏰 فرمانروایی", "city")],
         [c.btn("⚔️ نبرد و چالش", "fight"), c.btn("🛒 بازار و تجارت", "trade")],
         [c.btn("🏯 خاندان", "clan"), c.btn("💎 خزانه قلمرو", "premium")],

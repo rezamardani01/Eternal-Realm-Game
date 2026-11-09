@@ -726,6 +726,33 @@ MIGRATIONS: list[str] = [
     ALTER TABLE cities ADD COLUMN withdraw_day INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE cities ADD COLUMN withdrawn INTEGER NOT NULL DEFAULT 0;
     """,
+    # 49: solo play (the fight in progress, story/dungeon/boss progress and daily counters)
+    """
+    CREATE TABLE solo_fights (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id  INTEGER NOT NULL REFERENCES players (id),
+        kind       TEXT    NOT NULL,
+        status     TEXT    NOT NULL,
+        state      TEXT    NOT NULL,
+        info       TEXT    NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX idx_solo_fights_player ON solo_fights (player_id, status);
+    CREATE TABLE solo_progress (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        key       TEXT    NOT NULL,
+        n         INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (player_id, key)
+    );
+    CREATE TABLE solo_daily (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        day       INTEGER NOT NULL,
+        key       TEXT    NOT NULL,
+        n         INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (player_id, day, key)
+    );
+    """,
 ]
 
 

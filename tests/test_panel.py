@@ -583,7 +583,7 @@ async def test_the_adventure_menu_has_no_dungeon_button_the_main_menu_does(h, se
 async def test_private_words_and_the_adventure_panel_are_silent_in_a_group(h, services):
     await reg(services)
     h.session.reset()
-    for word in ("فروشگاه", "کوله‌پشتی", "خاندان", "ماجراجویی", "adventure", "بازار", "جایزه"):
+    for word in ("فروشگاه", "کوله‌پشتی", "ماجراجویی", "adventure", "بازار", "جایزه"):
         await h.say(10, word, group=True)
     assert h.session.calls == []  # not a single message, not even a pointer
     await h.say(10, "ماجراجویی")  # in the private chat the panel opens as always
@@ -591,7 +591,7 @@ async def test_private_words_and_the_adventure_panel_are_silent_in_a_group(h, se
     h.session.reset()
     await h.panel(10, "adv", group=True)  # and an old adventure button in a group does nothing
     assert not h.session.sent("editMessageText")
-    for word in ("ماهیگیری", "معدن", "گیاه", "شکار", "پروفایل", "قلمرو"):  # what stays in the group still works
+    for word in ("ماهیگیری", "معدن", "گیاه", "شکار", "پروفایل", "قلمرو", "خاندان"):  # what stays in the group still works
         await h.say(10, word, group=True)
         assert h.session.sent("sendMessage"), word
         h.session.reset()
