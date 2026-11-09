@@ -19,6 +19,15 @@ BOARDS: dict[str, tuple[str, str, str, str]] = {
 }
 
 
+#: level brackets of the global boards: id -> (button label, lowest level, highest level)
+BRACKETS: dict[str, tuple[str, int, int]] = {
+    "all": ("همه", 1, 10_000),
+    "b1": ("سطح ۱ تا ۲۰", 1, 20),
+    "b2": ("سطح ۲۱ تا ۴۰", 21, 40),
+    "b3": ("سطح ۴۱ به بالا", 41, 10_000),
+}
+
+
 @dataclass
 class Entry:
     name: str
@@ -55,21 +64,27 @@ class RankingService:
     def __init__(self, ctx: AppContext) -> None:
         self.ctx = ctx
 
-    async def global_board(self, board: str, me: Player | None = None, limit: int = 10) -> Board:
+    async def global_board(
+        self, board: str, me: Player | None = None, limit: int = 10, bracket: str = "all"
+    ) -> Board:
+        """A global board, optionally only for heroes of a level bracket (newcomers compare with newcomers)."""
         title, order, column, unit = BOARDS[board]
+        label, low, high = BRACKETS.get(bracket, BRACKETS["all"])
+        if bracket in BRACKETS and bracket != "all":
+            title = f"{title} · {label}"
         async with self.ctx.db.read() as tx:
             rows = await tx.fetchall(
                 f"SELECT display_name, platform_user_id AS uid, race, class, level, {column} AS value FROM players"  # noqa: S608
-                f" WHERE banned = 0 ORDER BY {order} LIMIT ?",
-                (limit,),
+                f" WHERE banned = 0 AND level BETWEEN ? AND ? ORDER BY {order} LIMIT ?",
+                (low, high, limit),
             )
             position = None
-            if me is not None:
+            if me is not None and low <= me.level <= high:
                 position = 1 + int(
                     await tx.scalar(
-                        f"SELECT COUNT(*) FROM players WHERE banned = 0 AND {column} >"  # noqa: S608
+                        f"SELECT COUNT(*) FROM players WHERE banned = 0 AND level BETWEEN ? AND ? AND {column} >"  # noqa: S608
                         f" (SELECT {column} FROM players WHERE id = ?)",
-                        (me.id,),
+                        (low, high, me.id),
                         0,
                     )
                 )

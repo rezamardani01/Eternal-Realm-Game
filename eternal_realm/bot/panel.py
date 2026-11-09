@@ -1059,6 +1059,7 @@ async def listing_ask(c: Ctx) -> Screen:
 @screen("top")
 async def top(c: Ctx) -> Screen:
     board_id = c.a or ("group" if c.is_group else "level")
+    bracket = c.b or "all"
     ranking = c.services.rankings
     group_only = ("group", "hero", "history")
     if board_id in group_only and not c.is_group:
@@ -1075,11 +1076,19 @@ async def top(c: Ctx) -> Screen:
         elif board_id == "path":
             board = await ranking.path_board(c.player)
         else:
-            board = await ranking.global_board(board_id, c.player)
+            board = await ranking.global_board(board_id, c.player, bracket=bracket)
         text = views.ranking(board, mentions=c.is_group)
+    from ..game.services.rankings import BRACKETS, BOARDS
+
+    brackets = []
+    if board_id in BOARDS:  # the four global boards can be narrowed to heroes of a similar level
+        brackets = [
+            [c.btn(("✔️ " if bracket == key else "") + label, "top", board_id, key) for key, (label, _, _) in BRACKETS.items()]
+        ]
     rows = [
-        [c.btn("🏆 سطح", "top", "level"), c.btn("💰 ثروت", "top", "rich")],
-        [c.btn("⚔️ دوئل", "top", "wins"), c.btn("🏅 لیگ", "top", "rating")],
+        [c.btn("🏆 سطح", "top", "level", bracket), c.btn("💰 ثروت", "top", "rich", bracket)],
+        [c.btn("⚔️ دوئل", "top", "wins", bracket), c.btn("🏅 لیگ", "top", "rating", bracket)],
+        *brackets,
         [c.btn("🎟️ مسیر قهرمانی", "top", "path"), c.btn("🐉 شکارچیان باس", "top", "bosses")],
         [c.btn("🏁 مسابقه‌های هفته", "contests")],
     ]

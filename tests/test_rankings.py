@@ -80,3 +80,30 @@ async def test_the_path_board_ranks_players_by_their_hero_path_tier(h, services,
     await h.tap(3, "مسیر قهرمانی", group=True)
     text = h.session.last_text()
     assert "تالار مسیر قهرمانی" in text and "مرحله" in text and text.index("سارا") < text.index("رها") and "جایگاه شما" in text
+
+
+async def test_global_boards_can_be_narrowed_to_a_level_bracket(services, db):
+    async def hero_at(uid, name, level):
+        p = await services.players.register(uid, f"u{uid}", name, "elf", "archer")
+        async with db.transaction() as tx:
+            await tx.execute("UPDATE players SET level = ? WHERE id = ?", (level, p.id))
+        return await services.players.require(uid)
+
+    novice, mid, giant = await hero_at(1, "تازه‌کار", 5), await hero_at(2, "میانرو", 30), await hero_at(3, "پرقدرت", 60)
+    everyone = await services.rankings.global_board("level", novice)
+    assert [e.name for e in everyone.entries] == ["پرقدرت", "میانرو", "تازه کار"] and everyone.my_position == 3
+    low = await services.rankings.global_board("level", novice, bracket="b1")
+    assert [e.name for e in low.entries] == ["تازه کار"] and low.my_position == 1 and "سطح ۱ تا ۲۰" in low.title
+    top = await services.rankings.global_board("level", novice, bracket="b3")
+    assert [e.name for e in top.entries] == ["پرقدرت"] and top.my_position is None  # a novice is not on the top bracket's board
+
+
+async def test_the_board_screen_has_bracket_buttons(h, services, db):
+    p = await services.players.register(1, "u1", "آرش‌جان", "elf", "archer")
+    await h.panel(1, "top", "level")
+    labels = h.labels()
+    assert {"✔️ همه", "سطح ۱ تا ۲۰", "سطح ۲۱ تا ۴۰", "سطح ۴۱ به بالا"} <= set(labels)
+    data = h.button_data("سطح ۱ تا ۲۰")
+    await h.click(1, data)
+    assert "سطح ۱ تا ۲۰" in h.session.last_text() and "✔️ سطح ۱ تا ۲۰" in h.labels()
+    del p

@@ -144,7 +144,16 @@ async def raid(services, db, attacker, a_city, d_city, sword):
             " ON CONFLICT (city_id, kind) DO UPDATE SET qty = ?", (a_city.id, sword, sword),
         )
         await tx.execute("UPDATE cities SET food = 100000, shield_until = 0 WHERE id IN (?, ?)", (a_city.id, d_city.id))
-    await services.city.search(attacker)
+    import json
+
+    async with db.transaction() as tx:  # the search is random, so aim at the chosen city directly
+        target = await services.city._by_id(tx, d_city.id)
+        await tx.execute(
+            "INSERT INTO city_search (player_id, target_id, snapshot, selection, seen, created_at, used)"
+            " VALUES (?, ?, ?, '{}', '[]', ?, 0) ON CONFLICT (player_id) DO UPDATE SET target_id = excluded.target_id,"
+            " snapshot = excluded.snapshot, selection = '{}', created_at = excluded.created_at, used = 0",
+            (attacker.id, target.id, json.dumps({"city": target.id, **target.snapshot(), "name": target.name}), services.ctx.now()),
+        )
     await services.city.adjust(attacker, None, 0, everyone=True)
     return await services.city.attack(attacker)
 
