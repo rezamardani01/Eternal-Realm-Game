@@ -71,6 +71,7 @@ async def trip(c: Ctx) -> Screen:
         [c.btn("📖 داستان سرزمین فراموش‌شده", "story"), c.btn("🏚️ دخمه‌های روزانه", "dng")],
         [c.btn("🐉 باس‌های تک‌نفره", "sbosses"), c.btn("🥊 میدان بات‌ها", "arena")],
         [c.btn("♾️ هزارتوی ابدی", "maze", style="primary"), c.btn(f"🎲 گشت‌زنی · {fa(data.ENERGY['wander'])}⚡", "wander")],
+        [c.btn("🏕️ اعزام قهرمان (در غیبتتان)", "expd")],
         c.back("home"),
     ]
     return Screen("\n".join(lines), rows)
@@ -532,3 +533,79 @@ async def maze_out(c: Ctx) -> Screen:
     if pay.level_up:
         text.append(f"🎉 به سطح {fa(pay.level_up.new)} رسیدید!")
     return Screen("\n".join(text), [[c.btn("♾️ هزارتو", "maze")], c.back("trip", "🧭 سفر قهرمان")])
+
+
+# --- offline expeditions --------------------------------------------------------------------------------------------------------------------
+@screen("expd")
+async def expedition(c: Ctx) -> Screen:
+    _guard(c)
+    from ..game.data import expedition as ed
+    from ..shared.text import duration
+
+    now = c.services.ctx.now()
+    trip = await c.services.expeditions.current(c.player.id)
+    used = await c.services.expeditions.today(c.player.id)
+    lines = [f"🏕️ {bold('اعزام قهرمان')}", LINE]
+    if trip is not None:
+        kind = ed.get_kind(trip.kind)
+        if trip.ends_at <= now:
+            lines += [f"{kind.emoji} {kind.name} تمام شد!", "قهرمان شما برگشته و گزارش و پاداشش را آورده است."]
+            return Screen("\n".join(lines), [[c.btn("📜 گرفتن گزارش و پاداش", "expdclaim", style="success")], c.back("trip", "🧭 سفر قهرمان")])
+        done = (now - trip.started_at) / max(1, trip.ends_at - trip.started_at)
+        lines += [
+            f"{kind.emoji} {kind.name}",
+            f"{bar(round(done * 100), 100, 10)} {fa(round(done * 100))}٪",
+            f"⏳ {duration(trip.ends_at - now)} تا بازگشت",
+            "", "وقتی برگشت برایتان پیام می‌فرستم.",
+        ]
+        return Screen("\n".join(lines), [[c.btn("🔄 تازه‌سازی", "expd")], c.back("trip", "🧭 سفر قهرمان")])
+    lines += [
+        "قهرمانتان را برای ساعت‌ها به کاری بفرستید؛ حتی وقتی در بازی نیستید برمی‌گردد و گزارش می‌دهد.",
+        f"⏳ مدت: {', '.join(fa(h) for h in ed.HOURS)} ساعت · هر روز حداکثر {fa(ed.DAILY_LIMIT)} اعزام (امروز {fa(used)})",
+        "پاداش اعزام کوچک‌تر از ماجراجویی فعال است تا ماجراجویی ارزشمندتر بماند.",
+        "", "کجا بفرستیمش؟ 👇",
+    ]
+    rows = [[c.btn(f"{k.emoji} {k.name} · {k.about}", "expdk", k.id)] for k in ed.KINDS]
+    rows.append(c.back("trip", "🧭 سفر قهرمان"))
+    return Screen("\n".join(lines), rows)
+
+
+@screen("expdk")
+async def expedition_kind(c: Ctx) -> Screen:
+    _guard(c)
+    from ..game.data import expedition as ed
+
+    try:
+        kind = ed.get_kind(c.a)
+    except KeyError:
+        raise GameError("چنین اعزامی نیست.") from None
+    lines = [f"{kind.emoji} {bold(kind.name)}", LINE, kind.about, "", "چند ساعت؟ 👇"]
+    rows = [[c.btn(f"⏳ {fa(h)} ساعت", "expdgo", kind.id, h)] for h in ed.HOURS]
+    rows.append(c.back("expd"))
+    return Screen("\n".join(lines), rows)
+
+
+@screen("expdgo")
+async def expedition_go(c: Ctx) -> Screen:
+    _guard(c)
+    await c.services.expeditions.start(c.player, c.a, _int(c.b))
+    shown = await expedition(c)
+    shown.toast = "🏕️ قهرمان شما راهی شد"
+    return shown
+
+
+@screen("expdclaim")
+async def expedition_claim(c: Ctx) -> Screen:
+    _guard(c)
+    report = await c.services.expeditions.claim(c.player)
+    lines = [
+        f"📜 {bold('گزارش اعزام شما')}", LINE,
+        f"{report.kind.emoji} {report.kind.name} · {fa(report.hours)} ساعت", "",
+        "در مدت غیبت شما، قهرمانتان این کارها را انجام داد:",
+        *[f"• {line}" for line in (report.lines or ["روزی آرام بود و چیزی دیده نشد"])],
+    ]
+    if report.crystal:
+        lines.append(f"💎 {fa(report.crystal)} کریستال هم یافت")
+    if report.level_up:
+        lines.append(f"🎉 به سطح {fa(report.level_up.new)} رسیدید!")
+    return Screen("\n".join(lines), [[c.btn("🏕️ اعزام دوباره", "expd", style="success")], c.back("trip", "🧭 سفر قهرمان")])

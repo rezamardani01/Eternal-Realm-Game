@@ -430,3 +430,63 @@ async def test_the_maze_screens(h, services, db):
     assert "بیرون آمدن" in h.session.last_text()
     await h.panel(1, "mazeout")
     assert "غنیمت" in h.session.last_text() and await services.solo.maze_run(p.id) is None
+
+
+async def test_expeditions_take_time_pay_modestly_and_are_limited(services, db, clock):
+    from eternal_realm.game.data import expedition as ed
+
+    p = await hero(services, db)
+    with pytest.raises(GameError, match="چنین"):
+        await services.expeditions.start(p, "nowhere", 4)
+    with pytest.raises(GameError, match="مدت"):
+        await services.expeditions.start(p, "mine", 3)
+    trip = await services.expeditions.start(p, "mine", 4)
+    assert trip.ends_at == services.ctx.now() + 4 * 3600
+    with pytest.raises(GameError, match="هم‌اکنون"):
+        await services.expeditions.start(p, "herb", 1)
+    with pytest.raises(GameError, match="برنگشته"):
+        await services.expeditions.claim(p)
+    clock.advance(4 * 3600 + 1)
+    report = await services.expeditions.claim(p)
+    assert report.hours == 4 and report.lines and report.items.get("iron_ore", 0) >= 6
+    async with db.read() as tx:
+        assert await tx.scalar("SELECT qty FROM inventory WHERE player_id = ? AND item_id = 'iron_ore'", (p.id,), 0) >= 6
+    with pytest.raises(GameError, match="در اعزام نیست"):
+        await services.expeditions.claim(p)
+    await services.expeditions.start(p, "train", 8)
+    clock.advance(8 * 3600)
+    trained = await services.expeditions.claim(p)
+    assert trained.xp > 0 and trained.gold == 0
+    with pytest.raises(GameError, match=f"{ed.DAILY_LIMIT}".translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))):
+        await services.expeditions.start(p, "treasure", 1)  # two a day is the limit
+    clock.advance(86400)
+    await services.expeditions.start(p, "treasure", 1)
+
+
+async def test_a_hero_back_from_an_expedition_is_told_and_reads_the_report(h, services, db, clock):
+    from eternal_realm.bot import notifier
+
+    p = await hero(services, db)
+    await h.panel(1, "expd")
+    assert "اعزام قهرمان" in h.session.last_text() and len([x for x in h.labels() if "·" in x]) == 5
+    await h.panel(1, "expdk", "guard")
+    assert {"⏳ ۱ ساعت", "⏳ ۴ ساعت", "⏳ ۸ ساعت"} <= set(h.labels())
+    await h.panel(1, "expdgo", "guard", "1")
+    await h.panel(1, "expd")
+    assert "تا بازگشت" in h.session.last_text()
+    h.session.reset()
+    await notifier.deliver(h.bot, services)
+    assert not [m for n, m in h.session.calls if n == "sendMessage"]
+    clock.advance(3700)
+    await notifier.deliver(h.bot, services)
+    told = [m for n, m in h.session.calls if n == "sendMessage" and m.get("chat_id") == 1]
+    assert told and "از اعزام برگشت" in told[-1]["text"]
+    await notifier.deliver(h.bot, services)
+    assert len([m for n, m in h.session.calls if n == "sendMessage" and m.get("chat_id") == 1]) == len(told)
+    await h.panel(1, "expd")
+    assert "گرفتن گزارش" in " ".join(h.labels())
+    await h.panel(1, "expdclaim")
+    assert "گزارش اعزام شما" in h.session.last_text() and "در مدت غیبت شما" in h.session.last_text()
+    for line in h.session.last_text().splitlines():
+        assert len(re.findall(EMOJI, line)) <= 1, line
+    assert await services.expeditions.current(p.id) is None

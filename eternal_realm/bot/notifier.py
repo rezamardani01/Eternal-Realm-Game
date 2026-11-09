@@ -13,7 +13,7 @@ from .services import Services
 
 log = logging.getLogger("eternal_realm.notifier")
 
-BUTTON_LABELS = {"achf": "🎁 دریافت پاداش", "premium": "💎 خزانه قلمرو", "citytroops": "⚔️ ارتش", "city": "🏰 فرمانروایی"}
+BUTTON_LABELS = {"achf": "🎁 دریافت پاداش", "premium": "💎 خزانه قلمرو", "citytroops": "⚔️ ارتش", "city": "🏰 فرمانروایی", "expd": "📜 گزارش اعزام"}
 
 
 async def deliver(bot, services: Services) -> int:  # noqa: ANN001

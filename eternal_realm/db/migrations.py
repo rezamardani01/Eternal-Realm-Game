@@ -766,6 +766,16 @@ MIGRATIONS: list[str] = [
         started   INTEGER NOT NULL
     );
     """,
+    # 51: expeditions (the hero away for hours)
+    """
+    CREATE TABLE expeditions (
+        player_id  INTEGER PRIMARY KEY REFERENCES players (id),
+        kind       TEXT    NOT NULL,
+        started_at INTEGER NOT NULL,
+        ends_at    INTEGER NOT NULL,
+        hours      INTEGER NOT NULL
+    );
+    """,
 ]
 
 

@@ -30,6 +30,7 @@ from ..game.services.achievements import AchievementService
 from ..game.services.advisor import AdvisorService
 from ..game.services.alerts import AlertService
 from ..game.services.city import CityService
+from ..game.services.expedition import ExpeditionService
 from ..game.services.solo import SoloService
 from ..game.services.exchange import ExchangeService
 from ..game.services.missions import MissionService
@@ -79,6 +80,7 @@ class Services:
     alerts: AlertService
     solo: SoloService
     advisor: AdvisorService
+    expeditions: ExpeditionService
     wheel: WheelService
     teams: TeamBattleService
     gdungeon: GroupDungeonService
@@ -140,6 +142,7 @@ class Services:
             alerts=AlertService(ctx),
             solo=solo,
             advisor=advisor,
+            expeditions=ExpeditionService(ctx, players, inventory),
             wheel=wheel,
             teams=TeamBattleService(ctx, players, characters),
             gdungeon=GroupDungeonService(ctx, players, characters, inventory),

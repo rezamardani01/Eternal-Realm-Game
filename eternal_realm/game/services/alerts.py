@@ -21,9 +21,14 @@ class AlertService:
         self.ctx = ctx
 
     async def sweep(self) -> None:
-        """Queue the news that no action causes: a boost or a VIP subscription that has just run out."""
+        """Queue the news that no action causes: a boost or a VIP subscription that has just run out, a hero back from away."""
         now = self.ctx.now()
         async with self.ctx.db.transaction() as tx:
+            for r in await tx.fetchall("SELECT player_id, started_at FROM expeditions WHERE ends_at <= ?", (now,)):
+                await queue(
+                    tx, r["player_id"], f"expedition:{r['started_at']}",
+                    "🏕️ *قهرمان شما از اعزام برگشت!*\n\nگزارش و پاداشش آماده است؛ همین حالا بگیرید.", now, "expd",
+                )
             for column, name, emoji in (("boost_until", "بوست دو برابر", "🚀"), ("vip_until", "اشتراک VIP", "💠")):
                 rows = await tx.fetchall(
                     f"SELECT id, {column} AS until FROM players WHERE {column} > ? AND {column} <= ?",  # noqa: S608
