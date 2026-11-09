@@ -152,6 +152,7 @@ async def home(c: Ctx) -> Screen:
         [c.btn("🃏 کلکسیون کارت", "album"), c.btn("🐱 حیوان خانگی", "pets")],
         [c.btn("🕳️ سیاه‌چال", "dungeon"), c.btn("🔥 کوره آهنگری", "craft")],
         [c.btn("💎 خزانه قلمرو", "premium"), c.btn("🎁 جایزه روزانه", "daily")],
+        [c.btn("🏰 فرمانروایی", "city", style="primary")],
         [c.btn("😴 استراحت", "rest"), c.btn("❓ راهنمایی", "help")],
         [c.btn("💱 مرکز مبادله", "exch"), c.btn("🤝 دعوت از دوستان", "invite", style="success")],
     ]

@@ -595,6 +595,86 @@ MIGRATIONS: list[str] = [
         at        INTEGER NOT NULL
     );
     """,
+    # 43: cities (realm rule): buildings, army, defences, raids and their reports
+    """
+    CREATE TABLE cities (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id    INTEGER NOT NULL UNIQUE REFERENCES players (id),
+        name         TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+        flag         TEXT    NOT NULL,
+        gold         REAL    NOT NULL,
+        food         REAL    NOT NULL,
+        wood         REAL    NOT NULL,
+        stone        REAL    NOT NULL,
+        iron         REAL    NOT NULL,
+        population   REAL    NOT NULL,
+        happiness    REAL    NOT NULL,
+        last_tick    INTEGER NOT NULL,
+        shield_until INTEGER NOT NULL DEFAULT 0,
+        trophies     INTEGER NOT NULL DEFAULT 0,
+        created_at   INTEGER NOT NULL,
+        last_active  INTEGER NOT NULL,
+        att_day      INTEGER NOT NULL DEFAULT 0,
+        att_count    INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX idx_cities_trophies ON cities (trophies DESC);
+    CREATE INDEX idx_cities_shield ON cities (shield_until);
+    CREATE TABLE city_buildings (
+        city_id INTEGER NOT NULL REFERENCES cities (id),
+        kind    TEXT    NOT NULL,
+        level   INTEGER NOT NULL,
+        PRIMARY KEY (city_id, kind)
+    );
+    CREATE TABLE city_troops (
+        city_id INTEGER NOT NULL REFERENCES cities (id),
+        kind    TEXT    NOT NULL,
+        qty     INTEGER NOT NULL CHECK (qty >= 0),
+        PRIMARY KEY (city_id, kind)
+    );
+    CREATE TABLE city_traps (
+        city_id INTEGER NOT NULL REFERENCES cities (id),
+        kind    TEXT    NOT NULL,
+        qty     INTEGER NOT NULL CHECK (qty >= 0),
+        PRIMARY KEY (city_id, kind)
+    );
+    CREATE TABLE city_training (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        city_id  INTEGER NOT NULL REFERENCES cities (id),
+        kind     TEXT    NOT NULL,
+        qty      INTEGER NOT NULL,
+        ready_at INTEGER NOT NULL
+    );
+    CREATE INDEX idx_city_training_city ON city_training (city_id, ready_at);
+    CREATE TABLE city_search (
+        player_id  INTEGER PRIMARY KEY REFERENCES players (id),
+        target_id  INTEGER NOT NULL,
+        snapshot   TEXT    NOT NULL,
+        selection  TEXT    NOT NULL DEFAULT '{}',
+        seen       TEXT    NOT NULL DEFAULT '[]',
+        created_at INTEGER NOT NULL,
+        used       INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE city_attacks (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        attacker_city INTEGER NOT NULL,
+        defender_city INTEGER NOT NULL,
+        attacker_pid  INTEGER NOT NULL,
+        defender_pid  INTEGER NOT NULL,
+        attacker_name TEXT    NOT NULL,
+        defender_name TEXT    NOT NULL,
+        stars         INTEGER NOT NULL,
+        destruction   REAL    NOT NULL,
+        data          TEXT    NOT NULL,
+        att_trophies  INTEGER NOT NULL,
+        def_trophies  INTEGER NOT NULL,
+        shield        INTEGER NOT NULL,
+        created_at    INTEGER NOT NULL,
+        seen          INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX idx_city_attacks_att ON city_attacks (attacker_pid, id);
+    CREATE INDEX idx_city_attacks_def ON city_attacks (defender_pid, seen, id);
+    CREATE INDEX idx_city_attacks_pair ON city_attacks (attacker_city, defender_city, created_at);
+    """,
 ]
 
 
