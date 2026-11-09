@@ -48,6 +48,9 @@ class Balance:
     event_interval_seconds: int = 7200
     event_min_active: int = 2
     clan_create_gold: int = 1000
+    clan_photo_gold: int = 3000
+    clan_fine_max: int = 50_000
+    clan_min_level_max: int = 100
     second_class_level: int = 15
     second_class_gold: int = 3000
     awaken_level: int = 20

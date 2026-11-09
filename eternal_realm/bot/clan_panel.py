@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from baleropy import Router
-from baleropy.types import CallbackQuery
+from baleropy import F, Router
+from baleropy.fsm import FSMContext, State, StatesGroup
+from baleropy.types import CallbackQuery, Message
+from baleropy.types.markup import _build_inline_markup
 
 from ..game.services.clans import DONATION_STEPS, ROLES, ClanView, role_power
 from ..shared.errors import GameError
@@ -17,6 +19,19 @@ from .services import Services
 
 router = Router(name="clans")
 LINE = "─" * 12
+FINE_STEPS = (500, 5_000)
+
+
+class ClanFlow(StatesGroup):
+    photo = State()
+
+
+#: the picture waiting for the leader's «yes»: player id -> Bale file id
+_photos: dict[int, str] = {}
+
+
+def fine_text(fine: int) -> str:
+    return f"{fa(fine)} سکه" if fine else "ندارد"
 
 
 def _role_label(role: str) -> str:
@@ -35,6 +50,8 @@ def clan_text(view: ClanView, mention: bool = False) -> str:
         f"💪 قدرت (جمع سطح اعضا): {fa(view.power)}",
         f"🪙 خزانه: {fa(view.treasury)} سکه",
         f"🚪 در خاندان: {door}",
+        f"🎓 حداقل سطح عضویت: {fa(view.min_level)}",
+        f"⚖️ جریمه‌ی خیانت (خروج): {fine_text(view.exit_fine)}",
     ]
     return "\n".join(lines)
 
@@ -60,13 +77,16 @@ async def clan(c: Ctx) -> Screen:
     rows = [
         [c.btn("👥 اعضا", "clanmembers", "0", style="primary"), c.btn("💰 کمک به خزانه", "clandonate")],
         [c.btn("🏆 برترین خاندان‌ها", "clantop"), c.btn("⚔️ جنگ خاندان‌ها", "clanwar")],
+        [c.btn("🛒 فروشگاه خاندان", "clanshop")],
     ]
     if role_power(mine.my_role or "member") >= 2:
         rows.append([c.btn("⚙️ مدیریت خاندان", "clanset")])
     rows.append([c.btn("🚪 خروج از خاندان", "clanleaveq")])
     rows.append(c.back("home"))
     role = _role_label(mine.my_role or "member")
-    return Screen(clan_text(mine, c.is_group) + f"\n\n{role}: مقام شما", rows)
+    khan = await c.services.clans.khan_points(c.player.id)
+    text = clan_text(mine, c.is_group) + f"\n\n{role}: مقام شما\n🎖️ خان‌پوینت شما: {fa(khan)}"
+    return Screen(text, rows, photo=mine.photo or None)
 
 
 # --- members ---------------------------------------------------------------------------------------
@@ -175,16 +195,149 @@ async def clan_settings(c: Ctx) -> Screen:
     if mine is None or role_power(mine.my_role or "member") < 2:
         raise GameError("مدیریت خاندان کار رهبر و معاون است.")
     door = "بسته کردن در (فقط دعوت)" if mine.open else "باز کردن در (ورود آزاد)"
-    text = (
-        f"⚙️ {bold('مدیریت خاندان')}\n\n"
-        f"در خاندان الان {'باز' if mine.open else 'بسته'} است.\n\n"
-        "برای دعوت یک نفر، روی پیامش در گروه ریپلای کنید و بنویسید «دعوت خاندان»."
-    )
+    leader = mine.my_role == "leader"
+    text = [
+        f"⚙️ {bold('مدیریت خاندان')}",
+        "",
+        f"🚪 در خاندان الان {'باز' if mine.open else 'بسته'} است.",
+        f"🎓 حداقل سطح عضویت: {fa(mine.min_level)}",
+        f"⚖️ جریمه‌ی خیانت: {fine_text(mine.exit_fine)}",
+        f"🖼️ عکس خاندان: {'دارد' if mine.photo else 'ندارد'}",
+        "",
+        "برای دعوت یک نفر، روی پیامش در گروه ریپلای کنید و بنویسید «دعوت خاندان».",
+    ]
+    if not leader:
+        text += ["", "تنظیم عکس، جریمه و سطح عضویت فقط با رهبر است."]
     rows = [[c.btn("🚪 " + door, "clandoor", "0" if mine.open else "1")]]
-    if mine.my_role == "leader":
-        rows.append([c.btn("💥 منحل کردن خاندان", "clandisq", style="danger")])
+    if leader:
+        rows += [
+            [c.btn(f"🎓 سطح مورد نیاز عضویت: {fa(mine.min_level)}", "noop")],
+            [c.btn("➖", "clanlvl", "dn"), c.btn("➕", "clanlvl", "up")],
+            [c.btn(f"⚖️ جریمه‌ی خیانت: {fine_text(mine.exit_fine)}", "noop")],
+            [
+                c.btn(f"➖ {fa(FINE_STEPS[1])}", "clanfine", -FINE_STEPS[1]),
+                c.btn(f"➖ {fa(FINE_STEPS[0])}", "clanfine", -FINE_STEPS[0]),
+                c.btn(f"➕ {fa(FINE_STEPS[0])}", "clanfine", FINE_STEPS[0]),
+                c.btn(f"➕ {fa(FINE_STEPS[1])}", "clanfine", FINE_STEPS[1]),
+            ],
+            [c.btn("🖼️ عکس خاندان", "clanphoto")],
+            [c.btn("💥 منحل کردن خاندان", "clandisq", style="danger")],
+        ]
     rows.append(c.back("clan"))
-    return Screen(text, rows)
+    return Screen("\n".join(text), rows)
+
+
+@screen("clanlvl")
+async def clan_level(c: Ctx) -> Screen:
+    mine = await c.services.clans.of(c.player.id)
+    if mine is None:
+        raise GameError("شما عضو هیچ خاندانی نیستید.")
+    now = await c.services.clans.set_min_level(c.player, mine.min_level + (1 if c.a == "up" else -1))
+    shown = await clan_settings(c)
+    shown.toast = f"🎓 حداقل سطح عضویت شد {fa(now)}"
+    return shown
+
+
+@screen("clanfine")
+async def clan_fine(c: Ctx) -> Screen:
+    mine = await c.services.clans.of(c.player.id)
+    if mine is None:
+        raise GameError("شما عضو هیچ خاندانی نیستید.")
+    now = await c.services.clans.set_fine(c.player, mine.exit_fine + _int(c.a))
+    shown = await clan_settings(c)
+    shown.toast = f"⚖️ جریمه‌ی خیانت شد {fine_text(now)}"
+    return shown
+
+
+# --- the clan picture ------------------------------------------------------------------------------
+@screen("clanphoto")
+async def clan_photo(c: Ctx) -> Screen:
+    mine = await c.services.clans.of(c.player.id)
+    if mine is None or mine.my_role != "leader":
+        raise GameError("عکس خاندان را فقط رهبر می‌تواند تنظیم کند.")
+    price = c.services.ctx.balance.clan_photo_gold
+    text = (
+        f"🖼️ {bold('عکس خاندان')}\n\n"
+        "با عکس، هر وقت اعضا «خاندان» را بزنند، عکس همراه اطلاعات خاندان و دکمه‌ها نشان داده می‌شود.\n\n"
+        f"💰 هزینه‌ی گذاشتن یا عوض کردن عکس: {bold(fa(price))} سکه (هر بار)\n"
+        "🗑️ برداشتن عکس رایگان است."
+    )
+    rows = [[c.btn(f"📤 {'عوض کردن' if mine.photo else 'گذاشتن'} عکس · {fa(price)} سکه", "clanphotoask", style="primary")]]
+    if mine.photo:
+        rows.append([c.btn("🗑️ برداشتن عکس", "clanphotodelq", style="danger")])
+    rows.append(c.back("clanset"))
+    return Screen(text, rows, photo=mine.photo or None)
+
+
+@screen("clanphotoask")
+async def clan_photo_ask(c: Ctx) -> Screen:
+    mine = await c.services.clans.of(c.player.id)
+    if mine is None or mine.my_role != "leader":
+        raise GameError("عکس خاندان را فقط رهبر می‌تواند تنظیم کند.")
+    if c.state is None:
+        raise GameError("برای فرستادن عکس از پیوی یا همان گروه شروع کنید.")
+    await c.state.set_state(ClanFlow.photo)
+    text = f"📤 {bold('عکس خاندان را بفرستید')}\n\nیک عکس بفرستید؛ بعد از دیدن پیش‌نمایش، تأیید می‌کنید و هزینه کم می‌شود."
+    return Screen(text, [[c.btn("❌ انصراف", "clanphoto")]])
+
+
+@screen("clanphotook")
+async def clan_photo_ok(c: Ctx) -> Screen:
+    file_id = _photos.pop(c.player.platform_user_id, "")
+    if not file_id:
+        raise GameError("این پیش‌نمایش دیگر معتبر نیست؛ دوباره عکس را بفرستید.")
+    price = await c.services.clans.set_photo(c.player, file_id)
+    mine = await c.services.clans.of(c.player.id)
+    assert mine is not None
+    shown = await clan_settings(c)
+    shown.text = f"✅ {bold('عکس خاندان تنظیم شد')}\n\n💰 {fa(price)} سکه از کیف شما رفت.\n\n{shown.text}"
+    shown.toast = "🖼️ عکس خاندان تنظیم شد"
+    return shown
+
+
+@screen("clanphotono")
+async def clan_photo_no(c: Ctx) -> Screen:
+    _photos.pop(c.player.platform_user_id, None)
+    return await clan_settings(c)
+
+
+@screen("clanphotodelq")
+async def clan_photo_del_ask(c: Ctx) -> Screen:
+    text = f"🗑️ {bold('برداشتن عکس خاندان')}\n\nعکس برداشته می‌شود و پولی که قبلاً داده‌اید برنمی‌گردد. مطمئنید؟"
+    return Screen(text, [[c.btn("🗑️ بله، بردار", "clanphotodel", style="danger"), c.btn("↩️ نه", "clanphoto")]])
+
+
+@screen("clanphotodel")
+async def clan_photo_del(c: Ctx) -> Screen:
+    await c.services.clans.remove_photo(c.player)
+    shown = await clan_settings(c)
+    shown.toast = "🗑️ عکس خاندان برداشته شد"
+    return shown
+
+
+@router.message(ClanFlow.photo, F.photo)
+async def got_clan_photo(message: Message, state: FSMContext, services: Services) -> None:
+    user = message.from_user
+    assert user is not None
+    player = await services.players.require(user.id)
+    mine = await services.clans.of(player.id)
+    await state.clear()
+    if mine is None or mine.my_role != "leader":
+        raise GameError("عکس خاندان را فقط رهبر می‌تواند تنظیم کند.")
+    file_id = message.photo[-1].file_id  # type: ignore[index]
+    _photos[user.id] = file_id
+    price = services.ctx.balance.clan_photo_gold
+    text = (
+        f"🖼️ {bold('پیش‌نمایش عکس خاندان')}\n\n"
+        f"💰 هزینه: {bold(fa(price))} سکه\n"
+        f"کیسه‌ی شما: {fa(player.gold)} ← {fa(max(0, player.gold - price))} سکه\n\n"
+        "این عکس برای خاندان گذاشته شود؟"
+    )
+    rows = [[
+        keyboards.panel_button("✅ بله، بگذار", "clanphotook", user.id),
+        keyboards.panel_button("❌ نه", "clanphotono", user.id),
+    ]]
+    await message.bot.send_photo(message.chat.id, file_id, text, message.message_id, _build_inline_markup(rows))
 
 
 @screen("clandoor")
@@ -211,8 +364,25 @@ async def clan_disband(c: Ctx) -> Screen:
 
 @screen("clanleaveq")
 async def clan_leave_ask(c: Ctx) -> Screen:
-    text = f"🚪 {bold('خروج از خاندان')}\n\nمطمئن هستید؟ برای برگشتن باید دوباره بپیوندید (یا دعوت شوید)."
-    return Screen(text, [[c.btn("🚪 بله، خارج شو", "clanleave", style="danger"), c.btn("↩️ نه", "clan")]])
+    mine = await c.services.clans.of(c.player.id)
+    if mine is None:
+        raise GameError("شما عضو هیچ خاندانی نیستید.")
+    fine = 0 if mine.my_role == "leader" else mine.exit_fine
+    p = await c.refresh()
+    lines = [f"🚪 {bold('خروج از خاندان')}", ""]
+    if fine:
+        lines += [
+            f"⚖️ این خاندان برای خروج {bold('جریمه‌ی خیانت')} دارد: {bold(fa(fine))} سکه.",
+            "جریمه از کیف شما کم می‌شود و به خزانه‌ی خاندان می‌رود.",
+            "",
+            f"کیسه‌ی شما: {fa(p.gold)} ← {fa(max(0, p.gold - fine))} سکه",
+            "",
+        ]
+        if p.gold < fine:
+            lines.append(f"💸 برای خروج {fa(fine - p.gold)} سکه کم دارید.")
+            return Screen("\n".join(lines), [c.back("clan")])
+    lines.append("مطمئن هستید؟ برای برگشتن باید دوباره بپیوندید (یا دعوت شوید).")
+    return Screen("\n".join(lines), [[c.btn("🚪 بله، خارج شو", "clanleave", style="danger"), c.btn("↩️ نه", "clan")]])
 
 
 @screen("clanleave")
@@ -314,9 +484,34 @@ async def clan_view(c: Ctx) -> Screen:
     rows = []
     if await c.services.clans.of(c.player.id) is None:
         label = "✅ پیوستن" if view.open else "🔒 درِ خاندان بسته است"
-        rows.append([c.btn(label, "clanjoin", view.id, style="success" if view.open else None)])
+        rows.append([c.btn(label, "clanjoinq", view.id, style="success" if view.open else None)])
     rows.append(c.back("clanlist", "🔙 بازگشت", "0"))
-    return Screen(clan_text(view, c.is_group), rows)
+    return Screen(clan_text(view, c.is_group), rows, photo=view.photo or None)
+
+
+@screen("clanjoinq")
+async def clan_join_ask(c: Ctx) -> Screen:
+    view = await c.services.clans.get(_int(c.a))
+    if view is None:
+        raise GameError("این خاندان دیگر وجود ندارد.")
+    if not view.open:
+        raise GameError("درهای این خاندان بسته است؛ فقط با دعوت رهبر یا معاون می‌شود وارد شد.")
+    p = await c.refresh()
+    lines = [f"🏯 {bold('پیوستن به خاندان ' + view.name)}", "", f"🎓 حداقل سطح عضویت: {fa(view.min_level)} (سطح شما: {fa(p.level)})"]
+    if view.exit_fine:
+        lines += [
+            f"⚖️ {bold('جریمه‌ی خیانت')}: {bold(fa(view.exit_fine))} سکه",
+            "اگر بعداً بخواهید از این خاندان خارج شوید، باید این مبلغ را به خزانه‌اش بپردازید.",
+        ]
+    else:
+        lines.append("⚖️ جریمه‌ی خیانت: ندارد؛ هر وقت خواستید می‌توانید آزادانه بروید.")
+    rows = [c.back("clanview", "🔙 بازگشت", view.id)]
+    if p.level < view.min_level:
+        lines += ["", f"🔒 هنوز به سطح {fa(view.min_level)} نرسیده‌اید."]
+    else:
+        lines += ["", "با این شرایط می‌پیوندید؟"]
+        rows = [[c.btn("✅ بله، می‌پیوندم", "clanjoin", view.id, style="success"), c.btn("↩️ نه", "clanview", view.id)]]
+    return Screen("\n".join(lines), rows)
 
 
 @screen("clanjoin")
@@ -373,6 +568,61 @@ async def clan_prize(c: Ctx) -> Screen:
     gold = await c.services.clans.claim_war(c.player)
     shown = await clan_war(c)
     shown.toast, shown.alert = f"🎁 {fa(gold)} سکه به کیفتان رسید!", True
+    return shown
+
+
+# --- the clan shop: Khan points for valuable goods ---------------------------------------------------
+@screen("clanshop")
+async def clan_shop(c: Ctx) -> Screen:
+    offers, points = await c.services.clans.shop(c.player)
+    lines = [
+        f"🛒 {bold('فروشگاه خاندان')}",
+        "",
+        f"🎖️ خان‌پوینت شما: {bold(fa(points))}",
+        "خان‌پوینت را از دوئل با اعضای خاندان‌های دیگر و جایزه‌ی جنگ هفتگی خاندان‌ها می‌گیرید.",
+        "کالاها هر روز عوض می‌شوند و هر کالا را روزی یک بار می‌توانید بخرید.",
+        "",
+    ]
+    rows = []
+    for offer, bought in offers:
+        if bought:
+            lines.append(f"✅ {offer.title} — خریده شد")
+        else:
+            lines.append(f"{offer.title} — {fa(offer.price)} خان‌پوینت")
+            rows.append([c.btn(f"{offer.title} · {fa(offer.price)} 🎖️", "clanshopq", offer.id,
+                               style="success" if points >= offer.price else None)])
+    rows.append(c.back("clan"))
+    return Screen("\n".join(lines), rows)
+
+
+@screen("clanshopq")
+async def clan_shop_ask(c: Ctx) -> Screen:
+    from ..game.data.khan_shop import get_offer
+
+    offers, points = await c.services.clans.shop(c.player)
+    offer = get_offer(c.a)
+    if offer.id not in {o.id for o, bought in offers if not bought}:
+        raise GameError("این کالا را امروز خریده‌اید یا در فروشگاه نیست.")
+    lines = [
+        f"🛒 {bold('تأیید خرید')}",
+        "",
+        f"{offer.title}",
+        f"💰 بها: {bold(fa(offer.price))} خان‌پوینت",
+        "",
+        f"خان‌پوینت شما: {fa(points)} ← {fa(max(0, points - offer.price))}",
+    ]
+    if points < offer.price:
+        lines += ["", f"🔒 {fa(offer.price - points)} خان‌پوینت کم دارید."]
+        return Screen("\n".join(lines), [c.back("clanshop")])
+    lines += ["", "خریداری شود؟"]
+    return Screen("\n".join(lines), [[c.btn("✅ بله، بخر", "clanshopbuy", offer.id, style="success"), c.btn("↩️ نه", "clanshop")]])
+
+
+@screen("clanshopbuy")
+async def clan_shop_buy(c: Ctx) -> Screen:
+    offer = await c.services.clans.buy(c.player, c.a)
+    shown = await clan_shop(c)
+    shown.toast, shown.alert = f"🛒 {offer.title} به کیف شما رسید!", True
     return shown
 
 

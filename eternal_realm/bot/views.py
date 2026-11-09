@@ -104,6 +104,7 @@ def profile_header(player: Player, xp_needed: int, now: int = 0) -> str:
         f"👤 {bold(player.name)} · سطح {fa(player.level)}\n"
         + (f"🏅 عنوان: {player.honor}\n" if player.honor else "")
         + ("💠 اشتراک VIP فعال\n" if player.vip_until > now > 0 else "")
+        + (f"🎖️ خان‌پوینت: {fa(player.khan_points)}\n" if player.khan_points else "")
         + (f"🚀 بوست دو برابر فعال · {duration(player.boost_until - now)} مانده\n" if player.boost_until > now > 0 else "")
         + f"{player.race.emoji} {player.race.name} · {player.char_class.emoji} {player.char_class.name}\n"
         + (f"🎭 کلاس دوم: {player.class2.emoji} {player.class2.name}\n" if player.class2 else "")

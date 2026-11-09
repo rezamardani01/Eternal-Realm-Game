@@ -12,7 +12,9 @@ from ...db.repos import wallet
 from ...db.repos.wallet import DuplicateOperation
 from ...shared.errors import GameError
 from ...shared.text import fa, normalize
+from ..data.khan_shop import WAR_POINTS, Offer, day_of, get_offer, offers_for
 from ..models import Player
+from .inventory import InventoryService
 
 NAME_MIN, NAME_MAX = 3, 16
 #: role id -> (emoji, title, power); a higher power outranks a lower one
@@ -56,6 +58,12 @@ class ClanView:
     level: int
     capacity: int
     my_role: str | None = None
+    #: the clan's picture (a Bale file id), empty when it has none
+    photo: str = ""
+    #: gold a member pays the clan to leave (0 = none)
+    exit_fine: int = 0
+    #: the lowest level that may join
+    min_level: int = 1
 
 
 def clean_clan_name(raw: str) -> str:
@@ -89,8 +97,9 @@ class WarView:
 
 
 class ClanService:
-    def __init__(self, ctx: AppContext) -> None:
+    def __init__(self, ctx: AppContext, inventory: InventoryService) -> None:
         self.ctx = ctx
+        self.inventory = inventory
 
     # --- reading --------------------------------------------------------------------------------
     async def _view(self, tx: Tx, row: Row, my_role: str | None = None) -> ClanView:
@@ -108,6 +117,7 @@ class ClanService:
         return ClanView(
             row["id"], row["name"], row["leader_id"], lead.name if lead else "-", lead.mention if lead else "-", bool(row["open"]),
             row["treasury"], row["donated"], size, power, level, capacity_for(level), my_role,
+            row["photo"], row["exit_fine"], row["min_level"],
         )
 
     async def of(self, player_id: int) -> ClanView | None:
@@ -174,6 +184,12 @@ class ClanService:
                 raise GameError("این خاندان دیگر وجود ندارد.")
             if not row["open"] and not invited:
                 raise GameError("درهای این خاندان بسته است؛ فقط با دعوت رهبر یا معاون می‌شود وارد شد.")
+            level = int(await tx.scalar("SELECT level FROM players WHERE id = ?", (player.id,), player.level))
+            if level < row["min_level"]:
+                raise GameError(
+                    f"این خاندان فقط قهرمان‌های سطح {fa(row['min_level'])} به بالا را می‌پذیرد؛ شما سطح {fa(level)} هستید. "
+                    "کمی قوی‌تر شوید و برگردید!"
+                )
             view = await self._view(tx, row)
             if view.size >= view.capacity:
                 raise GameError(
@@ -184,7 +200,7 @@ class ClanService:
             return await self._view(tx, row, "member")
 
     async def leave(self, player: Player) -> str:
-        """Returns ``left`` or ``disbanded`` (the leader of a one-person clan closes it)."""
+        """Returns ``left`` or ``disbanded`` (the leader of a one-person clan closes it). A member pays the clan's fine."""
         async with self.ctx.db.transaction() as tx:
             member, clan = await self._mine(tx, player.id)
             if member["role"] == "leader":
@@ -195,6 +211,10 @@ class ClanService:
                     )
                 await repo.delete(tx, clan["id"])
                 return "disbanded"
+            fine = clan["exit_fine"]
+            if fine:
+                await wallet.apply(tx, player.id, gold=-fine, reason="clan_fine", now=self.ctx.now())
+                await tx.execute("UPDATE clans SET treasury = treasury + ? WHERE id = ?", (fine, clan["id"]))
             await repo.remove_member(tx, player.id)
             return "left"
 
@@ -253,6 +273,97 @@ class ClanService:
                 raise GameError("باز و بسته کردن درِ خاندان کار رهبر و معاون است.")
             await repo.set_open(tx, clan["id"], value)
 
+    # --- the leader's settings -------------------------------------------------------------------
+    async def _as_leader(self, tx: Tx, actor: Player) -> Row:
+        member, clan = await self._mine(tx, actor.id)
+        if member["role"] != "leader":
+            raise GameError("این تنظیم فقط دست رهبر خاندان است.")
+        return clan
+
+    async def set_fine(self, actor: Player, amount: int) -> int:
+        limit = self.ctx.balance.clan_fine_max
+        amount = max(0, min(limit, amount))
+        async with self.ctx.db.transaction() as tx:
+            clan = await self._as_leader(tx, actor)
+            await tx.execute("UPDATE clans SET exit_fine = ? WHERE id = ?", (amount, clan["id"]))
+        return amount
+
+    async def set_min_level(self, actor: Player, level: int) -> int:
+        level = max(1, min(self.ctx.balance.clan_min_level_max, level))
+        async with self.ctx.db.transaction() as tx:
+            clan = await self._as_leader(tx, actor)
+            await tx.execute("UPDATE clans SET min_level = ? WHERE id = ?", (level, clan["id"]))
+        return level
+
+    async def set_photo(self, actor: Player, file_id: str) -> int:
+        """Put (or replace) the clan picture; it costs gold every time. Returns the price paid."""
+        if not file_id:
+            raise GameError("عکسی دریافت نشد؛ دوباره بفرستید.")
+        price = self.ctx.balance.clan_photo_gold
+        async with self.ctx.db.transaction() as tx:
+            clan = await self._as_leader(tx, actor)
+            await wallet.apply(tx, actor.id, gold=-price, reason="clan_photo", now=self.ctx.now())
+            await tx.execute("UPDATE clans SET photo = ? WHERE id = ?", (file_id, clan["id"]))
+        return price
+
+    async def remove_photo(self, actor: Player) -> None:
+        async with self.ctx.db.transaction() as tx:
+            clan = await self._as_leader(tx, actor)
+            if not clan["photo"]:
+                raise GameError("خاندان شما عکسی ندارد.")
+            await tx.execute("UPDATE clans SET photo = '' WHERE id = ?", (clan["id"],))
+
+    # --- the clan shop (Khan points) -------------------------------------------------------------
+    async def khan_points(self, player_id: int) -> int:
+        async with self.ctx.db.read() as tx:
+            return int(await tx.scalar("SELECT khan_points FROM players WHERE id = ?", (player_id,), 0))
+
+    async def shop(self, player: Player) -> tuple[list[tuple[Offer, bool]], int]:
+        """Today's goods with a «bought already» flag, and the player's Khan points."""
+        day = day_of(self.ctx.now())
+        async with self.ctx.db.read() as tx:
+            if await repo.membership(tx, player.id) is None:
+                raise GameError("فروشگاه خاندان مخصوص اعضای خاندان است.")
+            bought = {
+                r["offer"] for r in await tx.fetchall(
+                    "SELECT offer FROM khan_purchases WHERE player_id = ? AND day = ?", (player.id, day)
+                )
+            }
+            points = int(await tx.scalar("SELECT khan_points FROM players WHERE id = ?", (player.id,), 0))
+        return [(o, o.id in bought) for o in offers_for(day)], points
+
+    async def buy(self, player: Player, offer_id: str) -> Offer:
+        day = day_of(self.ctx.now())
+        try:
+            offer = get_offer(offer_id)
+        except KeyError:
+            raise GameError("این کالا وجود ندارد.") from None
+        if offer not in offers_for(day):
+            raise GameError("این کالا امروز در فروشگاه نیست؛ فهرست را تازه کنید.")
+        async with self.ctx.db.transaction() as tx:
+            if await repo.membership(tx, player.id) is None:
+                raise GameError("فروشگاه خاندان مخصوص اعضای خاندان است.")
+            await tx.execute(
+                "INSERT OR IGNORE INTO khan_purchases (player_id, day, offer) VALUES (?, ?, ?)", (player.id, day, offer.id)
+            )
+            if tx.rowcount == 0:
+                raise GameError("این کالا را امروز خریده‌اید؛ فردا موجود می‌شود یا کالای دیگری بیاید.")
+            await tx.execute(
+                "UPDATE players SET khan_points = khan_points - ? WHERE id = ? AND khan_points >= ?",
+                (offer.price, player.id, offer.price),
+            )
+            if tx.rowcount == 0:
+                have = int(await tx.scalar("SELECT khan_points FROM players WHERE id = ?", (player.id,), 0))
+                raise GameError(f"خان‌پوینت کافی نیست؛ {fa(offer.price)} لازم است و شما {fa(have)} دارید.")
+            if offer.kind == "item":
+                await self.inventory.grant(tx, player.id, offer.ref, offer.qty, origin="khan_shop")
+            else:
+                await wallet.apply(
+                    tx, player.id, gold=offer.qty if offer.kind == "gold" else 0,
+                    crystal=offer.qty if offer.kind == "crystal" else 0, reason="khan_shop", now=self.ctx.now(),
+                )
+        return offer
+
     async def donate(self, player: Player, amount: int) -> ClanView:
         if amount <= 0:
             raise GameError("مقدار کمک باید بیشتر از صفر باشد.")
@@ -298,6 +409,10 @@ class ClanService:
                 await wallet.apply(
                     tx, player.id, gold=view.prize, reason="clan_war_prize", now=self.ctx.now(),
                     ref=f"clanwar:{week - 1}:{player.id}",
+                )
+                await tx.execute(
+                    "UPDATE players SET khan_points = khan_points + ? WHERE id = ?",
+                    (WAR_POINTS[view.last_place - 1], player.id),
                 )
         except DuplicateOperation as exc:
             raise GameError("این جایزه را قبلاً گرفته‌اید.") from exc

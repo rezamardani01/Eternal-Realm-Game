@@ -66,6 +66,8 @@ async def clan_invite(ctx: CommandContext) -> None:
     await ctx.reply(
         f"📜 {bold('دعوت‌نامه‌ی خاندان')}\n\n"
         f"{target.mention} ، {ctx.me.mention} شما را به خاندان {bold(mine.name)} دعوت کرده است.\n\n"
+        f"🎓 حداقل سطح عضویت: {fa(mine.min_level)}\n"
+        f"⚖️ جریمه‌ی خیانت (خروج): {f'{fa(mine.exit_fine)} سکه' if mine.exit_fine else 'ندارد'}\n\n"
         "می‌پذیرید؟ فقط خودتان می‌توانید دکمه را بزنید 👇",
         [[Button.inline("✅ پذیرفتن دعوت", ClanCb(action="join", id=mine.id, arg=target.platform_user_id), style="success")]],
     )

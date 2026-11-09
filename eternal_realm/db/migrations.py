@@ -551,6 +551,19 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_team_members_player ON team_battle_members (player_id, paid_at);
     """,
+    # 39: clan photo, betrayal fine, minimum level, Khan points and their shop
+    """
+    ALTER TABLE clans ADD COLUMN photo TEXT NOT NULL DEFAULT '';
+    ALTER TABLE clans ADD COLUMN exit_fine INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE clans ADD COLUMN min_level INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE players ADD COLUMN khan_points INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE khan_purchases (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        day       INTEGER NOT NULL,
+        offer     TEXT    NOT NULL,
+        PRIMARY KEY (player_id, day, offer)
+    );
+    """,
 ]
 
 

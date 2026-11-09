@@ -206,6 +206,7 @@ class DuelService:
         await tx.execute("UPDATE players SET rating = ? WHERE id = ?", (won_rating, win.player_id))
         await tx.execute("UPDATE players SET rating = ? WHERE id = ?", (lost_rating, lose.player_id))
         await clan_repo.add_war_points(tx, win.player_id, 10, self.ctx.now())
+        await clan_repo.award_khan(tx, win.player_id, lose.player_id)
         return {
             win.player_id: (won_rating, won_rating - before[win.player_id]),
             lose.player_id: (lost_rating, lost_rating - before[lose.player_id]),

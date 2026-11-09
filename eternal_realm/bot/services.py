@@ -107,7 +107,7 @@ class Services:
             admin=AdminService(ctx, inventory),
             bosses=bosses,
             events=EventService(ctx, inventory, bosses),
-            clans=ClanService(ctx),
+            clans=ClanService(ctx, inventory),
             quests=QuestService(ctx, players, inventory),
             cards=cards,
             pets=PetService(ctx),

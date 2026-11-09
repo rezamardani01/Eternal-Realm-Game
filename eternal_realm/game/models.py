@@ -34,6 +34,7 @@ class Player:
     honor: str = ""
     vip_until: int = 0
     boost_until: int = 0
+    khan_points: int = 0
 
     @classmethod
     def from_row(cls, row: Row) -> Player:
@@ -61,6 +62,7 @@ class Player:
             honor=row["title"],
             vip_until=row["vip_until"],
             boost_until=row["boost_until"],
+            khan_points=row["khan_points"],
         )
 
     @property

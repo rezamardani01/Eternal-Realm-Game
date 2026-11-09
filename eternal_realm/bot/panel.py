@@ -16,6 +16,7 @@ from baleropy import Button, F, Router
 from baleropy.exceptions import BaleAPIError, SkipHandler
 from baleropy.fsm import FSMContext, State, StatesGroup
 from baleropy.types import CallbackQuery, InlineKeyboardButton, Message
+from baleropy.types.markup import _build_inline_markup
 
 from ..game import item_info
 from ..game.data.chests import CHESTS
@@ -47,6 +48,8 @@ class Screen:
     rows: Rows = field(default_factory=list)
     toast: str | None = None
     alert: bool = False
+    #: show the screen as a picture (a Bale file id) with the text as its caption
+    photo: str | None = None
 
 
 @dataclass
@@ -1245,9 +1248,32 @@ async def send(
     ctx = Ctx(services, player, player.platform_user_id, a, b, _is_group(message), message.chat.id, state)
     shown = await SCREENS[name](ctx)
     text = headline(shown.text or "")
+    if shown.photo:
+        return await message.bot.send_photo(
+            message.chat.id, shown.photo, text, message.message_id if reply else None,
+            _build_inline_markup(shown.rows) if shown.rows else None,
+        )
     if reply:
         return await message.reply(text, buttons=shown.rows or None)
     return await message.answer(text, buttons=shown.rows or None)
+
+
+async def _show(message: Message, shown: Screen) -> None:
+    """Put a screen on the tapped message: edit in place, or swap the message when text and picture trade places."""
+    text, was_photo = headline(shown.text or ""), bool(message.photo)
+    with contextlib.suppress(BaleAPIError):  # "message is not modified" and similar
+        if shown.photo and was_photo:
+            await message.edit_caption(text, buttons=shown.rows or None)
+        elif shown.photo or was_photo:
+            await message.delete()
+            if shown.photo:
+                await message.bot.send_photo(
+                    message.chat.id, shown.photo, text, None, _build_inline_markup(shown.rows) if shown.rows else None
+                )
+            else:
+                await message.answer(text, buttons=shown.rows or None)
+        else:
+            await message.edit_text(text, buttons=shown.rows or None)
 
 
 router = Router(name="panel")
@@ -1276,8 +1302,7 @@ async def on_panel(
     )
     shown = await handler(ctx)
     if shown.text is not None:
-        with contextlib.suppress(BaleAPIError):  # "message is not modified" and similar
-            await message.edit_text(headline(shown.text), buttons=shown.rows or None)
+        await _show(message, shown)
     await query.answer((shown.toast or "")[:190] or None, show_alert=shown.alert)
 
 

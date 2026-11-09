@@ -103,6 +103,17 @@ async def add_war_points(tx: Tx, player_id: int, points: int, now: int) -> None:
     )
 
 
+async def award_khan(tx: Tx, winner_id: int, loser_id: int) -> None:
+    """Khan points for a duel between members of two different clans."""
+    from ...game.data.khan_shop import DUEL_LOSE_POINTS, DUEL_WIN_POINTS
+
+    won, lost = await membership(tx, winner_id), await membership(tx, loser_id)
+    if won is None or lost is None or won["clan_id"] == lost["clan_id"]:
+        return
+    await tx.execute("UPDATE players SET khan_points = khan_points + ? WHERE id = ?", (DUEL_WIN_POINTS, winner_id))
+    await tx.execute("UPDATE players SET khan_points = khan_points + ? WHERE id = ?", (DUEL_LOSE_POINTS, loser_id))
+
+
 async def war_board(tx: Tx, week: int, limit: int) -> list[Row]:
     return await tx.fetchall(
         "SELECT w.clan_id, w.points, c.name FROM clan_war w JOIN clans c ON c.id = w.clan_id"
