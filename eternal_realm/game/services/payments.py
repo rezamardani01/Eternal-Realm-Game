@@ -49,6 +49,9 @@ class Order:
     amount: int
     status: str
     payload: str
+    #: the hero a gift order is for (``None`` for an ordinary purchase), and how many packs were bought
+    gift_to: int | None = None
+    qty: int = 1
 
 
 @dataclass
@@ -59,6 +62,8 @@ class Delivery:
     duplicate: bool = False
     #: what a lucky bundle turned out to contain (empty for fixed packs)
     granted: str = ""
+    #: for a gift: who received it (the payer is ``player_id``)
+    recipient_id: int | None = None
 
 
 XP_PACK_IDS = tuple(p.id for p in PACKS.values() if p.xp)
@@ -107,6 +112,48 @@ class PaymentService:
             order_id = await repo.create(tx, player.id, pack.id, amount, payload, self.ctx.now())
         return Order(order_id, player.id, pack, amount, "pending", payload)
 
+    async def create_gift_order(self, payer: Player, target_id: int, pack_id: str, qty: int) -> Order:
+        """An order whose goods go to somebody else; everything that could make the gift useless is refused first."""
+        if not self.ctx.settings.payments_enabled:
+            raise GameError("دروازه‌ی پرداخت فعلاً بسته است. کمی بعد دوباره سر بزنید.")
+        pack = PACKS.get(pack_id)
+        if pack is None:
+            raise GameError("چنین بسته‌ای در خزانه نیست.")
+        from ..data.season import season_of
+
+        if not 1 <= qty <= 10:
+            raise GameError("تعداد هدیه باید بین ۱ تا ۱۰ باشد.")
+        if target_id == payer.id:
+            raise GameError("برای خودتان از «خزانه قلمرو» در پیوی بخرید؛ هدیه برای دیگران است.")
+        async with self.ctx.db.read() as tx:
+            target = await player_repo.get(tx, target_id)
+            owns_pet = pack.pet and await tx.scalar(
+                "SELECT 1 FROM player_pets WHERE player_id = ? AND pet_id = ?", (target_id, pack.pet), 0
+            )
+            has_city = await tx.scalar("SELECT 1 FROM cities WHERE player_id = ?", (target_id,), 0)
+            has_ticket = pack.season and (await tx.scalar(
+                "SELECT premium FROM season_progress WHERE player_id = ? AND season = ?",
+                (target_id, season_of(self.ctx.now())), 0,
+            ))
+        if target is None or target.banned:
+            raise GameError("این بازیکن پیدا نشد.")
+        if owns_pet:
+            raise GameError(f"{target.name} این حیوان همراه را دارد؛ چیز دیگری هدیه بدهید. پولی کسر نشد.")
+        if has_ticket:
+            raise GameError(f"{target.name} بلیط این فصل را دارد؛ چیز دیگری هدیه بدهید. پولی کسر نشد.")
+        if (pack.city or pack.city_shield_hours) and not has_city:
+            raise GameError(f"{target.name} هنوز شهری در فرمانروایی ندارد و این بسته به کارش نمی‌آید. پولی کسر نشد.")
+        if pack.xp:
+            from ..data.packs import XP_PACK_MAX_LEVEL
+
+            if target.level > XP_PACK_MAX_LEVEL:
+                raise GameError(f"بسته‌ی تجربه برای قهرمان‌های تا سطح {fa(XP_PACK_MAX_LEVEL)} است و {target.name} از آن بالاتر است.")
+        amount = pack.price_rial * qty
+        async with self.ctx.db.transaction() as tx:
+            payload = f"ER-{secrets.token_hex(8)}"
+            order_id = await repo.create(tx, payer.id, pack.id, amount, payload, self.ctx.now(), gift_to=target_id, qty=qty)
+        return Order(order_id, payer.id, pack, amount, "pending", payload, target_id, qty)
+
     async def _check_xp_pack(self, player: Player, pack: Pack) -> None:
         """Experience packs are for climbing, not for the top: a level limit and a few per week."""
         from ..data.packs import XP_PACK_MAX_LEVEL, XP_PACK_WEEKLY_LIMIT
@@ -154,18 +201,27 @@ class PaymentService:
                 log.error("payment for an unknown order payload %r (user %s)", payload, platform_user_id)
                 raise GameError("پرداخت شما رسید اما سفارش پیدا نشد. نگران نباشید، با پشتیبانی تماس بگیرید تا درستش کنیم.")
             pack = PACKS[row["pack_id"]]
-            order = Order(row["id"], row["player_id"], pack, row["amount"], row["status"], payload)
+            order = Order(row["id"], row["player_id"], pack, row["amount"], row["status"], payload, row["gift_to"], row["qty"])
             if row["status"] in ("delivered", "refunded"):
-                return Delivery(order, row["player_id"], duplicate=True)
+                return Delivery(order, row["player_id"], duplicate=True, recipient_id=row["gift_to"])
             if row["platform_user_id"] != platform_user_id or row["amount"] != amount:
                 log.error("payment mismatch for order %s (user %s, amount %s)", row["id"], platform_user_id, amount)
                 raise GameError("اطلاعات پرداخت با سفارش نمی‌خواند. نگران نباشید، با پشتیبانی تماس بگیرید تا بررسی کنیم.")
             if not await repo.mark_paid(tx, order.id, charge_id or f"none:{payload}", now):
                 return Delivery(order, row["player_id"], duplicate=True)
-            granted = await self._deliver(tx, order, pack, now)
+            if order.gift_to is None:
+                granted = await self._deliver(tx, order, pack, now)
+            else:  # the goods go to the other hero, once per pack bought
+                parts = []
+                to_order = Order(order.id, order.gift_to, pack, order.amount, order.status, payload)
+                for n in range(order.qty):
+                    got = await self._deliver(tx, to_order, pack, now, ref_base=f"order:{order.id}" + (f":{n}" if n else ""))
+                    if got:
+                        parts.append(got)
+                granted = "\n".join(parts)
             await repo.mark_delivered(tx, order.id, now)
             order.status = "delivered"
-            return Delivery(order, row["player_id"], granted=granted)
+            return Delivery(order, row["player_id"], granted=granted, recipient_id=order.gift_to)
 
     async def gift(self, admin_id: int, player_id: int, pack_id: str, qty: int) -> tuple[Order, str]:
         """An administrator switches treasury packs on for a hero by hand; no money moves, no order is booked."""

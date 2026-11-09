@@ -70,6 +70,20 @@ async def on_successful_payment(message: Message, services: Services, bot: Bot) 
     if delivery.duplicate:
         await message.answer("ℹ️ این پرداخت پیش‌تر ثبت شده و کالایتان را گرفته‌اید؛ نگران نباشید، پولی دوباره کم نشد.")
         return
+    if delivery.recipient_id is not None:
+        recipient = await services.players.get(delivery.recipient_id)
+        buyer = await services.players.get(delivery.player_id)
+        assert recipient is not None and buyer is not None
+        await message.answer(views.gift_receipt(delivery.order, recipient))
+        with contextlib.suppress(BaleAPIError):
+            await bot.send_message(recipient.platform_user_id, views.gift_received(delivery.order, delivery.granted, buyer))
+        with contextlib.suppress(BaleAPIError):
+            totals = await services.admin.stats()
+            report = views.sale_report(
+                delivery.order, buyer, user, charge, services.ctx.now(), totals, delivery.granted, gift_to=recipient.name
+            )
+            await bot.send_message(services.ctx.settings.owner_id, report)
+        return
     spin_button = (
         [[keyboards.panel_button("🎡 رفتن به گردونه شانس", "wheel", user.id)]] if delivery.order.pack.spins else None
     )

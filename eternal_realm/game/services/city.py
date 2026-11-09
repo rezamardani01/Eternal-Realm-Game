@@ -607,7 +607,7 @@ class CityService:
         return await tx.fetchone("SELECT * FROM city_search WHERE player_id = ?", (player_id,))
 
     async def search(self, player: Player) -> Target:
-        """Pick a fitting city at random; the one shown last time is not offered again straight away."""
+        """Pick any city that can be raided, at random; the one shown last time is not offered again straight away."""
         now = self.ctx.now()
         async with self.ctx.db.transaction() as tx:
             me = await self._need(tx, player, now)
@@ -629,21 +629,16 @@ class CityService:
             ids = [r["id"] for r in await tx.fetchall(
                 "SELECT id FROM cities WHERE id != ? AND shield_until <= ? ORDER BY RANDOM() LIMIT 40", (me.id, now)
             )]
-            mine_power = max(1, me.army_power + me.defense_power)
-            pool: list[tuple[float, City]] = []
-            for cid in ids:
+            pool: list[City] = []
+            for cid in ids:  # whoever is at hand: no shield, not a clan mate, not hit too often today
                 other = await self._by_id(tx, cid)
                 if other is None or other.player_id in mates or recent.get(other.id, 0) >= d.SAME_TARGET_PER_DAY:
                     continue
-                if abs(other.castle - me.castle) > 4:
-                    continue
-                ratio = max(1, other.army_power + other.defense_power) / mine_power
-                pool.append((abs(math.log(ratio)), other))
+                pool.append(other)
             if not pool:
-                raise GameError("حریف مناسبی پیدا نشد؛ کمی بعد دوباره جستجو کنید.")
-            pool.sort(key=lambda x: x[0])
-            fresh = [p for p in pool if p[1].id not in seen[-1:]] or pool
-            target = self.ctx.rng.choice([c for _, c in fresh[:5]])
+                raise GameError("حریفی که بشود به او تاخت پیدا نشد؛ کمی بعد دوباره جستجو کنید.")
+            fresh = [c for c in pool if c.id not in seen[-1:]] or pool
+            target = self.ctx.rng.choice(fresh)
             await self._tick(tx, target, now)
             seen = (seen + [target.id])[-20:]
             snapshot = json.dumps({"city": target.id, **target.snapshot(), "name": target.name})

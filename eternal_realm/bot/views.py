@@ -660,7 +660,27 @@ def deals_text(deals, seconds_left: int) -> str:  # noqa: ANN001
     return "\n".join(lines)
 
 
-def sale_report(order, player, user, charge_id, when: int, totals, granted: str = "") -> str:  # noqa: ANN001
+def gift_receipt(order, recipient) -> str:  # noqa: ANN001
+    """What the payer reads after paying for a gift."""
+    return (
+        f"✅ {bold('پرداخت موفق بود')}\n\n"
+        f"{order.pack.label} ×{fa(order.qty)} برای {bold(recipient.name)} فعال شد و پیام هدیه برایش رفت.\n\n"
+        "سپاس از دست‌ودل‌بازی شما 💛"
+    )
+
+
+def gift_received(order, granted: str, sender) -> str:  # noqa: ANN001
+    """What the lucky hero reads."""
+    body = granted or pack_description(order.pack)
+    return (
+        f"🎁 {bold('هدیه‌ی ویژه رسید!')}\n\n"
+        f"فرمانده {bold(sender.name)} این هدیه را از خزانه قلمرو برایتان خرید:\n\n"
+        f"{order.pack.label} ×{fa(order.qty)}\n{body}\n\n"
+        "از او سپاسگزار باشید 💛"
+    )
+
+
+def sale_report(order, player, user, charge_id, when: int, totals, granted: str = "", gift_to: str = "") -> str:  # noqa: ANN001
     """The message the bot owner receives after every successful sale."""
     from ..shared.jalali import describe
 
@@ -675,7 +695,8 @@ def sale_report(order, player, user, charge_id, when: int, totals, granted: str 
             f"📅 تاریخ: {fa(date)} · {weekday}",
             f"🕒 ساعت: {fa(clock)} (به وقت تهران)",
             "",
-            f"📦 محصول: {pack.label}",
+            f"📦 محصول: {pack.label}" + (f" ×{fa(order.qty)}" if order.qty > 1 else ""),
+            *([f"🎁 هدیه برای: {gift_to}"] if gift_to else []),
             f"🏷️ نوع: {SECTION_NAMES.get(pack.section, pack.section)}",
             f"🎁 {pack_description(pack, when)}",
             *(["🎲 محتوای تصادفی:", granted] if granted else []),

@@ -700,6 +700,11 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_city_builds_city ON city_builds (city_id, ready_at);
     """,
+    # 46: treasury packs bought as a gift for another hero (and how many of them)
+    """
+    ALTER TABLE orders ADD COLUMN gift_to INTEGER REFERENCES players (id);
+    ALTER TABLE orders ADD COLUMN qty INTEGER NOT NULL DEFAULT 1;
+    """,
 ]
 
 

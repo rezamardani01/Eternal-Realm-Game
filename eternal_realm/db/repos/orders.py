@@ -5,11 +5,13 @@ from __future__ import annotations
 from ..database import Row, Tx
 
 
-async def create(tx: Tx, player_id: int, pack_id: str, amount: int, payload: str, now: int) -> int:
+async def create(
+    tx: Tx, player_id: int, pack_id: str, amount: int, payload: str, now: int, *, gift_to: int | None = None, qty: int = 1
+) -> int:
     return await tx.execute(
-        "INSERT INTO orders (player_id, pack_id, amount, status, payload, created_at)"
-        " VALUES (?, ?, ?, 'pending', ?, ?)",
-        (player_id, pack_id, amount, payload, now),
+        "INSERT INTO orders (player_id, pack_id, amount, status, payload, created_at, gift_to, qty)"
+        " VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)",
+        (player_id, pack_id, amount, payload, now, gift_to, qty),
     )
 
 

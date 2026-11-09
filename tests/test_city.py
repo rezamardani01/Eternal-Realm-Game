@@ -231,20 +231,20 @@ async def test_a_full_raid_loot_losses_shield_reports_and_revenge(services, db, 
 async def test_search_rules_shields_clans_daily_cap_and_repeats(services, db, clock):
     ap, a = await make_city(services, db, 1, "آذرگان")
     await give(db, a.id, sword=20)
-    with pytest.raises(GameError, match="حریف مناسبی"):
+    with pytest.raises(GameError, match="پیدا نشد"):
         await services.city.search(ap)  # nobody else exists yet
     bp, b = await make_city(services, db, 2, "شیرکوه")
     cp, c = await make_city(services, db, 3, "پلنگ‌دره")
     await stock(db, b.id, shield_until=services.ctx.now() + 10_000)
     await stock(db, c.id, shield_until=services.ctx.now() + 10_000)
-    with pytest.raises(GameError, match="حریف مناسبی"):
+    with pytest.raises(GameError, match="پیدا نشد"):
         await services.city.search(ap)  # everyone is shielded
     await stock(db, c.id, shield_until=0)
     assert (await services.city.search(ap)).city.id == c.id
     # clan mates are never offered
     clan = await services.clans.create(ap, "شیرها")
     await services.clans.join(cp, clan.id)
-    with pytest.raises(GameError, match="حریف مناسبی"):
+    with pytest.raises(GameError, match="پیدا نشد"):
         await services.city.search(ap)
     # nobody without soldiers can go to war
     with pytest.raises(GameError, match="بدون سرباز"):
