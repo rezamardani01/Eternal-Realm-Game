@@ -709,6 +709,23 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE players ADD COLUMN free_spin_day INTEGER NOT NULL DEFAULT 0;
     """,
+    # 48: the heroes' own messages (queued, keyed, sent once) and the city treasury withdrawal limit
+    """
+    CREATE TABLE player_alerts (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id  INTEGER NOT NULL REFERENCES players (id),
+        key        TEXT    NOT NULL,
+        text       TEXT    NOT NULL,
+        screen     TEXT    NOT NULL DEFAULT '',
+        arg        TEXT    NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        sent       INTEGER NOT NULL DEFAULT 0,
+        UNIQUE (player_id, key)
+    );
+    CREATE INDEX idx_player_alerts_unsent ON player_alerts (sent, id);
+    ALTER TABLE cities ADD COLUMN withdraw_day INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE cities ADD COLUMN withdrawn INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

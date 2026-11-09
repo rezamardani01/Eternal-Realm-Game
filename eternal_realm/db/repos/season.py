@@ -18,6 +18,10 @@ async def add_points(tx: Tx, player_id: int, deed: str, now: int) -> int:
         " ON CONFLICT (player_id, deed) DO UPDATE SET n = n + 1",
         (player_id, deed),
     )
+    from ...game.notify import achievement_check
+
+    done = int(await tx.scalar("SELECT n FROM deed_counts WHERE player_id = ? AND deed = ?", (player_id, deed), 0))
+    await achievement_check(tx, player_id, f"deed:{deed}", done, now)
     from ...game.services.contests import count_deed
 
     await count_deed(tx, player_id, deed, now)

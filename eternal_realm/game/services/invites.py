@@ -95,6 +95,10 @@ class InviteService:
 
             inviter = await player_repo.get(tx, inviter_id)
             assert inviter is not None
+            from ..notify import achievement_check
+
+            total = int(await tx.scalar("SELECT COUNT(*) FROM referrals WHERE referrer_id = ?", (inviter_id,), 0))
+            await achievement_check(tx, inviter_id, "invites", total, now)
             if today > DAILY_REWARDS:
                 return InviteResult(inviter, [], capped=True)
             prizes = []

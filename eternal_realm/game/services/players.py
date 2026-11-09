@@ -196,6 +196,10 @@ class PlayerService:
         amount = round(amount * player.race.xp_multiplier)
         level, xp, gained = progression.apply_xp(player.level, player.xp, amount, self.ctx.balance)
         await repo.set_progress(tx, player_id, level, xp)
+        if gained:
+            from ..notify import achievement_check
+
+            await achievement_check(tx, player_id, "level", level, self.ctx.now())
         return LevelUp(player.level, level) if gained else None
 
     async def schedule_cooldown(self, tx: Tx, player_id: int, key: str) -> int:
@@ -248,6 +252,9 @@ class PlayerService:
             chest = streak_chest(streak)
             if chest:
                 await inv_repo.add_stack(tx, player_id, chest, 1)
+            from ..notify import achievement_check
+
+            await achievement_check(tx, player_id, "streak", streak, now)
             crystal = 3 if streak % 7 == 0 else 0
             if crystal:
                 await wallet.apply(

@@ -69,6 +69,9 @@ class City:
     builds: list[Build] = field(default_factory=list)
     #: the automatic messages (hunger, full storage...) are switched on
     alerts: bool = True
+    #: gold taken out of the treasury today (the day it counts for is ``withdraw_day``)
+    withdraw_day: int = 0
+    withdrawn: int = 0
 
     # --- derived numbers -------------------------------------------------------------------
     @property
@@ -237,6 +240,7 @@ class CityService:
             for r in await tx.fetchall("SELECT * FROM city_builds WHERE city_id = ? ORDER BY ready_at", (cid,))
         ]
         city.alerts = bool(row["alerts"])
+        city.withdraw_day, city.withdrawn = row["withdraw_day"], row["withdrawn"]
         owner = await tx.fetchone(
             "SELECT display_name, platform_user_id, boost_until FROM players WHERE id = ?", (city.player_id,)
         )
@@ -434,6 +438,39 @@ class CityService:
             return city
 
     # --- treasury, buildings ----------------------------------------------------------------------------
+    def withdraw_left(self, city: City, now: int) -> int:
+        """How much gold may still leave the treasury today."""
+        used = city.withdrawn if city.withdraw_day == day_of(now) else 0
+        return max(0, d.WITHDRAW_DAILY_CAP - used)
+
+    def withdraw_fee(self, amount: int) -> int:
+        return -(-amount * d.WITHDRAW_FEE_PERCENT // 100)
+
+    async def withdraw(self, player: Player, amount: int) -> tuple[City, int, int]:
+        """Take gold out of the treasury into the hero's purse, minus a fee and within a daily limit.
+
+        Returns the city, the gold the hero received and the fee."""
+        if amount < 100:
+            raise GameError("کمترین مقدار برداشت ۱۰۰ سکه است.")
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            city = await self._need(tx, player, now)
+            left = self.withdraw_left(city, now)
+            if amount > left:
+                raise GameError(f"سقف برداشت امروز از خزانه {fa(d.WITHDRAW_DAILY_CAP)} سکه است و {fa(left)} باقی مانده.")
+            if amount > city.amount("gold"):
+                raise GameError(f"خزانه‌ی شهر فقط {fa(city.amount('gold'))} سکه دارد.")
+            fee = self.withdraw_fee(amount)
+            city.res["gold"] -= amount
+            used = (city.withdrawn if city.withdraw_day == day_of(now) else 0) + amount
+            city.withdraw_day, city.withdrawn = day_of(now), used
+            await tx.execute(
+                "UPDATE cities SET withdraw_day = ?, withdrawn = ? WHERE id = ?", (city.withdraw_day, used, city.id)
+            )
+            await self._save(tx, city)
+            await wallet.apply(tx, player.id, gold=amount - fee, reason="city_withdraw", now=now)
+            return city, amount - fee, fee
+
     async def deposit(self, player: Player, amount: int) -> City:
         if amount <= 0:
             raise GameError("مقدار باید بیشتر از صفر باشد.")

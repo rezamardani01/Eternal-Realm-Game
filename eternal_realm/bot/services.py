@@ -27,6 +27,7 @@ from ..game.services.inventory import InventoryService
 from ..game.services.invites import InviteService
 from ..game.services.market import MarketService
 from ..game.services.achievements import AchievementService
+from ..game.services.alerts import AlertService
 from ..game.services.city import CityService
 from ..game.services.exchange import ExchangeService
 from ..game.services.missions import MissionService
@@ -73,6 +74,7 @@ class Services:
     achievements: AchievementService
     exchange: ExchangeService
     city: CityService
+    alerts: AlertService
     wheel: WheelService
     teams: TeamBattleService
     gdungeon: GroupDungeonService
@@ -125,6 +127,7 @@ class Services:
             achievements=AchievementService(ctx, inventory),
             exchange=ExchangeService(ctx),
             city=CityService(ctx),
+            alerts=AlertService(ctx),
             wheel=WheelService(ctx, inventory),
             teams=TeamBattleService(ctx, players, characters),
             gdungeon=GroupDungeonService(ctx, players, characters, inventory),

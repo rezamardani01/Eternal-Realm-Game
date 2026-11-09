@@ -74,6 +74,9 @@ class PetService:
             "INSERT INTO player_pets (player_id, pet_id, active, got_at) VALUES (?, ?, ?, ?)",
             (player_id, pet_id, int(not owned), self.ctx.now()),
         )
+        from ..notify import achievement_check
+
+        await achievement_check(tx, player_id, "pets", len(owned) + 1, self.ctx.now())
         return True
 
     async def buy_with_gold(self, player: Player, pet_id: str) -> Pet:

@@ -148,6 +148,15 @@ class MarketService:
                 await inv_repo.transfer_gear(tx, row["gear_id"], buyer.id)
             else:
                 await self.inventory.grant(tx, buyer.id, row["item_id"], row["qty"])
+            from ...shared.text import fa
+            from ..notify import queue
+
+            sold = get_item(row["item_id"])
+            await queue(
+                tx, row["seller_id"], f"sold:{listing_id}",
+                f"🏪 *آگهی شما فروخته شد!*\n\n{sold.label}" + (f" ×{fa(row['qty'])}" if row["qty"] > 1 else "") +
+                f"\n💰 {fa(price - fee)} سکه به کیف شما رسید (کارمزد بازار: {fa(fee)})", now,
+            )
             return Listing(
                 listing_id, row["seller_id"], "", get_item(row["item_id"]), row["qty"], price,
                 row["gear_id"], 0,

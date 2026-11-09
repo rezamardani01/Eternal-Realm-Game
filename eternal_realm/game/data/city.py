@@ -19,6 +19,10 @@ FLAGS: tuple[tuple[str, str], ...] = (
 FLAG_EMOJIS = tuple(f for f, _ in FLAGS)
 
 NAME_MIN, NAME_MAX = 3, 16
+#: taking gold out of the city treasury costs this much, and only this much may leave per day
+WITHDRAW_FEE_PERCENT = 20
+WITHDRAW_DAILY_CAP = 30_000
+WITHDRAW_STEPS = (1_000, 5_000, 10_000)
 START_SHIELD = 3 * 24 * 3600
 #: a city hit this many times in a day (with at least a star each) gets a rest period of this length
 REPEAT_HITS = 3

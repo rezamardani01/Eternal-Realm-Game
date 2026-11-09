@@ -130,7 +130,7 @@ async def realm(c: Ctx) -> Screen:
         [c.btn("🏆 لیگ و رتبه‌بندی", "cityleague"), c.btn(f"📜 گزارش جنگ‌ها{f' ({fa(unseen)})' if unseen else ''}", "cityreports")],
         [c.btn(f"⏱️ صف کارها{f' ({fa(working)})' if working else ''}", "cityqueue", style="primary" if working else None),
          c.btn("⚙️ تنظیمات شهر", "citycfg")],
-        [c.btn("🛒 خرید منابع از خزانه", "prem", "city", style="success")],
+        [c.btn("🏛️ خزانه شهر", "citytreas"), c.btn("🛒 خرید منابع از خزانه", "prem", "city", style="success")],
         c.back("home"),
     ]
     return Screen("\n".join(text), rows)
@@ -240,6 +240,77 @@ async def city_mine(c: Ctx) -> Screen:
     ]
     rows = [[c.btn("💰 واریز سکه به خزانه‌ی شهر", "citydep")], c.back("city")]
     return Screen("\n".join(text), rows)
+
+
+@screen("citytreas")
+async def city_treasury(c: Ctx) -> Screen:
+    city, now = await _city(c), c.services.ctx.now()
+    p = await c.refresh()
+    left = c.services.city.withdraw_left(city, now)
+    text = "\n".join([
+        f"🏛️ {bold('خزانه شهر')}", LINE,
+        *[_res_line(r, city.amount(r)) for r in d.RES],
+        LINE,
+        f"👛 کیف شما: {fa(p.gold)} سکه",
+        "📥 هر سکه‌ی واریزی، یک‌به‌یک به خزانه‌ی شهر می‌رود.",
+        f"📤 برداشت: {fa(d.WITHDRAW_FEE_PERCENT)}٪ کارمزد دارد و امروز تا {fa(left)} سکه‌ی دیگر می‌شود برداشت.",
+        "سکه‌ی خزانه برای ساخت و سرباز لازم است؛ فقط وقتی لازم بود برداشت کنید.",
+    ])
+    rows = [
+        [c.btn("📥 واریز سکه", "citydep", style="success"), c.btn("📤 برداشت از خزانه", "citywd", style="primary")],
+        c.back("city"),
+    ]
+    return Screen(text, rows)
+
+
+@screen("citywd")
+async def city_withdraw(c: Ctx) -> Screen:
+    city, now = await _city(c), c.services.ctx.now()
+    left = c.services.city.withdraw_left(city, now)
+    most = min(left, city.amount("gold"))
+    text = "\n".join([
+        f"📤 {bold('برداشت از خزانه')}", "",
+        f"🏛️ سکه‌ی خزانه: {fa(city.amount('gold'))}",
+        f"📅 سقف امروز: {fa(left)} سکه",
+        f"🧾 کارمزد: {fa(d.WITHDRAW_FEE_PERCENT)}٪ از مبلغ برداشت",
+        "",
+        "چقدر برداشت می‌کنید؟ 👇",
+    ])
+    amounts = [n for n in d.WITHDRAW_STEPS if n <= most]
+    buttons = [c.btn(f"🪙 {fa(n)}", "citywdq", n) for n in amounts]
+    if most >= 100 and most not in amounts:
+        buttons.append(c.btn(f"🪙 همه ({fa(most)})", "citywdq", most))
+    rows = keyboards.grid(buttons, 2)
+    rows.append(c.back("citytreas"))
+    return Screen(text, rows)
+
+
+@screen("citywdq")
+async def city_withdraw_ask(c: Ctx) -> Screen:
+    amount, city, now = _int(c.a), await _city(c), c.services.ctx.now()
+    p = await c.refresh()
+    left = c.services.city.withdraw_left(city, now)
+    fee = c.services.city.withdraw_fee(amount)
+    lines = [
+        f"📤 {bold('تأیید برداشت')}", "",
+        f"مبلغ برداشت: {bold(fa(amount))} سکه",
+        f"🧾 کارمزد: {fa(fee)} سکه",
+        f"👛 به کیف شما می‌رسد: {bold(fa(amount - fee))} سکه", "",
+        f"خزانه‌ی شهر: {fa(city.amount('gold'))} ← {fa(max(0, city.amount('gold') - amount))}",
+        f"کیف شما: {fa(p.gold)} ← {fa(p.gold + amount - fee)}",
+    ]
+    if amount > left or amount > city.amount("gold") or amount < 100:
+        return Screen("\n".join(lines + ["", "🔒 این مقدار از سقف امروز یا موجودی خزانه بیشتر است."]), [c.back("citywd")])
+    return Screen("\n".join(lines + ["", "برداشت شود؟"]), [[c.btn("✅ بله، برداشت کن", "citywdok", amount, style="success"), c.btn("↩️ نه", "citywd")]])
+
+
+@screen("citywdok")
+async def city_withdraw_do(c: Ctx) -> Screen:
+    _, got, fee = await c.services.city.withdraw(c.player, _int(c.a))
+    await c.refresh()
+    shown = await city_treasury(c)
+    shown.toast, shown.alert = f"📤 {fa(got)} سکه به کیف شما رسید (کارمزد {fa(fee)})", True
+    return shown
 
 
 @screen("citydep")

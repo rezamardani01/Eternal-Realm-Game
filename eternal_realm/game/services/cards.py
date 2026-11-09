@@ -50,6 +50,10 @@ class CardService:
                 "INSERT INTO player_cards (player_id, card_id, qty, first_at) VALUES (?, ?, 1, ?)",
                 (player_id, card_id, self.ctx.now()),
             )
+            from ..notify import achievement_check
+
+            kinds = int(await tx.scalar("SELECT COUNT(*) FROM player_cards WHERE player_id = ?", (player_id,), 0))
+            await achievement_check(tx, player_id, "cards", kinds, self.ctx.now())
             return True
         await tx.execute(
             "UPDATE player_cards SET qty = qty + 1 WHERE player_id = ? AND card_id = ?", (player_id, card_id)
