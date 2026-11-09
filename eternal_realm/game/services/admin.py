@@ -135,9 +135,32 @@ class AdminService:
         if not (0 <= gold <= 1_000_000 and 0 <= crystal <= 10_000 and 0 <= vip_days <= 365) or not (gold or crystal or vip_days):
             raise GameError("مقدار هدیه درست نیست (سکه تا ۱٬۰۰۰٬۰۰۰، کریستال تا ۱۰٬۰۰۰، VIP تا ۳۶۵ روز).")
         now = self.ctx.now()
+        from ...shared.text import fa
+        from ..notify import queue
+
+        parts = []
+        if gold:
+            parts.append(f"🪙 {fa(gold)} سکه")
+        if crystal:
+            parts.append(f"💎 {fa(crystal)} کریستال")
+        if vip_days:
+            parts.append(f"💠 {fa(vip_days)} روز اشتراک VIP")
+        message = "\n".join([
+            "👑 *فرمان شاهانه‌ی مالک قلمرو*",
+            "",
+            "ای جنگجوی دلیر! مالک قلمرو از خزانه‌ی بزرگ خویش، به پاس شجاعت و هم‌راهی شما، هدیه‌ای همگانی بخشید.",
+            "",
+            "🎁 *هدیه‌ی شما:*",
+            *parts,
+            "",
+            "✅ هدیه همین حالا به کیف شما رسید.",
+            "",
+            "⚔️ با آن قهرمانتان را قوی‌تر کنید؛ قلمرو جاودان به دست شما می‌درخشد!",
+        ])
         async with self.ctx.db.transaction() as tx:
             rows = await tx.fetchall("SELECT id, vip_until FROM players WHERE banned = 0")
             for row in rows:
+                await queue(tx, row["id"], f"gift_all:{now}", message, now)
                 if gold or crystal:
                     await wallet.apply(tx, row["id"], gold=gold, crystal=crystal, reason="admin_gift", now=now)
                 if vip_days:

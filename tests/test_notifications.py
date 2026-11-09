@@ -125,3 +125,14 @@ async def test_the_city_treasury_pays_out_with_a_fee_and_a_daily_limit(h, servic
         await tx.execute("UPDATE cities SET gold = 500 WHERE id = ?", (pc.id,))
     with pytest.raises(GameError, match="فقط"):
         await services.city.withdraw(poor, 1_000)
+
+
+async def test_a_gift_for_everybody_tells_each_hero(h, services, db):
+    await hero(services, 1, "آرش")
+    await hero(services, 2, "دومی")
+    await services.admin.give_all(999, gold=500, crystal=3)
+    h.session.reset()
+    await notifier.deliver(h.bot, services)
+    for chat in (1, 2):
+        text = dms(h, chat)[-1]["text"]
+        assert "مالک قلمرو" in text and "۵۰۰ سکه" in text and "۳ کریستال" in text
