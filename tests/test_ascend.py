@@ -69,16 +69,16 @@ async def test_awakening_costs_gold_and_crystals_once(services, db):
 
 async def test_glass_flow_and_profile_lines(h, services, db):
     await hero(services, db, 5, "رها")
-    await h.say(5, "قلمرو", group=True)
-    await h.tap(5, "قهرمان من", group=True)
-    await h.tap(5, "ارتقای قهرمان", group=True)
-    await h.tap(5, "انتخاب کلاس دوم", group=True)
-    await h.click(5, h.button_data("جادوگر"), group=True)
-    await h.tap(5, "بله", group=True)
+    await h.say(5, "قلمرو")
+    await h.tap(5, "قهرمان من")
+    await h.tap(5, "ارتقای قهرمان")
+    await h.tap(5, "انتخاب کلاس دوم")
+    await h.click(5, h.button_data("جادوگر"))
+    await h.tap(5, "بله")
     assert (await services.players.require(5)).class2_id == "mage"
-    await h.tap(5, "بیدار کردن", group=True)
-    await h.tap(5, "بیدار شو", group=True)
+    await h.tap(5, "بیدار کردن")
+    await h.tap(5, "بیدار شو")
     assert (await services.players.require(5)).awakened
-    await h.panel(5, "profile", group=True)
+    await h.panel(5, "profile")
     text = h.session.sent("editMessageText")[-1]["text"]
     assert "کلاس دوم" in text and "قدرت پنهان" in text

@@ -113,8 +113,8 @@ async def test_stats_are_one_per_line_in_text_and_buttons_in_the_panel(h, servic
 async def test_a_panel_only_answers_to_its_owner(h, services):
     await reg(services)
     await reg(services, 11, "سارا", "fairy", "mage")
-    await h.say(10, "کوله‌پشتی", group=True)
-    data = h.button_data("تجهیزات")
+    await h.say(10, "قلمرو", group=True)
+    data = h.button_data("قهرمان من")
     await h.click(11, data, group=True)
     assert any("مال شما نیست" in a.get("text", "") for a in h.session.callback_answers())
     assert not h.session.sent("editMessageText")
@@ -125,15 +125,20 @@ async def test_start_shows_the_home_panel_with_glass_buttons(h, services):
     await reg(services)
     await h.say(10, "/start")
     labels = h.labels()
-    assert any("کوله‌پشتی" in t for t in labels) and any("فروشگاه" in t for t in labels)
-    assert any("ماجراجویی" in t for t in labels)
+    for name in ("قهرمان من", "فرمانروایی", "نبرد و چالش", "بازار و تجارت", "خاندان", "خزانه قلمرو", "ماجراجویی"):
+        assert any(name in t for t in labels), name
+    assert len(labels) <= 12  # categories, not a wall of buttons
 
 
-async def test_group_words_open_panels_and_personal_panel_goes_private(h, services):
+async def test_group_words_open_panels_and_personal_panel_goes_private(h, services, clock):
     await reg(services)
     for word, expect in [("کوله‌پشتی", "تجهیزات"), ("فروشگاه", "سلاح"), ("بازار", "بازگشت"), ("صندوقچه", "خرید صندوقچه")]:
-        await h.say(10, word, group=True)
+        await h.say(10, word)
         assert any(expect in t for t in h.labels()), (word, h.labels())
+        h.session.reset()
+        clock.advance(61)  # the pointer is sent at most once a minute per person
+        await h.say(10, word, group=True)  # in a group the same word only points to the private chat
+        assert "پیوی ربات" in h.session.last_text() and h.session.last_buttons()[0]["url"].startswith("https://ble.ir/")
     await h.say(10, "کیف من", group=True)
     assert h.session.last_buttons()[0]["url"].startswith("https://ble.ir/")
     await h.say(10, "کیف من")
@@ -145,6 +150,7 @@ async def test_equip_and_unequip_by_tapping(h, services, db):
     p = await reg(services)
     await give(services, db, p.id, "dagger")
     await h.say(10, "/start")
+    await h.tap(10, "قهرمان من")
     await h.tap(10, "کوله‌پشتی")
     await h.tap(10, "تجهیزات")
     assert any("✅" in t for t in h.labels())  # the starter weapon is marked as worn
@@ -357,7 +363,7 @@ async def test_market_has_category_buttons_with_listings_below(h, services, db):
 async def test_market_panel_opened_in_a_group_belongs_to_its_opener(h, services):
     await reg(services)
     await reg(services, 11, "سارا", "fairy", "mage")
-    await h.say(10, "بازار", group=True)
+    await h.panel(10, "market", group=True)
     tab = h.button_data("فیلتر")
     h.session.reset()
     await h.click(11, tab, group=True)
@@ -408,7 +414,7 @@ async def test_the_word_realm_opens_the_home_panel_in_a_group(h, services):
     await reg(services)
     await h.say(10, "قلمرو", group=True)
     assert "فرمانده" in h.session.last_text()
-    assert [t.split(" ", 1)[1] for t in h.labels()] == ["قهرمان من", "فروشگاه آیتم", "بازارچه", "خاندان", "استراحت"]
+    assert [t.split(" ", 1)[1] for t in h.labels()] == ["قهرمان من", "ماجراجویی", "مبارزه", "استراحت", "باز کردن پنل شخصی"]
 
 
 async def test_back_buttons_are_called_back_not_menu(h, services):
@@ -442,7 +448,7 @@ async def test_names_are_mentions_in_groups_but_plain_in_private(h, services):
     await reg(services)
     await h.say(10, "ماهیگیری", group=True)
     assert "[آرش](uid:10)" in h.session.sent("sendMessage")[0]["text"]
-    await h.say(10, "جایزه", group=True)
+    await h.say(10, "استراحت", group=True)
     assert "[آرش](uid:10)" in h.session.last_text()
     h.session.reset()
     await h.panel(10, "act", "fishing")
@@ -459,6 +465,8 @@ async def test_profile_of_another_player_is_a_glass_panel_with_their_numbers(h, 
     assert "سارا" in h.session.last_text()
     assert not any("کوله‌پشتی" in t for t in labels)  # it is their profile, not your backpack
     await h.say(10, "پروفایل", group=True)
+    assert any("قلمرو من" in t for t in h.labels()) and not any("کوله‌پشتی" in t for t in h.labels())  # a group sees the card only
+    await h.say(10, "پروفایل")
     assert any("کوله‌پشتی" in t for t in h.labels())
 
 
@@ -566,7 +574,25 @@ async def test_selling_the_last_of_a_stack_or_a_piece_returns_to_the_list(h, ser
 async def test_the_adventure_menu_has_no_dungeon_button_the_main_menu_does(h, services):
     await reg(services)
     await h.say(10, "/start")
-    assert any("سیاه‌چال" in t for t in h.labels())  # the main menu keeps it
+    await h.panel(10, "fight")
+    assert any("سیاه‌چال" in t for t in h.labels())  # the «fight and challenge» menu keeps it
     await h.panel(10, "adv")
     assert not any("سیاه‌چال" in t for t in h.labels()) and "سیاه‌چال" not in h.session.last_text()
     assert any("شکار" in t for t in h.labels())
+
+
+async def test_private_words_in_a_group_get_one_friendly_pointer_a_minute(h, services, clock):
+    await reg(services)
+    h.session.reset()
+    await h.say(10, "فروشگاه", group=True)
+    assert len(h.session.sent("sendMessage")) == 1 and "پیوی ربات" in h.session.last_text()
+    await h.say(10, "کوله‌پشتی", group=True)  # same person, same minute: quiet
+    assert len(h.session.sent("sendMessage")) == 1
+    clock.advance(61)
+    await h.say(10, "خاندان", group=True)
+    assert len(h.session.sent("sendMessage")) == 2
+    h.session.reset()
+    for word in ("ماهیگیری", "پروفایل", "قلمرو"):  # what stays in the group still works
+        clock.advance(61)
+        await h.say(10, word, group=True)
+        assert "پیوی ربات باز می‌شود" not in h.session.last_text()

@@ -20,6 +20,8 @@ class Throttle:
         self.group_max = group_max
         self._now = monotonic
         self._user_last: dict[int, float] = {}
+        #: (chat, user) -> when the «open this in the private chat» pointer was last sent
+        self.hinted: dict[tuple[int, int], int] = {}
         self._group_hits: defaultdict[int, deque[float]] = defaultdict(deque)
 
     def allow_user(self, user_id: int) -> bool:

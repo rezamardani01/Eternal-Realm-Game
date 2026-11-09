@@ -80,8 +80,8 @@ async def test_worn_base_piece_is_not_used(services, db):
 async def test_glass_flow(h, services, db):
     recipe = RECIPES[4]
     await hero(services, db, 4, "نگار", {recipe.base: 1, **recipe.materials})
-    await h.say(4, "کوره", group=True)
-    await h.click(4, h.button_data("اژدهاکش"), group=True)
+    await h.say(4, "کوره")
+    await h.click(4, h.button_data("اژدهاکش"))
     assert "نیازمندی" in h.session.sent("editMessageText")[-1]["text"]
-    await h.tap(4, "بله، بساز", group=True)
+    await h.tap(4, "بله، بساز")
     assert "ساخته شد" in h.session.sent("editMessageText")[-1]["text"]

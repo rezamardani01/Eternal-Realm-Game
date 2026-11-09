@@ -74,11 +74,11 @@ async def test_premium_pet_order_delivers_and_blocks_a_second_purchase(h, servic
 
 async def test_glass_flow(h, services, db):
     await hero(services, db, 4, "نگار")
-    await h.say(4, "حیوان همراه", group=True)
-    await h.click(4, h.button_data("گربه"), group=True)
-    await h.tap(4, "خرید", group=True)
+    await h.say(4, "حیوان همراه")
+    await h.click(4, h.button_data("گربه"))
+    await h.tap(4, "خرید")
     assert "تأیید خرید" in h.session.sent("editMessageText")[-1]["text"]
-    await h.tap(4, "بله، بخر", group=True)
+    await h.tap(4, "بله، بخر")
     assert await services.pets.owned((await services.players.require(4)).id) == {"cat": True}
     assert "همین حالا همراه شماست" in h.session.sent("editMessageText")[-1]["text"]
 
@@ -156,7 +156,7 @@ def test_stronger_pets_cost_more_and_the_legendary_ones_are_sold_for_real_money_
 
 async def test_the_pet_list_has_two_buttons_per_row_name_and_price(h, services, db):
     await services.players.register(7, "u", "آرش", "elf", "archer")
-    await h.say(7, "حیوان", group=True)
+    await h.say(7, "حیوان")
     markup = h.session.last_markup_rows()
     pet_rows = [row for row in markup if any("pet" in b.get("callback_data", "") for b in row)]
     assert len(pet_rows) == len(PETS) and all(len(row) == 2 for row in pet_rows)

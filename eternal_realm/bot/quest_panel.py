@@ -38,7 +38,7 @@ async def quests(c: Ctx) -> Screen:
     special = by_chapter.get(0, [])
     if special:
         rows.append([c.btn(f"🌟 داستان‌های ویژه · {fa(special.count('done'))}/{fa(len(special))}", "qchapter", 0)])
-    rows.append(c.back("home"))
+    rows.append(c.back("fight"))
     return Screen("\n".join(lines), rows)
 
 

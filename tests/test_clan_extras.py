@@ -118,7 +118,7 @@ async def test_the_picture_flow_and_the_card_with_the_picture(h, services, db):
     await h.click(1, yes["callback_data"])
     assert (await services.clans.get(clan.id)).photo == "BIG"
     h.session.reset()
-    await h.say(1, "خاندان", group=True)  # the clan word shows the picture, the facts and the glass buttons
+    await h.say(1, "خاندان")  # the clan word shows the picture, the facts and the glass buttons
     card = h.session.sent("sendPhoto")[-1]
     assert card["photo"] == "BIG" and "شیرها" in card["caption"] and "جریمه‌ی خیانت" in card["caption"]
     labels = [b["text"] for row in card["reply_markup"]["inline_keyboard"] for b in row]

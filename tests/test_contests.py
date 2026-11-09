@@ -68,7 +68,7 @@ async def test_prizes_arrive_next_week_for_the_top_three_once(services, db, cloc
 async def test_glass_flow(h, services, db):
     p = await hero(services, db, 20, "نگار")
     await do(db, services, p, "mission", 2)
-    await h.say(20, "مسابقه", group=True)
+    await h.panel(20, "contests", group=True)  # opened from the group menu the ranking names people with mentions
     assert "مسابقه‌های هفته" in h.session.last_text()
     assert len([b for b in h.session.last_buttons() if "contest" in b.get("callback_data", "")]) >= len(CONTESTS)
     await h.click(20, h.button_data("مأموریت تمام‌شده"), group=True)

@@ -29,7 +29,7 @@ async def pets(c: Ctx) -> Screen:
         rows.append([c.btn(f"{pet.emoji} {pet.name}", "pet", pet.id), c.btn(tag, "pet", pet.id)])  # name, then its price or state
     if not owned:
         lines.append("هنوز حیوان خانگی ندارید. یکی از ارزان‌ترها را با سکه بگیرید!")
-    rows.append(c.back("home"))
+    rows.append(c.back("profile"))
     return Screen("\n".join(lines), rows)
 
 

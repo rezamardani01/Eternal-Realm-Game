@@ -142,11 +142,11 @@ async def test_selling_a_stack_needs_confirmation(services, db, h):
 
 async def test_shop_categories_have_two_columns_name_and_price(h, services):
     await services.players.register(7, "u", "آرش", "elf", "archer")
-    await h.say(7, "فروشگاه", group=True)
+    await h.say(7, "فروشگاه")
     for category in ("سلاح و زره", "معجون"):
-        await h.tap(7, category, group=True)
+        await h.tap(7, category)
         rows = [row for row in h.session.last_markup_rows() if any("shopitem" in b.get("callback_data", "") for b in row)]
         assert rows and all(len(row) == 2 for row in rows)
         assert all(row[0]["callback_data"] == row[1]["callback_data"] for row in rows)  # both buttons open the item
         assert any(("🪙" in row[1]["text"] or "دارید" in row[1]["text"]) for row in rows)
-        await h.tap(7, "بازگشت", group=True)
+        await h.tap(7, "بازگشت")

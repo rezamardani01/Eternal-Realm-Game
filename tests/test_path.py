@@ -100,14 +100,14 @@ async def test_ticket_order_unlocks_and_blocks_a_repeat(services, db):
 async def test_glass_flow(h, services, db):
     p = await hero(services, db, 6, "مینا")
     await add(db, services, p, "boss", 4)
-    await h.say(6, "قلمرو", group=True)
-    await h.tap(6, "قهرمان من", group=True)
-    await h.tap(6, "مسیر قهرمانی", group=True)
+    await h.say(6, "قلمرو")
+    await h.tap(6, "قهرمان من")
+    await h.tap(6, "مسیر قهرمانی")
     text = h.session.sent("editMessageText")[-1]["text"]
     assert "مرحله‌ی شما" in text and "جایزه‌ی رایگان بعدی" in text
-    await h.tap(6, "دریافت همه", group=True)
+    await h.tap(6, "دریافت همه")
     assert (await services.season.state(p)).claimed
-    await h.tap(6, "مراحل و جایزه‌ها", group=True)
+    await h.tap(6, "مراحل و جایزه‌ها")
     assert "مسیر قهرمانی" in h.session.sent("editMessageText")[-1]["text"]
     assert POINTS_PER_TIER == 100
 

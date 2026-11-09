@@ -18,6 +18,14 @@ if TYPE_CHECKING:
 Handler = Callable[["CommandContext"], Awaitable[None]]
 
 
+#: words that open a personal panel: they work in the private chat only (the group gets a friendly pointer)
+PRIVATE_ONLY = (
+    "daily", "clan", "clan_create", "rename", "wallet", "open_inventory", "open_gear", "open_chests", "open_shop",
+    "open_market", "open_premium", "open_quests", "open_album", "open_pets", "open_dungeon", "open_craft",
+    "open_offers", "open_missions", "open_contests", "open_altar",
+)
+
+
 @dataclass
 class Command:
     name: str

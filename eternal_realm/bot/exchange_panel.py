@@ -31,7 +31,7 @@ async def exchange(c: Ctx) -> Screen:
     rows = [
         [c.btn("🪙 تبدیل سکه به کریستال", "exchbuy", style="primary")],
         [c.btn("💎 تبدیل کریستال به سکه", "exchsell", style="success")],
-        c.back("home"),
+        c.back("trade"),
     ]
     return Screen(text, rows)
 

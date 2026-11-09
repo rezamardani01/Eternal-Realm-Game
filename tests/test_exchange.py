@@ -69,6 +69,8 @@ async def test_poor_heroes_and_the_daily_limit(services, db, clock):
 async def test_the_screens(h, services, db):
     await rich(services, db, crystal=3)
     await h.panel(7, "home")
+    assert any("بازار و تجارت" in label for label in h.labels())
+    await h.panel(7, "trade")
     assert any("مرکز مبادله" in label for label in h.labels())
     await h.panel(7, "exch")
     text = h.session.last_text()

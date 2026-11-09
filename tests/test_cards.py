@@ -88,14 +88,14 @@ async def test_hunting_can_drop_the_monster_card(services, db):
 
 async def test_glass_flow(h, services, db):
     await hero(services, db, 6, "پویا")
-    await h.say(6, "آلبوم", group=True)
+    await h.say(6, "آلبوم")
     assert "آلبوم کارت" in h.session.sent()[-1]["text"]
-    await h.tap(6, "بسته‌ی کارت", group=True)
+    await h.tap(6, "بسته‌ی کارت")
     assert "شانس هر کارت" in h.session.sent("editMessageText")[-1]["text"]
-    await h.tap(6, "بله، بخر", group=True)
+    await h.tap(6, "بله، بخر")
     assert "کارت‌های بسته" in h.session.sent("editMessageText")[-1]["text"]
-    await h.tap(6, "آلبوم", group=True)
-    await h.click(6, h.button_data("قهرمانان"), group=True)
+    await h.tap(6, "آلبوم")
+    await h.click(6, h.button_data("قهرمانان"))
     assert "از ۵ کارت" in h.session.sent("editMessageText")[-1]["text"]
     assert get_card("hero_warrior").name
 
@@ -143,12 +143,12 @@ async def test_cards_have_a_value_and_duplicates_can_be_gifted(h, services, db):
 
     async with db.transaction() as tx:
         await services.cards.grant(tx, a.id, "hero_mage")
-    await h.say(40, "انتقال", group=True, reply_to=h.message_of(41))
+    await h.say(40, "انتقال", reply_to=h.message_of(41), group=True)
     await h.tap(40, "کارت کلکسیونی", group=True)
     assert "تکراری" in h.session.last_text() or any("تکراری" in t for t in h.labels())
     await h.click(40, h.button_data("جادوگر"), group=True)
     await h.tap(40, "تأیید مقدار", group=True)
     await h.tap(40, "تأیید و انتقال", group=True)
     assert (await services.cards.owned(b.id))["hero_mage"] == 3
-    await h.say(40, "آلبوم", group=True)
+    await h.say(40, "آلبوم")
     assert "ارزش کل آلبوم" in h.session.sent()[-1]["text"]

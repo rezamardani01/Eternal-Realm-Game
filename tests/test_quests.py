@@ -67,12 +67,12 @@ async def test_locked_choice_and_level_gate(services, db):
 
 async def test_glass_flow(h, services, db):
     await hero(services, db, 4, "نگار")
-    await h.say(4, "داستان", group=True)
-    await h.click(4, h.button_data("داستان‌های ویژه"), group=True)
-    await h.click(4, h.button_data("نامه‌ی گمشده"), group=True)
+    await h.say(4, "داستان")
+    await h.click(4, h.button_data("داستان‌های ویژه"))
+    await h.click(4, h.button_data("نامه‌ی گمشده"))
     assert "کنار جاده" in h.session.sent("editMessageText")[-1]["text"]
-    await h.click(4, h.button_data("نامه را به صاحبش"), group=True)
-    await h.click(4, h.button_data("جایزه‌اش را قبول نمی‌کنم"), group=True)
+    await h.click(4, h.button_data("نامه را به صاحبش"))
+    await h.click(4, h.button_data("جایزه‌اش را قبول نمی‌کنم"))
     assert "پاداش شما" in h.session.sent("editMessageText")[-1]["text"]
     assert not [b for b in h.session.last_buttons() if "qgo" in b.get("callback_data", "")]
 
@@ -97,16 +97,16 @@ def test_a_hundred_generated_stories_in_ten_chapters():
 
 async def test_chapters_open_with_the_players_level(h, services, db):
     p = await hero(services, db, 20, "نگار", level=1)
-    await h.say(20, "داستان", group=True)
+    await h.say(20, "داستان")
     assert any("فصل ۲" in t and "🔒" in t for t in h.labels())
-    await h.click(20, h.button_data("فصل ۲"), group=True)
+    await h.click(20, h.button_data("فصل ۲"))
     assert "هنوز بسته است" in h.session.sent("editMessageText")[-1]["text"]
     with pytest.raises(GameError, match="سطح"):
         await services.quests.view(p, "c2s1")
     async with db.transaction() as tx:
         await tx.execute("UPDATE players SET level = 6 WHERE id = ?", (p.id,))
-    await h.say(20, "داستان", group=True)
-    await h.click(20, h.button_data("فصل ۲"), group=True)
+    await h.say(20, "داستان")
+    await h.click(20, h.button_data("فصل ۲"))
     assert "فصل ۲" in h.session.sent("editMessageText")[-1]["text"]
     assert len([b for b in h.session.last_buttons() if "quest:" in b.get("callback_data", "")]) == 10
 

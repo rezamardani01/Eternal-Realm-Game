@@ -34,7 +34,7 @@ async def album(c: Ctx) -> Screen:
         "کارت‌ها قدرت رزمی ندارند؛ فقط برای شکوه و جمع‌آوری‌اند.",
     ]
     rows.append([c.btn(f"🛍️ بسته‌ی کارت ({fa(PACK_PRICE)}🪙)", "cpackq", style="success")])
-    rows.append(c.back("home"))
+    rows.append(c.back("profile"))
     return Screen("\n".join(lines), rows)
 
 

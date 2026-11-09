@@ -69,14 +69,14 @@ async def test_not_enough_energy_blocks_entry(services, db):
 
 async def test_glass_flow_walks_the_whole_dungeon(h, services, db):
     await hero(services, db, 4, "نگار", level=40)
-    await h.say(4, "سیاه‌چال", group=True)
-    await h.tap(4, "ورود به سیاه‌چال", group=True)
+    await h.say(4, "سیاه‌چال")
+    await h.tap(4, "ورود به سیاه‌چال")
     assert "تأیید ورود" in h.session.sent("editMessageText")[-1]["text"]
-    await h.tap(4, "بله، وارد شو", group=True)
+    await h.tap(4, "بله، وارد شو")
     for _ in range(ROOMS):
         if not any("اتاق بعدی" in label for label in h.labels()):
             break
-        await h.tap(4, "اتاق بعدی", group=True)
+        await h.tap(4, "اتاق بعدی")
     text = h.session.sent("editMessageText")[-1]["text"]
     assert "سیاه‌چال را فتح کردید" in text or "جانتان تمام شد" in text
     assert await services.dungeon.current((await services.players.require(4)).id) is None

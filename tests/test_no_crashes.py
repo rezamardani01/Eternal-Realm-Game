@@ -12,6 +12,8 @@ from eternal_realm.config import Settings
 from eternal_realm.context import AppContext
 from eternal_realm.db.repos import wallet
 
+from eternal_realm.bot.callbacks import PanelCb
+
 from .harness import Harness
 
 
@@ -65,12 +67,12 @@ async def test_walking_the_whole_panel_never_crashes(services, db, caplog):
     pressed_private = await explore(h, 10, group=False)
     await h.say(10, "قلمرو", group=True)
     pressed_group = await explore(h, 10, group=True)
-    await h.say(11, "بازار", group=True)
+    await h.click(11, PanelCb(s="market", o=11).pack(), group=True)
     await explore(h, 11, group=True, budget=120)
 
     crashes = [r for r in caplog.records if r.levelno >= logging.ERROR and r.name.startswith("eternal_realm")]
     assert not crashes, [(r.getMessage(), "\n".join((r.exc_text or "").splitlines()[-14:])) for r in crashes[:2]]
-    assert pressed_private > 60 and pressed_group > 40  # the tour really covered a lot
+    assert pressed_private > 60 and pressed_group > 10  # the tour really covered a lot
 
 
 async def test_every_group_command_runs_without_a_crash(services, db, caplog):

@@ -200,6 +200,10 @@ def command_help(registry, in_group: bool) -> str:  # noqa: ANN001 - kept for AP
     if in_group:
         sections.append(ADMIN_HELP)
     tail = "💡 همه‌ی کارهای دیگر، مثل پوشیدن، خرید و فروش، فقط با دکمه‌های شیشه‌ای انجام می‌شود."
+    if in_group:
+        tail += "
+
+🗝️ در گروه فقط ماجراجویی، احضار باس، مبارزه‌ها، انتقال و پروفایل کار می‌کند؛ فروشگاه، کوله‌پشتی، خاندان و بقیه‌ی بخش‌ها در پیوی ربات است."
     return f"📖 {bold('راهنمای قلمرو جاودان')}\n\n" + "\n\n".join(_help_block(t, r) for t, r in sections) + "\n\n" + tail
 
 

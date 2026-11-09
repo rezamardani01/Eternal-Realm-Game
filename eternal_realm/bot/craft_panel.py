@@ -15,7 +15,7 @@ async def craft(c: Ctx) -> Screen:
     for r in RECIPES:
         item = get_item(r.result)
         rows.append([c.btn(f"{item.label} · {item.rarity_label.split(' ')[1]}", "craftq", r.id)])
-    rows.append(c.back("home"))
+    rows.append(c.back("trade"))
     text = (
         f"🔥 {bold('کوره‌ی آهنگری')}\n\n"
         "یک تجهیزات ساده را با منابع کمیاب ترکیب کنید و تجهیزات افسانه‌ای بسازید. "

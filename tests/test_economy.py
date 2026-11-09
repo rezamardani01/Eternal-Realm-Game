@@ -126,5 +126,5 @@ async def test_transfer_without_reply_explains(h, services, db):
 
 async def test_wallet_command(h, services, db):
     await pair(services, db)
-    await h.say(11, "کیف پول", group=True)
+    await h.say(11, "کیف پول")
     assert "سکه" in h.session.last_text() and "کریستال" in h.session.last_text()

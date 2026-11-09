@@ -29,7 +29,7 @@ async def dungeon(c: Ctx) -> Screen:
             + "\n".join(_status(run))
             + "\n\nاگر جانتان تمام شود، نصف گنج را نگه می‌دارید. اگر فرار کنید، گنج را از دست می‌دهید."
         )
-        rows = [[c.btn("🚪 اتاق بعدی", "dgo", style="primary")], [c.btn("🏃 فرار از سیاه‌چال", "dgoutq")], c.back("home")]
+        rows = [[c.btn("🚪 اتاق بعدی", "dgo", style="primary")], [c.btn("🏃 فرار از سیاه‌چال", "dgoutq")], c.back("fight")]
         return Screen(text, rows)
     text = (
         f"🕳️ {bold('سیاه‌چال')}\n\n"
@@ -47,7 +47,7 @@ async def dungeon(c: Ctx) -> Screen:
         "💔 اگر جانتان تمام شود، نصف گنج را نگه می‌دارید\n\n"
         f"⚡ ورود {fa(ENERGY_COST)} انرژی می‌خواهد و هر {duration(COOLDOWN)} یک بار می‌شود وارد شد."
     )
-    return Screen(text, [[c.btn("🕳️ ورود به سیاه‌چال", "dgenterq", style="success")], c.back("home")])
+    return Screen(text, [[c.btn("🕳️ ورود به سیاه‌چال", "dgenterq", style="success")], c.back("fight")])
 
 
 @screen("dgenterq")

@@ -5,6 +5,8 @@ from eternal_realm.config import Settings
 from eternal_realm.context import AppContext
 from eternal_realm.game.data.items import get_item
 
+from eternal_realm.bot.callbacks import PanelCb
+
 from .harness import Harness
 
 
@@ -90,9 +92,9 @@ async def test_everyone_sees_the_same_market_from_any_group(h, services, db):
     await seed_market(services, db)
     await reg(services, 11, "سارا")
     await reg(services, 12, "رها")
-    await h.say(11, "بازار", group=True, chat=-111)
+    await h.click(11, PanelCb(s="market", o=11).pack(), group=True, chat=-111)
     first = listing_labels(h)
-    await h.say(12, "بازار", group=True, chat=-222)
+    await h.click(12, PanelCb(s="market", o=12).pack(), group=True, chat=-222)
     assert listing_labels(h) == first and len(first) == 4
 
 
@@ -123,7 +125,7 @@ async def test_sell_flow_pick_item_then_choose_quantity_then_type_the_price(h, s
 async def test_selling_in_a_group_works_and_chatter_still_reaches_commands(h, services, db):
     seller = await reg(services, 10, "آرش")
     await stock(services, db, seller.id, leather_cap=1)
-    await h.say(10, "بازار", group=True)
+    await h.panel(10, "market", group=True)
     await h.tap(10, "فروش کالای من", group=True)
     await h.tap(10, "کلاه چرمی", group=True)
     assert "قیمت فروش" in h.session.last_text()
@@ -162,9 +164,14 @@ async def test_home_menu_uses_the_new_names(h, services, db):
     await reg(services, 11, "سارا")
     await h.say(11, "قلمرو", group=True)
     assert len(h.labels()) == 5  # a short menu in groups
-    await h.say(11, "/start")  # the private menu has everything
+    await h.say(11, "/start")  # the private menu is made of categories
     labels = " ".join(h.labels())
-    for name in ("قهرمان من", "فروشگاه آیتم", "بازارچه", "تالار بزرگان", "کلکسیون کارت", "حیوان خانگی",
-                 "کوره آهنگری", "خزانه قلمرو", "راهنمایی"):
+    for name in ("قهرمان من", "فرمانروایی", "نبرد و چالش", "بازار و تجارت", "خاندان", "خزانه قلمرو", "جایزه روزانه", "راهنمایی"):
         assert name in labels
-    assert "🐱 حیوان خانگی" in h.labels()
+    assert "🗺️ ماجراجویی" in h.labels()
+    await h.panel(11, "trade")
+    assert {"🛒 فروشگاه آیتم", "🏪 بازارچه", "🏦 مرکز مبادله", "🔥 کوره آهنگری"} <= set(h.labels())
+    await h.panel(11, "fight")
+    assert {"🕳️ سیاه‌چال", "📜 داستان‌ها", "🏆 تالار بزرگان"} <= set(h.labels())
+    await h.panel(11, "profile")
+    assert {"🃏 کلکسیون کارت", "🐱 حیوان همراه من", "🏅 دستاوردها", "🧰 تجهیزات"} <= set(h.labels())

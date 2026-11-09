@@ -121,6 +121,64 @@ def _int(text: str, what: str = "شماره") -> int:
 
 
 # --- home -------------------------------------------------------------------------------------
+@screen("fight")
+async def fight_menu(c: Ctx) -> Screen:
+    if c.is_group:
+        return await home(c)
+    text = "\n".join([
+        f"⚔️ {bold('نبرد و چالش')}",
+        "",
+        "تنها به دل خطر بروید، داستان بخوانید یا در تالارها نامتان را بر سنگ بکوبید.",
+        "دوئل و باس و مبارزه‌ی تیمی را با دوستان در گروه انجام می‌دهید.",
+        "",
+        "کدام؟ 👇",
+    ])
+    rows = [
+        [c.btn("🕳️ سیاه‌چال", "dungeon"), c.btn("📜 داستان‌ها", "quests")],
+        [c.btn("🏆 تالار بزرگان", "top"), c.btn("🏁 مسابقه‌های هفته", "contests")],
+        [c.btn("⚔️ راهنمای مبارزه در گروه", "fighthelp")],
+        c.back("home"),
+    ]
+    return Screen(text, rows)
+
+
+@screen("trade")
+async def trade_menu(c: Ctx) -> Screen:
+    if c.is_group:
+        return await home(c)
+    p = await c.refresh()
+    text = "\n".join([
+        f"🛒 {bold('بازار و تجارت')}",
+        "",
+        f"🪙 {fa(p.gold)} سکه · 💎 {fa(p.crystal)} کریستال",
+        "",
+        "بخرید، بفروشید، سکه و کریستال را مبادله کنید یا سلاح افسانه‌ای بسازید 👇",
+    ])
+    rows = [
+        [c.btn("🛒 فروشگاه آیتم", "shop"), c.btn("🏪 بازارچه", "market")],
+        [c.btn("🏦 مرکز مبادله", "exch"), c.btn("🔥 کوره آهنگری", "craft")],
+        c.back("home"),
+    ]
+    return Screen(text, rows)
+
+
+@screen("fighthelp")
+async def fight_help(c: Ctx) -> Screen:
+    text = "\n".join([
+        f"⚔️ {bold('راهنمای مبارزه')}",
+        "",
+        "این‌ها در گروه انجام می‌شوند 👇",
+        "",
+        "🗡️ دوئل: روی پیام حریف ریپلای کنید و بنویسید «مبارزه»",
+        "🎰 دوئل شرطی: بنویسید «مبارزه شرطی» و سر سکه، کریستال یا آیتم شرط ببندید",
+        "👥 مبارزه‌ی تیمی: بنویسید «مبارزه تیمی»، جایگاه‌ها را پر کنید و سازنده شروع می‌کند",
+        "🐉 باس گروهی: بنویسید «احضار باس» و با دوستانتان بزنیدش",
+        "🕳️ سیاه‌چال گروهی: بنویسید «سیاه‌چال گروهی»",
+        "💰 انتقال: روی پیام کسی ریپلای کنید و بنویسید «انتقال»",
+    ])
+    return Screen(text, [c.back("home")])
+
+
 @screen("noop")
 async def noop(c: Ctx) -> Screen:
     """A button that only decorates or explains: nothing happens when it is tapped."""
@@ -137,24 +195,21 @@ async def home(c: Ctx) -> Screen:
         f"⚡ انرژی {fa(p.energy)} / {fa(top)}\n🪙 {fa(p.gold)} سکه · 💎 {fa(p.crystal)} کریستال\n\n"
         "امروز به کجا حمله می‌کنید؟"
     )
-    if c.is_group:  # a short menu in groups; everything else lives in the private chat
+    if c.is_group:  # a short menu in groups: play and fight here, manage things in the private chat
         rows = [
-            [c.btn("👤 قهرمان من", "profile"), c.btn("🛒 فروشگاه آیتم", "shop")],
-            [c.btn("🏪 بازارچه", "market"), c.btn("🏯 خاندان", "clan")],
-            [c.btn("😴 استراحت", "rest")],
+            [c.btn("👤 قهرمان من", "profile"), c.btn("🗺️ ماجراجویی", "adv", style="primary")],
+            [c.btn("⚔️ مبارزه", "fighthelp"), c.btn("😴 استراحت", "rest")],
         ]
+        if c.services.bot_username:
+            rows.append(keyboards.open_panel_button(c.services.bot_username))
         return Screen(text, rows)
     rows = [
-        [c.btn("🗺️ ماجراجویی", "adv", style="primary"), c.btn("👤 قهرمان من", "profile")],
-        [c.btn("🎒 کوله‌پشتی", "inv"), c.btn("🛒 فروشگاه آیتم", "shop")],
-        [c.btn("🏪 بازارچه", "market"), c.btn("🏆 تالار بزرگان", "top")],
-        [c.btn("🏯 خاندان", "clan"), c.btn("📜 داستان‌ها", "quests")],
-        [c.btn("🃏 کلکسیون کارت", "album"), c.btn("🐱 حیوان خانگی", "pets")],
-        [c.btn("🕳️ سیاه‌چال", "dungeon"), c.btn("🔥 کوره آهنگری", "craft")],
-        [c.btn("💎 خزانه قلمرو", "premium"), c.btn("🎁 جایزه روزانه", "daily")],
-        [c.btn("🏰 فرمانروایی", "city", style="primary")],
-        [c.btn("😴 استراحت", "rest"), c.btn("❓ راهنمایی", "help")],
-        [c.btn("🏦 مرکز مبادله", "exch"), c.btn("🤝 دعوت از دوستان", "invite", style="success")],
+        [c.btn("🗺️ ماجراجویی", "adv", style="primary")],
+        [c.btn("👤 قهرمان من", "profile"), c.btn("🏰 فرمانروایی", "city")],
+        [c.btn("⚔️ نبرد و چالش", "fight"), c.btn("🛒 بازار و تجارت", "trade")],
+        [c.btn("🏯 خاندان", "clan"), c.btn("💎 خزانه قلمرو", "premium")],
+        [c.btn("🎁 جایزه روزانه", "daily"), c.btn("😴 استراحت", "rest")],
+        [c.btn("❓ راهنمایی", "help"), c.btn("🤝 دعوت از دوستان", "invite", style="success")],
     ]
     shown = await c.services.admin.links()
     links = [Button.url(shown[key]["text"], shown[key]["url"]) for key in ("group", "channel") if shown[key]["url"]]
@@ -261,12 +316,17 @@ async def profile(c: Ctx) -> Screen:
         [stat("magic", fa(stats.magic)), stat("speed", fa(stats.speed))],
         [stat("luck", fa(stats.luck))],
     ]
-    if target is me:
+    if target is me and c.is_group:
+        rows.append([c.btn("🏰 قلمرو من", "home")])
+        if c.services.bot_username:
+            rows.append(keyboards.open_panel_button(c.services.bot_username))
+    elif target is me:
         rows.append([c.btn("▫️▫️▫️▫️▫️▫️▫️", "noop")])
         rows.append([c.btn("🧰 تجهیزات", "gear"), c.btn("🎒 کوله‌پشتی", "inv")])
         rows.append([c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")])
         rows.append([c.btn("📅 مأموریت‌ها", "missions"), c.btn("🕯️ محراب", "altar")])
         rows.append([c.btn("🐱 حیوان همراه من", "pets"), c.btn("🏅 دستاوردها", "ach")])
+        rows.append([c.btn("🃏 کلکسیون کارت", "album")])
         rows.append(c.back("home"))
     elif c.b == "cm":
         rows.append(c.back("clanmember", "🔙 بازگشت به عضو خاندان", target.id))
@@ -367,7 +427,7 @@ async def inventory(c: Ctx) -> Screen:
     rows = [
         [c.btn("⚔️ تجهیزات", "gear"), c.btn("📦 آیتم‌ها", "items")],
         [c.btn("🎁 صندوقچه‌ها", "chests")],
-        c.back("home", "🔙 بازگشت"),
+        c.back("profile", "🔙 بازگشت"),
     ]
     return Screen(text, rows)
 
@@ -665,7 +725,7 @@ async def shop(c: Ctx) -> Screen:
     rows = [
         [c.btn("⚔️ سلاح و زره", "shopcat", "gear"), c.btn("🧪 معجون‌ها", "shopcat", "pot")],
         [c.btn("🎁 صندوقچه‌ها", "chestshop"), c.btn("💰 فروش آیتم‌ها", "items")],
-        c.back("home", "🔙 بازگشت"),
+        c.back("trade", "🔙 بازگشت"),
     ]
     return Screen(text, rows)
 
@@ -823,7 +883,7 @@ async def market(c: Ctx) -> Screen:
     if nav := _nav(c, "market", page, page > 0, nxt, f"{tab}.{sort}"):
         rows.append(nav)
     rows.append([c.btn("🏷️ فروش کالای من", "msell", style="success"), c.btn("📋 آگهی‌های من", "mine")])
-    rows.append(c.back("home"))
+    rows.append(c.back("trade"))
     return Screen(text, rows)
 
 
@@ -1027,7 +1087,7 @@ async def top(c: Ctx) -> Screen:
         rows.append([c.btn("🏰 این گروه", "top", "group"), c.btn("🌟 قهرمان هفته", "top", "hero")])
         rows.append([c.btn("📜 تاریخچه‌ی نبردها", "top", "history")])
     else:
-        rows.append(c.back("home", "🔙 بازگشت"))
+        rows.append(c.back("fight", "🔙 بازگشت"))
     return Screen(text, rows)
 
 

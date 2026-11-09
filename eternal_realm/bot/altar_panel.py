@@ -30,7 +30,7 @@ async def altar(c: Ctx) -> Screen:
     rows = [[c.btn(f"🙏 دعا ({fa(ALTAR_PRICE)}🪙)", "altarq", style="primary")]]
     if any(not e.blessing for e, _ in active):
         rows.append([c.btn(f"🧼 پاک کردن نفرین ({fa(ALTAR_PRICE // 2)}🪙)", "altarcq")])
-    rows.append(c.back("home"))
+    rows.append(c.back("profile"))
     return Screen("\n".join(lines).strip(), rows)
 
 

@@ -88,31 +88,31 @@ async def test_closed_door_capacity_and_treasury(services, db):
         await services.clans.join(await hero(services, db, 99, "دیرآمده"), clan.id, invited=True)
 
 
-async def test_glass_flow_in_group(h, services, db):
+async def test_glass_flow_in_private(h, services, db):
     await hero(services, db, 1, "رهبر")
     a = await hero(services, db, 2, "آرش")
-    await h.say(1, "خاندان", group=True)
+    await h.say(1, "خاندان")
     assert "ساخت خاندان" in h.session.sent()[-1]["text"]
-    await h.say(1, "ساخت خاندان شیرها", group=True)
+    await h.say(1, "ساخت خاندان شیرها")
     assert "تأیید ساخت خاندان" in h.session.sent()[-1]["text"] and await services.clans.of(1) is None
-    await h.tap(1, "بله، بساز", group=True)
+    await h.tap(1, "بله، بساز")
     assert "ساخته شد" in h.session.sent("editMessageText")[-1]["text"]
     await services.clans.join(a, (await services.clans.of(1)).id)
 
-    await h.say(1, "خاندان", group=True)
-    await h.click(1, h.button_data("اعضا"), group=True)
+    await h.say(1, "خاندان")
+    await h.click(1, h.button_data("اعضا"))
     assert "آرش" in "".join(h.labels())
-    await h.click(1, h.button_data("آرش"), group=True)
+    await h.click(1, h.button_data("آرش"))
     assert any("مقام قائم‌مقام" in label for label in h.labels())
-    await h.click(1, h.button_data("مقام قائم‌مقام"), group=True)
+    await h.click(1, h.button_data("مقام قائم‌مقام"))
     assert (await services.clans.of(2)).my_role == "deputy"
-    await h.click(1, h.button_data("اخراج"), group=True)
-    await h.click(1, h.button_data("بله"), group=True)
+    await h.click(1, h.button_data("اخراج"))
+    await h.click(1, h.button_data("بله"))
     assert await services.clans.of(2) is None
 
     # somebody else's panel buttons are refused
     data = h.button_data("بازگشت")
-    await h.click(2, data, group=True)
+    await h.click(2, data)
     assert h.session.callback_answers()[-1].get("show_alert")
 
 
@@ -152,12 +152,12 @@ async def test_clan_member_opens_a_full_profile_and_goes_back(h, services, db):
     a = await hero(services, db, 2, "آرش")
     await services.clans.create(await services.players.require(1), "شیرها")
     await services.clans.join(a, (await services.clans.of(1)).id)
-    await h.say(1, "خاندان", group=True)
-    await h.click(1, h.button_data("اعضا"), group=True)
-    await h.click(1, h.button_data("آرش"), group=True)
-    await h.click(1, h.button_data("پروفایل کامل"), group=True)
+    await h.say(1, "خاندان")
+    await h.click(1, h.button_data("اعضا"))
+    await h.click(1, h.button_data("آرش"))
+    await h.click(1, h.button_data("پروفایل کامل"))
     text = h.session.sent("editMessageText")[-1]["text"]
     assert "آرش" in text and "سطح" in text
     assert any("حمله" in t or "جان" in t for t in h.labels())  # the stat buttons of a real profile
-    await h.click(1, h.button_data("بازگشت به عضو خاندان"), group=True)
+    await h.click(1, h.button_data("بازگشت به عضو خاندان"))
     assert "مقام" in h.session.sent("editMessageText")[-1]["text"]
