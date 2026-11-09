@@ -77,11 +77,12 @@ async def clan(c: Ctx) -> Screen:
     rows = [
         [c.btn("👥 اعضا", "clanmembers", "0", style="primary"), c.btn("💰 کمک به خزانه", "clandonate")],
         [c.btn("🏆 برترین خاندان‌ها", "clantop"), c.btn("⚔️ جنگ خاندان‌ها", "clanwar")],
-        [c.btn("🛒 فروشگاه خاندان", "clanshop")],
     ]
+    shop_row = [c.btn("🛒 فروشگاه خاندان", "clanshop")]
     if role_power(mine.my_role or "member") >= 2:
-        rows.append([c.btn("⚙️ مدیریت خاندان", "clanset")])
-    rows.append([c.btn("🚪 خروج از خاندان", "clanleaveq")])
+        shop_row.append(c.btn("⚙️ تنظیمات خاندان", "clanset"))
+    rows.append(shop_row)
+    rows.append([c.btn("🚪 خروج از خاندان", "clanleaveq", style="danger")])
     rows.append(c.back("home"))
     role = _role_label(mine.my_role or "member")
     khan = await c.services.clans.khan_points(c.player.id)

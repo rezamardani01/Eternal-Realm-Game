@@ -175,3 +175,16 @@ async def test_the_clan_shop(h, services, db, clock):
         await services.clans.buy(leader, other.id)
     clock.advance(86400)  # a new day, new goods, and yesterday's purchase is forgotten
     assert len((await services.clans.shop(leader))[0]) == 6
+
+
+async def test_home_buttons_shop_next_to_settings_and_a_red_leave_with_confirmation(h, services, db):
+    leader = await hero(services, db, 1, "رهبر")
+    await services.clans.create(leader, "شیرها")
+    await h.panel(1, "clan")
+    rows = h.session.last_markup_rows()
+    shop = next(r for r in rows if any("فروشگاه خاندان" in b["text"] for b in r))
+    assert [b["text"] for b in shop] == ["🛒 فروشگاه خاندان", "⚙️ تنظیمات خاندان"]
+    leave = next(b for r in rows for b in r if "خروج از خاندان" in b["text"])
+    assert leave["style"] == "danger"
+    await h.click(1, leave["callback_data"])  # asks first, nothing happens yet
+    assert "مطمئن" in h.session.last_text() and (await services.clans.of(leader.id)) is not None
