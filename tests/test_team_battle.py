@@ -139,3 +139,23 @@ async def test_the_group_flow_with_buttons(h, services):
     text = h.session.last_text()
     assert "نبرد تیمی" in text and "نوبت" in text and "❤️" in text
     assert {"حمله", "دفاع", "تسلیم"} <= {w for lab in h.labels() for w in lab.split()}
+
+
+async def test_the_result_panel_is_tidy(services):
+    from eternal_realm.bot import team_battle
+
+    a, b = await heroes(services, 2)
+    lobby = await services.teams.create(-500, a)
+    await services.teams.sit(lobby.id, b, 1, 0)
+    await services.teams.start(lobby.id, a)
+    for _ in range(400):
+        lobby = await services.teams.get(lobby.id)
+        who = next(p for _t, _s, p in lobby.members if p.id == lobby.battle.current.player_id)
+        update = await services.teams.act(lobby.id, who, Action.ATTACK)
+        if update.finished:
+            break
+    text = team_battle.result_text(update)
+    assert "پایان نبرد تیمی" in text and "پیروز شد" in text and "برنده" in text and "بازنده" in text and "🎁" in text
+    for line in text.splitlines():
+        if not line.startswith("•"):  # the story lines come from the duel engine
+            assert len(re.findall(EMOJI, line)) <= 1, line

@@ -78,29 +78,28 @@ def result_text(update: TeamUpdate) -> str:
     battle = update.battle
     out = [f"🏁 {bold('پایان نبرد تیمی')}", ""]
     if battle.winner is None:
-        out.append("🤝 مساوی شد؛ هر دو تیم دلاور بودند!")
+        out.append(f"🤝 {bold('مساوی شد؛ هر دو تیم دلاور بودند!')}")
     else:
-        out.append(f"🏆 برنده: {TEAM_MARKS[battle.winner]} {bold(TEAM_NAMES[battle.winner])}")
-    out.append("")
+        out.append(f"🏆 {bold(TEAM_NAMES[battle.winner] + ' پیروز شد!')}")
+    out += [f"🔁 در دور {fa(battle.round)} از {fa(battle.max_rounds)}", ""]
     for team in (0, 1):
-        out.append(_team_title(team))
+        verdict = "" if battle.winner is None else (" — برنده" if battle.winner == team else " — بازنده")
+        out.append(f"{TEAM_MARKS[team]} {bold(TEAM_NAMES[team])}{verdict}")
         for i in battle.members(team):
             f = battle.fighters[i]
-            out.append(f"{f.emoji} {f.mention or f.name} — {fa(team_fight.hp_percent(f))}٪ جان")
+            if f.hp <= 0:
+                out.append(f"💀 {f.mention or f.name} — از پا افتاد")
+            else:
+                out += [f"{f.emoji} {f.mention or f.name}", f"❤️ {bar(f.hp, f.max_hp, 8)} {fa(team_fight.hp_percent(f))}٪"]
+            payout = update.payouts.get(f.player_id)
+            if payout is not None and (payout.gold or payout.xp):
+                gains = ([f"{fa(payout.gold)} سکه"] if payout.gold else []) + ([f"{fa(payout.xp)} تجربه"] if payout.xp else [])
+                out.append(f"🎁 {' و '.join(gains)}")
         out.append("")
     story = [f"• {line.strip()}" for line in update.lines if line.strip()][-2:]
     if story:
-        out += [f"📜 {bold('ضربه‌ی پایانی')}", *story, ""]
-    rewards = []
-    for f in battle.fighters:
-        payout = update.payouts.get(f.player_id)
-        if payout is None or not (payout.gold or payout.xp):
-            continue
-        gains = ([f"{fa(payout.gold)} سکه"] if payout.gold else []) + ([f"{fa(payout.xp)} تجربه"] if payout.xp else [])
-        rewards.append(f"🎁 {f.mention or f.name} — {' و '.join(gains)}")
-    if rewards:
-        out += [bold("پاداش‌ها"), *rewards]
-    return "\n".join(out).strip()
+        out += [f"📜 {bold('ضربه‌ی پایانی')}", *story]
+    return chr(10).join(out).strip()
 
 
 # --- buttons ------------------------------------------------------------------------------------
