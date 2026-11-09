@@ -69,10 +69,9 @@ class TeamBattle:
         return battle
 
 
-def _pick_target(battle: TeamBattle) -> int:
-    """The enemy with the fewest hit points left: a team that focuses is a team that wins."""
-    enemies = battle.alive(1 - battle.current_team)
-    return min(enemies, key=lambda i: (battle.fighters[i].hp, i))
+def _pick_target(battle: TeamBattle, rng: random.Random) -> int:
+    """Luck decides who takes the blow: a random living member of the opposing team."""
+    return rng.choice(battle.alive(1 - battle.current_team))
 
 
 def _advance(battle: TeamBattle) -> list[str]:
@@ -105,7 +104,7 @@ def act(battle: TeamBattle, action: Action, rng: random.Random) -> list[str]:
         me.hp = 0
         lines.append(f"🏳️ {me.name} پرچم سفید را بالا برد و از نبرد کنار کشید!")
     else:
-        index = _pick_target(battle)
+        index = _pick_target(battle, rng)
         foe = battle.fighters[index]
         duel = Battle([me, foe], actor=0, max_rounds=999)
         lines = combat.act(duel, action, rng)

@@ -204,3 +204,22 @@ async def test_the_opening_team_is_drawn_by_lot(services):
         assert "قرعه" in update.lines[0]
         await services.teams.cancel(lobby.id, a)
     assert firsts == {0, 1}
+
+
+async def test_blows_land_on_random_members_of_the_other_team():
+    import random
+
+    from eternal_realm.game.engine import team_fight
+    from eternal_realm.game.engine.combat import Fighter
+    from eternal_realm.game.engine.team_fight import TeamBattle
+
+    def mk(n):
+        return Fighter(name=n, emoji="x", max_hp=100, hp=100, atk=1, defense=0, magic=0, speed=1, luck=0)
+
+    battle = TeamBattle([mk("a"), mk("b"), mk("c"), mk("d")], [0, 1, 1, 1])
+    battle.actor = 0
+    rng = random.Random(5)
+    hit = {team_fight._pick_target(battle, rng) for _ in range(60)}
+    assert hit == {1, 2, 3}
+    battle.fighters[2].hp = 0  # a fallen hero is never picked
+    assert {team_fight._pick_target(battle, rng) for _ in range(60)} == {1, 3}
