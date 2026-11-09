@@ -130,6 +130,11 @@ class City:
         return sum(q * d.unit_power(d.get_troop(k)) for k, q in self.troops.items())
 
     @property
+    def strength(self) -> int:
+        """One number for the whole city, used to tell a fair raid from a bully's raid."""
+        return self.army_power + self.defense_power
+
+    @property
     def defense_power(self) -> int:
         return (
             self.army_power + self.levels.get("wall", 0) * 500 + self.levels.get("tower", 0) * 600
@@ -170,6 +175,8 @@ class Target:
     #: the most each resource could be taken (already limited by the owner's inactivity)
     loot: dict[str, int]
     inactive_days: int
+    #: raider strength / target strength
+    ratio: float = 1.0
 
 
 @dataclass
@@ -190,6 +197,7 @@ class AttackResult:
     attacker_name: str
     xp: int = 0
     def_lost: dict[str, int] = field(default_factory=dict)
+    ratio: float = 1.0
 
 
 def clean_city_name(raw: str) -> str:
@@ -603,6 +611,13 @@ class CityService:
         factor = 0.25 if idle_days > 7 else 0.5 if idle_days > 3 else 1.0
         return {r: int(target.res[r] * d.LOOT_CAP[r] * factor) for r in d.RES}, idle_days
 
+    def _target(self, me: City, other: City, now: int) -> Target:
+        """The target card: loot already scaled by how fair the fight is."""
+        ratio = max(1, me.strength) / max(1, other.strength)
+        loot, idle = self._loot_preview(other, now)
+        factor = d.loot_factor(ratio)
+        return Target(other, {r: int(v * factor) for r, v in loot.items()}, idle, ratio)
+
     async def _search_row(self, tx: Tx, player_id: int) -> Row | None:
         return await tx.fetchone("SELECT * FROM city_search WHERE player_id = ?", (player_id,))
 
@@ -650,8 +665,7 @@ class CityService:
                 (player.id, target.id, snapshot, json.dumps(seen), now),
             )
             await self._save(tx, me)
-            loot, idle = self._loot_preview(target, now)
-            return Target(target, loot, idle)
+            return self._target(me, target, now)
 
     def _count_today(self, city: City, now: int) -> None:
         if city.att_day != day_of(now):
@@ -665,10 +679,10 @@ class CityService:
             if row is None or row["used"]:
                 return None
             target = await self._by_id(tx, row["target_id"])
-            if target is None:
+            me = await self._by_player(tx, player.id)
+            if target is None or me is None:
                 return None
-            loot, idle = self._loot_preview(target, now)
-            return Target(target, loot, idle), json.loads(row["selection"])
+            return self._target(me, target, now), json.loads(row["selection"])
 
     async def adjust(self, player: Player, kind: str | None, delta: int, *, everyone: bool = False, clear: bool = False) -> dict[str, int]:
         """Change the army chosen for the march (nothing is spent until the final confirmation)."""
@@ -724,6 +738,8 @@ class CityService:
             if me.res["food"] < supplies:
                 raise GameError(f"آذوقه‌ی سفر کافی نیست؛ {fa(supplies)} غذا لازم است و {fa(int(me.res['food']))} دارید.")
             snap = json.loads(row["snapshot"])
+            ratio = max(1, me.strength) / max(1, target.strength)
+            factor = d.loot_factor(ratio)
             defence = siege.Defence(snap["troops"], snap["traps"], snap["levels"], target.name)
             commander = min(0.15, player.level * 0.002)
             out = siege.simulate(
@@ -736,7 +752,9 @@ class CityService:
                 me.troops[kind] = me.troops.get(kind, 0) - qty + out.att_alive.get(kind, 0)
                 await tx.execute("UPDATE city_troops SET qty = ? WHERE city_id = ? AND kind = ?", (me.troops[kind], me.id, kind))
             # --- loot
-            loot = self._take_loot(target, out, now, me)
+            loot = self._take_loot(target, out, now, me, factor)
+            if ratio >= 3:  # a raid by somebody far stronger costs the weak city no soldiers
+                out.def_alive = dict(out.def_start)
             # --- defender losses, traps, shield
             for kind, left in out.def_alive.items():
                 live = target.troops.get(kind, 0)
@@ -747,10 +765,16 @@ class CityService:
                 target.traps[kind] = max(0, target.traps.get(kind, 0) - used)
                 await tx.execute("UPDATE city_traps SET qty = ? WHERE city_id = ? AND kind = ?", (target.traps[kind], target.id, kind))
             shield = d.shield_for(out.destruction)
+            hits = int(await tx.scalar(
+                "SELECT COUNT(*) FROM city_attacks WHERE defender_city = ? AND stars > 0 AND created_at > ?",
+                (target.id, now - DAY), 0,
+            ))
+            if out.stars and hits + 1 >= d.REPEAT_HITS:  # hit again and again: the city is left in peace for a while
+                shield = max(shield, d.REPEAT_SHIELD)
             if shield:
                 target.shield_until = max(target.shield_until, now + shield)
             # --- trophies
-            gain, defender_delta = self._trophies(me, target, out.stars)
+            gain, defender_delta = self._trophies(me, target, out.stars, ratio)
             me.trophies = max(0, me.trophies + gain)
             target.trophies = max(0, target.trophies + defender_delta)
             me.att_count += 1
@@ -759,7 +783,7 @@ class CityService:
             await self._save(tx, me)
             await self._save(tx, target)
             # --- clan war points and experience for the hero
-            xp = out.stars * 40
+            xp = round(out.stars * 40 * min(1.0, factor))
             if out.stars:
                 await clan_repo.add_war_points(tx, player.id, out.stars * 8, now)
             if xp:
@@ -777,7 +801,7 @@ class CityService:
             )
             return AttackResult(
                 attack_id, out.stars, out.destruction, loot, sent, out.att_lost, out.log, out.destroyed, out.castle_down,
-                gain, shield, target.owner_uid, target.name, me.name, xp, out.def_lost,
+                gain, shield, target.owner_uid, target.name, me.name, xp, out.def_lost, ratio,
             )
 
     async def _mark_used(self, tx: Tx, player_id: int, created_at: int) -> bool:
@@ -786,7 +810,7 @@ class CityService:
         )
         return tx.rowcount == 1
 
-    def _take_loot(self, target: City, out: siege.Outcome, now: int, me: City) -> dict[str, int]:
+    def _take_loot(self, target: City, out: siege.Outcome, now: int, me: City, factor: float = 1.0) -> dict[str, int]:
         """Take a limited share of each stock: more when the buildings that make or keep it were destroyed."""
         helper = {"gold": "market", "food": "farm", "wood": "lumber", "stone": "stone_mine", "iron": "iron_mine"}
         preview, _ = self._loot_preview(target, now)
@@ -799,7 +823,7 @@ class CityService:
                 ratio = min(1.0, ratio + 0.1)
             if out.stars == 0:
                 ratio *= 0.5
-            take = min(int(preview[r] * ratio), int(target.res[r]))
+            take = min(int(preview[r] * ratio * factor), int(target.res[r]))
             room = int((me.storage * (2 if r == "gold" else 1)) - me.res[r])
             take = max(0, min(take, room))
             target.res[r] -= take
@@ -807,12 +831,16 @@ class CityService:
             got[r] = take
         return got
 
-    def _trophies(self, me: City, target: City, stars: int) -> tuple[int, int]:
+    def _trophies(self, me: City, target: City, stars: int, ratio: float = 1.0) -> tuple[int, int]:
         if stars == 0:
             return -8, 6
+        if ratio >= 2:  # beating a city far weaker moves no trophies at all
+            return 0, 0
         base = {1: 12, 2: 22, 3: 32}[stars]
         diff = max(-8, min(8, (target.trophies - me.trophies) // 50))
         win = max(5, base + diff)
+        if ratio <= 0.7:  # and beating a stronger one is worth more
+            win = round(win * 1.25)
         return win, -round(win * 0.8)
 
     # --- reports, ranking, map ---------------------------------------------------------------------------------------
@@ -865,8 +893,7 @@ class CityService:
                 (player.id, target.id, snapshot, now),
             )
             await self._save(tx, me)
-            loot, idle = self._loot_preview(target, now)
-            return Target(target, loot, idle)
+            return self._target(me, target, now)
 
     async def ranking(self, player: Player, limit: int = 10) -> tuple[list[City], int | None, City | None]:
         async with self.ctx.db.read() as tx:

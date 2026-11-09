@@ -19,7 +19,10 @@ FLAGS: tuple[tuple[str, str], ...] = (
 FLAG_EMOJIS = tuple(f for f, _ in FLAGS)
 
 NAME_MIN, NAME_MAX = 3, 16
-START_SHIELD = 24 * 3600
+START_SHIELD = 3 * 24 * 3600
+#: a city hit this many times in a day (with at least a star each) gets a rest period of this length
+REPEAT_HITS = 3
+REPEAT_SHIELD = 12 * 3600
 START_RESOURCES = {"gold": 3_000, "food": 3_000, "wood": 1_500, "stone": 1_500, "iron": 500}
 START_BUILDINGS = {"castle": 1, "farm": 1, "lumber": 1, "stone_mine": 1, "barracks": 1}
 START_POPULATION = 300
@@ -79,6 +82,21 @@ HP_PER_LEVEL = {"castle": 600, "wall": 800, "tower": 500}
 DEFAULT_HP_PER_LEVEL = 300
 #: the largest share of a stock a raid may take
 LOOT_CAP = {"gold": 0.15, "food": 0.20, "wood": 0.10, "stone": 0.10, "iron": 0.10}
+
+
+def loot_factor(ratio: float) -> float:
+    """What a raid is worth, by how much stronger the raider's city is than the target (ratio = raider / target)."""
+    if ratio >= 3:
+        return 0.1
+    if ratio >= 2:
+        return 0.3
+    if ratio >= 1.5:
+        return 0.6
+    if ratio <= 0.4:
+        return 1.6
+    if ratio <= 0.7:
+        return 1.3
+    return 1.0
 
 
 def get_building(building_id: str) -> Building:

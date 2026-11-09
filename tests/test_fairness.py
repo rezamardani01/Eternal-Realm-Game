@@ -107,3 +107,66 @@ async def test_a_duel_between_a_novice_and_a_giant_is_capped_and_the_giants_win_
             assert await tx.scalar("SELECT rating FROM players WHERE id = ?", (giant.id,), 0) == 1000  # and moves no rating
     else:
         assert (await services.players.require(1)).gold > novice.gold  # the novice's win pays well
+
+
+# --- cities ------------------------------------------------------------------------------------------------------
+def test_the_loot_factor_and_trophies_follow_the_strength_gap():
+    from eternal_realm.game.data import city as d
+    from eternal_realm.game.services.city import City, CityService
+
+    assert [d.loot_factor(r) for r in (0.3, 0.6, 1.0, 1.6, 2.5, 4.0)] == [1.6, 1.3, 1.0, 0.6, 0.3, 0.1]
+    assert d.START_SHIELD == 3 * 86400
+
+    def city(trophies=0):
+        return City(1, 1, "x", "🦁", {r: 0.0 for r in d.RES}, 300, 100, 0, 0, trophies, 0, 0, 0, 0)
+
+    svc = CityService.__new__(CityService)
+    assert svc._trophies(city(), city(), 0) == (-8, 6)
+    fair = svc._trophies(city(), city(), 2, 1.0)[0]
+    assert fair > 0 and svc._trophies(city(), city(), 3, 2.5) == (0, 0)  # beating a far weaker city changes nothing
+    assert svc._trophies(city(), city(), 2, 0.5)[0] > fair  # beating a stronger one pays more
+
+
+async def make_city(services, db, uid, name):
+    from eternal_realm.game.data import city as d
+
+    p = await hero(services, db, uid, f"قهرمان{uid}", 10, gold=50_000)
+    c = await services.city.found(p, name, d.FLAGS[0][0])
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE cities SET shield_until = 0 WHERE id = ?", (c.id,))
+    return p, c
+
+
+async def raid(services, db, attacker, a_city, d_city, sword):
+    async with db.transaction() as tx:
+        await tx.execute(
+            "INSERT INTO city_troops (city_id, kind, qty) VALUES (?, 'sword', ?)"
+            " ON CONFLICT (city_id, kind) DO UPDATE SET qty = ?", (a_city.id, sword, sword),
+        )
+        await tx.execute("UPDATE cities SET food = 100000, shield_until = 0 WHERE id IN (?, ?)", (a_city.id, d_city.id))
+    await services.city.search(attacker)
+    await services.city.adjust(attacker, None, 0, everyone=True)
+    return await services.city.attack(attacker)
+
+
+async def test_a_bully_gets_little_and_a_victim_is_left_in_peace_after_repeated_hits(services, db, clock, h):
+    big_p, big = await make_city(services, db, 1, "بزرگ‌شهر")
+    small_p, small = await make_city(services, db, 2, "خردشهر")
+    res = await raid(services, db, big_p, big, small, 400)
+    assert res.ratio >= 3 and res.loot["gold"] <= small.res["gold"] * 0.15 * 0.1 + 2  # a tenth of the usual loot
+    assert res.trophies == 0 and res.xp <= 12  # a tenth of the usual experience
+    victim_after = await services.city.mine(small_p, visit=False)
+    assert victim_after.troops == {} or sum(victim_after.troops.values()) == 0
+    # three successful raids in a day, by different raiders, put the weak city to rest even when little was destroyed
+    for uid, name in ((3, "سومین‌شهر"), (4, "چهارمین‌شهر")):
+        other_p, other = await make_city(services, db, uid, name)
+        async with db.transaction() as tx:
+            await tx.execute("UPDATE cities SET shield_until = 0 WHERE id = ?", (small.id,))
+        await raid(services, db, other_p, other, small, 400)
+    async with db.read() as tx:
+        row = await tx.fetchone("SELECT shield_until FROM cities WHERE id = ?", (small.id,))
+    assert row["shield_until"] >= services.ctx.now() + 12 * 3600 - 5
+    # the target card tells the raider what to expect
+    from eternal_realm.bot.city_panel import _fairness_note
+
+    assert "ضعیف‌تر" in _fairness_note(3.5) and "قوی‌تر" in _fairness_note(0.3) and "هم‌شأن" in _fairness_note(1.0)

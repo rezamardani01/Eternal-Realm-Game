@@ -94,7 +94,7 @@ async def realm(c: Ctx) -> Screen:
             "",
             f"🎓 سطح لازم: {fa(b.city_min_level)} (سطح شما: {fa(p.level)})",
             f"💰 هزینه‌ی بنای شهر: {fa(b.city_found_gold)} سکه",
-            "🔰 شهر تازه‌تأسیس یک شبانه‌روز در پناه سپر است",
+            "🔰 شهر تازه‌تأسیس سه شبانه‌روز در پناه سپر است",
         ]
         rows = []
         if p.level >= b.city_min_level:
@@ -188,7 +188,7 @@ async def city_flag(c: Ctx) -> Screen:
         f"💰 هزینه: {bold(fa(b.city_found_gold))} سکه",
         f"کیسه‌ی شما: {fa(p.gold)} ← {fa(max(0, p.gold - b.city_found_gold))}",
         "",
-        "با بنای شهر، قلعه، مزرعه، چوب‌بری، معدن سنگ و سربازخانه ساخته می‌شود و شهر یک شبانه‌روز سپر دارد.",
+        "با بنای شهر، قلعه، مزرعه، چوب‌بری، معدن سنگ و سربازخانه ساخته می‌شود و شهر سه شبانه‌روز سپر دارد.",
     ])
     if p.gold < b.city_found_gold:
         return Screen(text + f"\n\n💸 {fa(b.city_found_gold - p.gold)} سکه کم دارید.", [c.back("city")])
@@ -679,7 +679,22 @@ def _target_card(t: Target, header: str, now: int) -> str:
     ]
     if t.inactive_days > 3:
         lines += ["", f"💤 این شهر {fa(t.inactive_days)} روز است ساکت مانده؛ غنائمش کمتر است."]
+    lines += ["", _fairness_note(t.ratio)]
     return "\n".join(lines)
+
+
+def _fairness_note(ratio: float) -> str:
+    if ratio >= 3:
+        return "⚖️ این شهر بسیار ضعیف‌تر از شماست؛ غنیمتش ناچیز است و جام و تجربه‌ای ندارد."
+    if ratio >= 2:
+        return "⚖️ این شهر خیلی ضعیف‌تر از شماست؛ غنیمت و تجربه‌اش کم است و جامی ندارد."
+    if ratio >= 1.5:
+        return "⚖️ این شهر کمی ضعیف‌تر از شماست؛ غنیمتش کمتر از معمول است."
+    if ratio <= 0.4:
+        return "⚖️ این شهر بسیار قوی‌تر از شماست؛ اگر موفق شوید غنیمت و جام بسیار بیشتری می‌گیرید."
+    if ratio <= 0.7:
+        return "⚖️ این شهر قوی‌تر از شماست؛ در صورت موفقیت غنیمت و جام بیشتری می‌گیرید."
+    return "⚖️ هم‌شأن شماست؛ نبردی عادلانه."
 
 
 @screen("citysearch")
@@ -827,6 +842,8 @@ def _result_text(r, now: int) -> str:  # noqa: ANN001 - AttackResult
     ]
     if r.xp:
         lines += ["", f"⭐ {fa(r.xp)} تجربه برای فرمانده"]
+    if r.ratio >= 2:
+        lines += ["", "⚖️ شهر دشمن بسیار ضعیف‌تر از شما بود؛ غنیمت و جام کم شد."]
     return "\n".join(lines)
 
 
