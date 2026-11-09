@@ -154,8 +154,13 @@ class MarketService:
             sold = get_item(row["item_id"])
             await queue(
                 tx, row["seller_id"], f"sold:{listing_id}",
-                f"🏪 *آگهی شما فروخته شد!*\n\n{sold.label}" + (f" ×{fa(row['qty'])}" if row["qty"] > 1 else "") +
-                f"\n💰 {fa(price - fee)} سکه به کیف شما رسید (کارمزد بازار: {fa(fee)})", now,
+                "🏪 *آگهی شما فروخته شد!*\n\n"
+                f"{sold.label}" + (f" ×{fa(row['qty'])}" if row["qty"] > 1 else "") + "\n\n"
+                f"🛒 خریدار: {buyer.mention}\n"
+                f"🏷️ قیمت آگهی: {fa(price)} سکه\n"
+                f"🧾 کارمزد بازار: {fa(fee)} سکه\n"
+                f"💰 دریافتی شما: {fa(price - fee)} سکه\n\n"
+                "پول به کیف شما رسید؛ آگهی تازه‌ای بگذارید تا بازار گرم بماند.", now,
             )
             return Listing(
                 listing_id, row["seller_id"], "", get_item(row["item_id"]), row["qty"], price,

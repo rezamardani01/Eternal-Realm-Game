@@ -115,7 +115,7 @@ def lobby_buttons(lobby: Lobby) -> Rows:
         for team in (0, 1):
             for seat in (pair, pair + 1):
                 player = lobby.at(team, seat)
-                label = f"{player.char_class.emoji} {player.name}" if player else f"➕ {fa(seat + 1)}"
+                label = f"{player.char_class.emoji} {player.name}" if player else "➕"
                 row.append(Button.inline(label, TeamCb(action="sit", id=lobby.id, arg=team * 10 + seat),
                                          style="primary" if player else None))
         rows.append(row)

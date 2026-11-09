@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ...context import AppContext
+from ...shared.text import fa
+from ..data.expedition import get_kind
 from ..notify import queue
 
 
@@ -26,10 +28,18 @@ class AlertService:
         """Queue the news that no action causes: a boost or a VIP subscription that has just run out, a hero back from away."""
         now = self.ctx.now()
         async with self.ctx.db.transaction() as tx:
-            for r in await tx.fetchall("SELECT player_id, started_at FROM expeditions WHERE ends_at <= ?", (now,)):
+            for r in await tx.fetchall("SELECT player_id, started_at, kind, hours FROM expeditions WHERE ends_at <= ?", (now,)):
+                try:
+                    kind = get_kind(r["kind"])
+                    where = f"{kind.emoji} {kind.name}"
+                except KeyError:
+                    where = "اعزام"
                 await queue(
                     tx, r["player_id"], f"expedition:{r['started_at']}",
-                    "🏕️ *قهرمان شما از اعزام برگشت!*\n\nگزارش و پاداشش آماده است؛ همین حالا بگیرید.", now, "expd",
+                    "🏕️ *قهرمان شما از اعزام برگشت!*\n\n"
+                    f"📍 مأموریت: {where}\n"
+                    f"⏳ مدت: {fa(r['hours'])} ساعت\n\n"
+                    "🎁 گزارش و پاداشش آماده است؛ همین حالا بگیرید.", now, "expd",
                 )
             for column, name, emoji in (("boost_until", "بوست دو برابر", "🚀"), ("vip_until", "اشتراک VIP", "💠")):
                 rows = await tx.fetchall(
