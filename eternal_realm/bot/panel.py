@@ -204,8 +204,8 @@ async def home(c: Ctx) -> Screen:
     text = (
         f"🏰 {_greeting(c.services.ctx.now())}، فرمانده {c.who(p) if c.is_group else bold(p.name)}!\n"
         f"سطح {fa(p.level)} · {p.race.name} · {p.char_class.name}\n\n"
-        f"⭐ {bar(p.xp, need)} {fa(p.xp)} / {fa(need)}\n"
-        f"⚡ {bar(p.energy, top)} {fa(p.energy)} / {fa(top)}\n"
+        f"⭐ تجربه تا سطح بعد: {fa(p.xp)} / {fa(need)}\n{bar(p.xp, need)}\n"
+        f"⚡ انرژی: {fa(p.energy)} / {fa(top)}\n{bar(p.energy, top)}\n"
         f"🪙 {fa(p.gold)} سکه · 💎 {fa(p.crystal)} کریستال\n\n"
         "دروازه‌های قلمرو باز است؛ امروز پرچمتان را کجا می‌کوبید؟"
     )
