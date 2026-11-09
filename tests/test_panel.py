@@ -130,15 +130,14 @@ async def test_start_shows_the_home_panel_with_glass_buttons(h, services):
     assert len(labels) <= 12  # categories, not a wall of buttons
 
 
-async def test_group_words_open_panels_and_personal_panel_goes_private(h, services, clock):
+async def test_group_words_open_panels_and_personal_panel_goes_private(h, services):
     await reg(services)
     for word, expect in [("کوله‌پشتی", "تجهیزات"), ("فروشگاه", "سلاح"), ("بازار", "بازگشت"), ("صندوقچه", "خرید صندوقچه")]:
         await h.say(10, word)
         assert any(expect in t for t in h.labels()), (word, h.labels())
         h.session.reset()
-        clock.advance(61)  # the pointer is sent at most once a minute per person
-        await h.say(10, word, group=True)  # in a group the same word only points to the private chat
-        assert "پیوی ربات" in h.session.last_text() and h.session.last_buttons()[0]["url"].startswith("https://ble.ir/")
+        await h.say(10, word, group=True)  # in a group the same word gets no answer at all
+        assert h.session.calls == []
     await h.say(10, "کیف من", group=True)
     assert h.session.last_buttons()[0]["url"].startswith("https://ble.ir/")
     await h.say(10, "کیف من")
@@ -414,7 +413,7 @@ async def test_the_word_realm_opens_the_home_panel_in_a_group(h, services):
     await reg(services)
     await h.say(10, "قلمرو", group=True)
     assert "فرمانده" in h.session.last_text()
-    assert [t.split(" ", 1)[1] for t in h.labels()] == ["قهرمان من", "ماجراجویی", "مبارزه", "استراحت", "باز کردن پنل شخصی"]
+    assert [t.split(" ", 1)[1] for t in h.labels()] == ["قهرمان من", "مبارزه", "استراحت", "باز کردن پنل شخصی"]
 
 
 async def test_back_buttons_are_called_back_not_menu(h, services):
@@ -581,18 +580,18 @@ async def test_the_adventure_menu_has_no_dungeon_button_the_main_menu_does(h, se
     assert any("شکار" in t for t in h.labels())
 
 
-async def test_private_words_in_a_group_get_one_friendly_pointer_a_minute(h, services, clock):
+async def test_private_words_and_the_adventure_panel_are_silent_in_a_group(h, services):
     await reg(services)
     h.session.reset()
-    await h.say(10, "فروشگاه", group=True)
-    assert len(h.session.sent("sendMessage")) == 1 and "پیوی ربات" in h.session.last_text()
-    await h.say(10, "کوله‌پشتی", group=True)  # same person, same minute: quiet
-    assert len(h.session.sent("sendMessage")) == 1
-    clock.advance(61)
-    await h.say(10, "خاندان", group=True)
-    assert len(h.session.sent("sendMessage")) == 2
-    h.session.reset()
-    for word in ("ماهیگیری", "پروفایل", "قلمرو"):  # what stays in the group still works
-        clock.advance(61)
+    for word in ("فروشگاه", "کوله‌پشتی", "خاندان", "ماجراجویی", "adventure", "بازار", "جایزه"):
         await h.say(10, word, group=True)
-        assert "پیوی ربات باز می‌شود" not in h.session.last_text()
+    assert h.session.calls == []  # not a single message, not even a pointer
+    await h.say(10, "ماجراجویی")  # in the private chat the panel opens as always
+    assert any("شکار" in t for t in h.labels())
+    h.session.reset()
+    await h.panel(10, "adv", group=True)  # and an old adventure button in a group does nothing
+    assert not h.session.sent("editMessageText")
+    for word in ("ماهیگیری", "معدن", "گیاه", "شکار", "پروفایل", "قلمرو"):  # what stays in the group still works
+        await h.say(10, word, group=True)
+        assert h.session.sent("sendMessage"), word
+        h.session.reset()

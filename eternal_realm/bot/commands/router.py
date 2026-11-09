@@ -9,29 +9,9 @@ from ...shared.errors import GameError
 from .. import keyboards
 from ..services import Services
 from .context import CommandContext
-from .registry import PRIVATE_ONLY, REGISTRY
+from .registry import REGISTRY
 
 router = Router(name="commands")
-
-HINT_GAP = 60
-
-
-async def _private_hint(message: Message, services: Services, user_id: int) -> None:
-    now = services.ctx.now()
-    key = (message.chat.id, user_id)
-    hinted = services.throttle.hinted
-    if key in hinted and now - hinted[key] < HINT_GAP:
-        return
-    if len(hinted) > 2000:
-        hinted.clear()
-    hinted[key] = now
-    username = services.bot_username
-    await message.reply(
-        "🗝️ *این بخش در پیوی ربات باز می‌شود*\n\n"
-        "فروشگاه، کوله‌پشتی، خاندان و بقیه‌ی بخش‌های شخصی را در پیام خصوصی ببینید؛ "
-        "گروه برای ماجراجویی، احضار باس، مبارزه، انتقال و دیدن پروفایل است.",
-        buttons=[keyboards.open_panel_button(username)] if username else None,
-    )
 
 
 def _is_private(message: Message) -> bool:
@@ -51,8 +31,8 @@ async def on_text(message: Message, bot: Bot, services: Services) -> None:
 
     if private and not cmd.private:
         raise GameError("این فرمان مال میدان‌های گروهی است! ربات را به یک گروه ببرید و آنجا امتحانش کنید.")
-    if not private and not cmd.group and cmd.name not in PRIVATE_ONLY:
-        return  # admin and other private-only words stay silent in groups
+    if not private and not cmd.group:
+        return  # words that belong to the private chat get no answer at all in a group
     if user.id != services.ctx.settings.owner_id and not services.throttle.allow_user(user.id):
         return
 
@@ -62,9 +42,6 @@ async def on_text(message: Message, bot: Bot, services: Services) -> None:
         group = await services.groups.touch(message.chat.id, message.chat.title)
         if not cmd.always_on:
             if not group.enabled:
-                return
-            if not cmd.group:
-                await _private_hint(message, services, user.id)
                 return
             if cmd.name in group.disabled_commands:
                 raise GameError("فرمانده، مدیر این گروه این فعالیت را فعلاً بسته است. شاید بعداً دوباره باز شود!")

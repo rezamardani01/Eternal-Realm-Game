@@ -197,8 +197,8 @@ async def home(c: Ctx) -> Screen:
     )
     if c.is_group:  # a short menu in groups: play and fight here, manage things in the private chat
         rows = [
-            [c.btn("👤 قهرمان من", "profile"), c.btn("🗺️ ماجراجویی", "adv", style="primary")],
-            [c.btn("⚔️ مبارزه", "fighthelp"), c.btn("😴 استراحت", "rest")],
+            [c.btn("👤 قهرمان من", "profile"), c.btn("⚔️ مبارزه", "fighthelp")],
+            [c.btn("😴 استراحت", "rest")],
         ]
         if c.services.bot_username:
             rows.append(keyboards.open_panel_button(c.services.bot_username))
@@ -345,6 +345,8 @@ async def stat(c: Ctx) -> Screen:
 # --- adventure --------------------------------------------------------------------------------
 @screen("adv")
 async def adventure(c: Ctx) -> Screen:
+    if c.is_group:
+        return Screen(None)  # the adventure panel is private; in a group only the activity words work
     from ..game.data.activities import ACTIVITIES
 
     buttons = [c.btn(f"{a.emoji} {a.title} · {fa(a.energy)}⚡", "act", a.id) for a in ACTIVITIES.values()]

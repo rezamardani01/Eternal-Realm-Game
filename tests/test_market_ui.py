@@ -163,7 +163,7 @@ async def test_empty_market_shows_one_wide_notice_button_between_the_rows(h, ser
 async def test_home_menu_uses_the_new_names(h, services, db):
     await reg(services, 11, "سارا")
     await h.say(11, "قلمرو", group=True)
-    assert len(h.labels()) == 5  # a short menu in groups
+    assert len(h.labels()) == 4  # a short menu in groups
     await h.say(11, "/start")  # the private menu is made of categories
     labels = " ".join(h.labels())
     for name in ("قهرمان من", "فرمانروایی", "نبرد و چالش", "بازار و تجارت", "خاندان", "خزانه قلمرو", "جایزه روزانه", "راهنمایی"):
