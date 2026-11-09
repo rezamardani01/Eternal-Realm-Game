@@ -135,7 +135,7 @@ async def fight_menu(c: Ctx) -> Screen:
     ])
     rows = [
         [c.btn("🕳️ سیاه‌چال", "dungeon"), c.btn("📜 داستان‌ها", "quests")],
-        [c.btn("🏆 تالار بزرگان", "top"), c.btn("🏁 مسابقه‌های هفته", "contests")],
+        [c.btn("🏆 تالار بزرگان", "top"), c.btn("🏁 مسابقات", "contests")],
         [c.btn("⚔️ راهنمای مبارزه در گروه", "fighthelp")],
         c.back("home"),
     ]
@@ -1092,7 +1092,7 @@ async def top(c: Ctx) -> Screen:
         [c.btn("⚔️ دوئل", "top", "wins", bracket), c.btn("🏅 لیگ", "top", "rating", bracket)],
         *brackets,
         [c.btn("🎟️ مسیر قهرمانی", "top", "path"), c.btn("🐉 شکارچیان باس", "top", "bosses")],
-        [c.btn("🏁 مسابقه‌های هفته", "contests")],
+        [c.btn("🏁 مسابقات", "contests")],
     ]
     if c.is_group:
         rows.append([c.btn("🏰 این گروه", "top", "group"), c.btn("🌟 قهرمان هفته", "top", "hero")])

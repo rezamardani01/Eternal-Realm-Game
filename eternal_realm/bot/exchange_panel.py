@@ -42,8 +42,9 @@ def _selector(c: Ctx, screen_name: str, amount: int, top: int, confirm_screen: s
         return c.btn(("➕ " if delta > 0 else "➖ ") + fa(abs(delta)), screen_name, max(1, min(top, amount + delta)))
 
     return [
-        [go(-100), go(-10), go(-1), go(1), go(10), go(100)],
         [c.btn(f"💎 {fa(amount)} {label}", "noop")],
+        [go(-10), go(-1), go(1), go(10)],
+        [go(-100), go(100)],
         [c.btn("✅ ادامه و تأیید", confirm_screen, amount, style="success")],
     ]
 
