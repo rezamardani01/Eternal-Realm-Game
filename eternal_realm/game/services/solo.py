@@ -156,6 +156,12 @@ class SoloService:
             row = await tx.fetchone("SELECT * FROM solo_fights WHERE player_id = ? AND status = 'active' LIMIT 1", (player_id,))
         return self._load(row) if row else None
 
+    async def last_finished(self, player_id: int) -> SoloFight | None:
+        """The fight that ended most recently (to rescue a tap on a button of a fight that is already over)."""
+        async with self.ctx.db.read() as tx:
+            row = await tx.fetchone("SELECT * FROM solo_fights WHERE player_id = ? AND status != 'active' ORDER BY id DESC LIMIT 1", (player_id,))
+        return self._load(row) if row else None
+
     async def _hero(self, tx: Tx, player: Player) -> Fighter:
         stats = await self.characters.stats_in(tx, player)
         hero = Fighter.for_player(player.id, player.name, player.char_class, stats, player.mention)

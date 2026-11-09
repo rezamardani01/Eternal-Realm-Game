@@ -729,3 +729,25 @@ async def test_the_away_notice_in_a_group_carries_the_recall_button(h, services,
     clock.advance(3 * 3600)
     await h.say(1, "مبارزه", group=True, reply_to=h.message_of(2))
     assert "احضار سریع (۱ کریستال)" in " ".join(h.labels())
+
+
+async def test_a_double_tap_on_the_last_blow_never_freezes_the_fight_screen(h, services, db):
+    p = await hero(services, db)
+    day = (services.ctx.now() + 12600) // 86400
+    dungeon = data.todays_dungeons(day)[0]
+    await services.solo.start_dungeon(p, dungeon.id)
+    for _ in range(data.FLOORS - 1):
+        assert (await finish(services, db, p)).won
+        await services.solo.next_floor(p)
+    await rig(db, p.id)  # the last floor
+    await h.panel(1, "sact", "attack")
+    assert "پیروزی" in h.session.last_text() and "پاداش" in h.session.last_text()
+    result = h.session.last_text()
+    h.session.reset()
+    await h.panel(1, "sact", "attack")  # a second tap that arrives after the fight is over
+    assert not [a for a in h.session.callback_answers() if a.get("show_alert")]
+    shown = [m["text"] for n, m in h.session.calls if n in ("editMessageText", "sendMessage")]
+    assert all("پیروزی" in t for t in shown)  # either untouched or a recovered result, never an error or a dead screen
+    assert result
+    async with db.read() as tx:
+        assert await tx.scalar("SELECT qty FROM inventory WHERE player_id = ? AND item_id = 'wooden_chest'", (p.id,), 0) >= 1

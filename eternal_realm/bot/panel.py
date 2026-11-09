@@ -1331,7 +1331,7 @@ async def send(
 async def _show(message: Message, shown: Screen) -> None:
     """Put a screen on the tapped message: edit in place, or swap the message when text and picture trade places."""
     text, was_photo = headline(shown.text or ""), bool(message.photo)
-    with contextlib.suppress(BaleAPIError):  # "message is not modified" and similar
+    try:
         if shown.photo and was_photo:
             await message.edit_caption(text, buttons=shown.rows or None)
         elif shown.photo or was_photo:
@@ -1344,6 +1344,18 @@ async def _show(message: Message, shown: Screen) -> None:
                 await message.answer(text, buttons=shown.rows or None)
         else:
             await message.edit_text(text, buttons=shown.rows or None)
+    except BaleAPIError as error:
+        if "not modified" in str(error).lower():
+            return
+        # the edit failed for a real reason: never leave the player staring at a dead screen, send it as a new message
+        log.warning("could not edit a panel message, sending a new one: %s", error)
+        with contextlib.suppress(BaleAPIError):
+            if shown.photo:
+                await message.bot.send_photo(
+                    message.chat.id, shown.photo, text, None, _build_inline_markup(shown.rows) if shown.rows else None
+                )
+            else:
+                await message.answer(text, buttons=shown.rows or None)
 
 
 router = Router(name="panel")

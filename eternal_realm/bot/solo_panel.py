@@ -101,12 +101,32 @@ def _fight_screen(c: Ctx, fight: SoloFight, lines: list[str]) -> Screen:
     return Screen("\n".join(text), rows)
 
 
+_RESULT_MARKS = ("پاداش", "پیروزی", "شکست خوردید", "گریختید", "نبرد تمام شد")
+
+
+async def _stale(c: Ctx) -> Screen:
+    """A tap on a fight button when the fight is already over (a double tap, a slow edit): never a dead end.
+
+    If the message already shows the result nothing is touched; otherwise it is replaced by a short result with the way on.
+    """
+    shown = (getattr(c.message, "text", None) or getattr(c.message, "caption", None) or "") if c.message is not None else ""
+    if any(mark in shown for mark in _RESULT_MARKS):
+        return Screen(None, toast="این نبرد همین حالا تمام شد ✅")
+    fight = await c.services.solo.last_finished(c.player.id)
+    if fight is None:
+        return Screen(f"🧭 {bold('نبرد تمام شده است')}", [c.back("trip", "🧭 سفر قهرمان")])
+    won, fled = fight.status == "won", fight.status == "fled"
+    head = "🏆 پیروزی!" if won else "🏳️ از نبرد گریختید" if fled else "💀 شکست خوردید"
+    text = [head, bold(fight.info.get("title", "")), LINE, "نبرد تمام شد و نتیجه‌اش (پاداش و پیشرفت) ثبت شده است."]
+    return Screen("\n".join(text), _next_rows(c, fight.kind, fight.info, won))
+
+
 @screen("sfight")
 async def fight_view(c: Ctx) -> Screen:
     _guard(c)
     fight = await c.services.solo.active(c.player.id)
     if fight is None:
-        raise GameError("نبرد فعالی ندارید.")
+        return await _stale(c)
     return _fight_screen(c, fight, [])
 
 
@@ -119,18 +139,24 @@ async def fight_act(c: Ctx) -> Screen:
     action = ACTIONS.get(c.a)
     if action is None:
         raise GameError("این حرکت وجود ندارد.")
+    if await c.services.solo.active(c.player.id) is None:
+        return await _stale(c)
     update = await c.services.solo.act(c.player, action)
     return _after(c, update)
 
 
 @screen("sfleeq")
 async def flee_ask(c: Ctx) -> Screen:
+    if await c.services.solo.active(c.player.id) is None:
+        return await _stale(c)
     text = f"🏳️ {bold('فرار از نبرد')}\n\nاگر فرار کنید پاداشی نمی‌گیرید و انرژی برنمی‌گردد. مطمئنید؟"
     return Screen(text, [[c.btn("🏳️ بله، فرار", "sfleeok", style="danger"), c.btn("↩️ نه، می‌جنگم", "sfight")]])
 
 
 @screen("sfleeok")
 async def flee_do(c: Ctx) -> Screen:
+    if await c.services.solo.active(c.player.id) is None:
+        return await _stale(c)
     update = await c.services.solo.act(c.player, Action.SURRENDER)
     return _after(c, update)
 
@@ -153,16 +179,21 @@ def _after(c: Ctx, update: SoloUpdate) -> Screen:
     text += [f"✨ {n}" for n in update.payout.notes]
     if not update.won and not update.fled:
         text += ["", "شکست درس است؛ تجهیزاتتان را بهتر کنید و دوباره بیایید."]
+    return Screen("\n".join(text), _next_rows(c, kind, info, update.won))
+
+
+def _next_rows(c: Ctx, kind: str, info: dict, won: bool) -> list:
+    """The buttons under a finished fight: go on, repeat, or back to the hub."""
     rows: list = []
     if kind == "arena":
         rows.append([c.btn("🔁 دوباره همین سطح", "arenago", info["tier"], style="success"), c.btn("🥊 میدان", "arena")])
     elif kind == "story":
         nxt = info["stage"] + 1
-        if update.won and nxt <= len(data.STAGES):
+        if won and nxt <= len(data.STAGES):
             rows.append([c.btn(f"➡️ مرحله‌ی بعد: {data.get_stage(nxt).title}", "stage", nxt, style="success")])
         rows.append([c.btn("📖 داستان", "story")])
     elif kind == "dungeon":
-        if update.won and info["floor"] < data.FLOORS:
+        if won and info["floor"] < data.FLOORS:
             rows.append([c.btn(f"⬇️ طبقه‌ی {fa(info['floor'] + 1)}", "dngnext", style="success"), c.btn("🚪 خروج با غنیمت", "dng")])
         else:
             rows.append([c.btn("🏚️ دخمه‌ها", "dng")])
@@ -171,12 +202,12 @@ def _after(c: Ctx, update: SoloUpdate) -> Screen:
     elif kind == "world":
         rows.append([c.btn("⚔️ دوباره با نگهبان", "worldgo", style="danger"), c.btn("🌍 جهان", "world")])
     elif kind == "maze":
-        if update.won and info["floor"] < maze_data.FLOORS:
+        if won and info["floor"] < maze_data.FLOORS:
             rows.append([c.btn("➡️ ادامه‌ی هزارتو", "maze", style="success")])
         else:
             rows.append([c.btn("♾️ هزارتوی ابدی", "maze")])
     rows.append(c.back("trip", "🧭 سفر قهرمان"))
-    return Screen("\n".join(text), rows)
+    return rows
 
 
 def _start(c: Ctx, fight: SoloFight) -> Screen:
