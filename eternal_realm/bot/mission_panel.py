@@ -36,5 +36,7 @@ async def missions(c: Ctx) -> Screen:
 async def mission_claim(c: Ctx) -> Screen:
     done = await c.services.missions.claim(c.player, _int(c.a))
     shown = await missions(c)
-    shown.toast, shown.alert = f"🎁 {fa(done.gold)} سکه گرفتید!", True
+    shown.toast, shown.alert = f"🎁 {fa(done.gold)} سکه گرفتید!" + (
+        f" و چون همه‌ی مأموریت‌های امروز تمام شد، {fa(done.bonus_crystal)} کریستال هدیه!" if done.bonus_crystal else ""
+    ), True
     return shown

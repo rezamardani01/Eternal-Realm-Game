@@ -12,7 +12,7 @@ from ...db.repos import wallet
 from ...db.repos.wallet import DuplicateOperation
 from ...shared.errors import GameError
 from ...shared.text import fa, normalize
-from ..data.khan_shop import WAR_POINTS, Offer, day_of, get_offer, offers_for
+from ..data.khan_shop import WAR_BOOST_HOURS, WAR_CRYSTALS, WAR_POINTS, Offer, day_of, get_offer, offers_for
 from ..models import Player
 from .inventory import InventoryService
 
@@ -413,6 +413,14 @@ class ClanService:
                 await tx.execute(
                     "UPDATE players SET khan_points = khan_points + ? WHERE id = ?",
                     (WAR_POINTS[view.last_place - 1], player.id),
+                )
+                await wallet.apply(
+                    tx, player.id, crystal=WAR_CRYSTALS[view.last_place - 1], reason="clan_war_crystals",
+                    now=self.ctx.now(), ref=f"clanwar:{week - 1}:{player.id}:crystal",
+                )
+                await tx.execute(
+                    "UPDATE players SET boost_until = MAX(boost_until, ?) + ? WHERE id = ?",
+                    (self.ctx.now(), WAR_BOOST_HOURS * 3600, player.id),
                 )
         except DuplicateOperation as exc:
             raise GameError("این جایزه را قبلاً گرفته‌اید.") from exc

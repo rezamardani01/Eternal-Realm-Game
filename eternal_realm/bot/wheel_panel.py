@@ -39,6 +39,7 @@ async def wheel(c: Ctx) -> Screen:
         return await premium(c)
     p = await c.refresh()
     spins = await c.services.wheel.spins(p.id)
+    free = await c.services.wheel.free_ready(p.id)
     enabled = c.services.ctx.settings.payments_enabled
     lines = [
         f"🎡 {bold('گردونه شانس')}",
@@ -53,8 +54,11 @@ async def wheel(c: Ctx) -> Screen:
         "🍀 هیچ چرخشی پوچ نیست؛ هر بار جایزه می‌گیرید!",
         "",
         f"🎟️ فرصت‌های شما: {bold(fa(spins))}",
+        "🎁 هر روز یک چرخش رایگان دارید!" if free else "🎁 چرخش رایگان امروز را برداشته‌اید؛ فردا دوباره",
     ]
     rows = []
+    if free:
+        rows.append([c.btn("🎁 چرخش رایگان امروز", "wheelspin", "free", style="primary")])
     if spins:
         rows.append([c.btn(f"🎡 بچرخان ({fa(spins)} فرصت)", "wheelspin", style="success")])
     if enabled:
@@ -86,7 +90,8 @@ async def wheel_odds(c: Ctx) -> Screen:
 
 @screen("wheelspin")
 async def wheel_spin(c: Ctx) -> Screen:
-    prize, left = await c.services.wheel.spin(c.player)
+    free = c.a == "free"
+    prize, left = await c.services.wheel.spin(c.player, free=free)
     rng = random.Random()
     # the wheel gathers speed, slows down, and stops on the prize
     for title, factor in (
@@ -100,8 +105,12 @@ async def wheel_spin(c: Ctx) -> Screen:
         f"🏆 جایزه: {bold(data.describe(prize))}",
         "✅ به کیف شما رسید",
     ]
-    lines = [f"🎡 {bold('گردونه شانس')}", "", final, "", *verdict, "", f"🎟️ فرصت باقی‌مانده: {fa(left)}"]
+    lines = [f"🎡 {bold('گردونه شانس')}", "", final, "", *verdict, ""]
+    lines.append(f"🎟️ فرصت باقی‌مانده: {fa(left)}" if left or not free else "🎁 فردا دوباره بیایید؛ هر روز یک چرخش رایگان دارید")
     rows = []
+    if free and not left:
+        rows.append(c.back("wheel", "🔙 گردونه شانس"))
+        return Screen("\n".join(lines), rows)
     if left:
         rows.append([c.btn(f"🎡 چرخاندن دوباره ({fa(left)} فرصت)", "wheelspin", style="success")])
     else:

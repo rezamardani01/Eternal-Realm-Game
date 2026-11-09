@@ -67,6 +67,8 @@ SECTIONS = {
 XP_PACK_MAX_LEVEL = 40
 XP_PACK_WEEKLY_LIMIT = 5
 BOOST_FACTOR = 2
+#: city resource bundles are limited, so a wallet cannot buy a city: this many a week per payer
+CITY_PACK_WEEKLY_LIMIT = 4
 
 PACKS: dict[str, Pack] = {
     p.id: p

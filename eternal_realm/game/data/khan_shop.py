@@ -13,6 +13,9 @@ DUEL_WIN_POINTS = 3
 DUEL_LOSE_POINTS = 1
 #: Khan points for the top three clans of the weekly war
 WAR_POINTS = (30, 20, 10)
+#: crystals and boost hours the weekly clan war prize adds for the top three clans
+WAR_CRYSTALS = (10, 6, 3)
+WAR_BOOST_HOURS = 24
 
 
 @dataclass(frozen=True)

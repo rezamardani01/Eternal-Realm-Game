@@ -568,7 +568,7 @@ async def clan_war(c: Ctx) -> Screen:
 async def clan_prize(c: Ctx) -> Screen:
     gold = await c.services.clans.claim_war(c.player)
     shown = await clan_war(c)
-    shown.toast, shown.alert = f"🎁 {fa(gold)} سکه به کیفتان رسید!", True
+    shown.toast, shown.alert = f"🎁 {fa(gold)} سکه، کریستال و بوست ۲۴ ساعته‌ی جایزه‌ی جنگ به کیفتان رسید!", True
     return shown
 
 

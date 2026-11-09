@@ -105,7 +105,8 @@ async def got_class(
         user.id, user.username, data["name"], data["race"], char_class.id
     )
     await state.clear()
-    await query.message.edit_text(views.created(player))
+    await services.players.grant_welcome_boost(player.id)
+    await query.message.edit_text(views.created(player) + "\n\n🚀 هدیه‌ی خوش‌آمد: ۳ روز بوست دو برابر برای شروع سریع‌تر!")
     await panel.send(query.message, services, player, "home")
     if data.get("ref"):
         await _pay_inviter(query.message.bot, services, player, int(data["ref"]))

@@ -66,13 +66,15 @@ def backpack_section(item) -> str:  # noqa: ANN001 - Item
 
 def streak_note(reward) -> str:  # noqa: ANN001 - DailyReward
     """The «days in a row» lines of the daily reward: the streak, a chest when one was paid and what comes next."""
-    if reward.streak < 2 and not reward.chest:
+    if reward.streak < 2 and not reward.chest and not reward.crystal:
         return ""
     from ..game.data.items import get_item
 
     lines = [f"🔥 {fa(reward.streak)} روز پشت‌سرهم!"]
     if reward.chest:
         lines.append(f"🎁 پاداش زنجیره: {get_item(reward.chest).label}")
+    if reward.crystal:
+        lines.append(f"💎 هدیه‌ی یک هفته پشت‌سرهم: {fa(reward.crystal)} کریستال")
     lines.append(f"⏳ تا صندوقچه‌ی بعدی: {fa(reward.next_chest_in)} روز (هر روز بیایید تا زنجیره نشکند)")
     return "\n".join(lines)
 

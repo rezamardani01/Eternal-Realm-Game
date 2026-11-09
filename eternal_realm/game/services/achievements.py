@@ -98,6 +98,14 @@ class AchievementService:
             )
             for item_id, qty in step.items:
                 await self.inventory.grant(tx, player.id, item_id, qty)
+            if step.pet:
+                from .pets import PetService
+
+                if not await PetService(self.ctx).grant(tx, player.id, step.pet):  # already owned: crystals instead
+                    await wallet.apply(
+                        tx, player.id, crystal=20, reason="achievement_pet", now=now,
+                        ref=f"ach:{player.id}:{family.id}:{paid + 1}:pet",
+                    )
             if step.title:
                 await tx.execute("UPDATE players SET title = ? WHERE id = ? AND title = ''", (step.title, player.id))
         return family, paid + 1, step

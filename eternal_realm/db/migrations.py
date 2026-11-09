@@ -705,6 +705,10 @@ MIGRATIONS: list[str] = [
     ALTER TABLE orders ADD COLUMN gift_to INTEGER REFERENCES players (id);
     ALTER TABLE orders ADD COLUMN qty INTEGER NOT NULL DEFAULT 1;
     """,
+    # 47: the free daily spin of the wheel
+    """
+    ALTER TABLE players ADD COLUMN free_spin_day INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

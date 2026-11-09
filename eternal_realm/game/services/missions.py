@@ -24,10 +24,15 @@ class MissionView:
     target: int
     gold: int
     claimed: bool
+    #: crystals paid because this was the day's last mission
+    bonus_crystal: int = 0
 
     @property
     def done(self) -> bool:
         return self.progress >= self.target
+
+
+ALL_DONE_CRYSTALS = 2
 
 
 def today(now: int) -> int:
@@ -116,4 +121,13 @@ class MissionService:
                 tx, player.id, gold=gold, reason="mission", now=now, ref=f"mission:{player.id}:{day}:{slot}"
             )
             await season_repo.add_points(tx, player.id, "mission", now)
-        return MissionView(slot, kind.id, kind.emoji, kind.title, row["progress"], row["target"], gold, True)
+            bonus = 0
+            open_left = int(await tx.scalar(
+                "SELECT COUNT(*) FROM daily_missions WHERE player_id = ? AND day = ? AND claimed = 0", (player.id, day), 0
+            ))
+            if open_left == 0:  # every mission of the day is done: a few free crystals
+                bonus = ALL_DONE_CRYSTALS
+                await wallet.apply(
+                    tx, player.id, crystal=bonus, reason="missions_all", now=now, ref=f"missall:{player.id}:{day}"
+                )
+        return MissionView(slot, kind.id, kind.emoji, kind.title, row["progress"], row["target"], gold, True, bonus)

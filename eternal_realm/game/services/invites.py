@@ -17,6 +17,7 @@ from ..data.packs import PACKS
 from ..models import Player
 from .inventory import InventoryService
 
+INVITE_BOOST_HOURS = 12
 DAY = 86400
 #: how many invitations per day still pay prizes (the friend is counted either way)
 DAILY_REWARDS = 10
@@ -109,6 +110,10 @@ class InviteService:
                     item_id, qty = payload
                     await self.inventory.grant(tx, inviter_id, item_id, qty)
                     prizes.append(f"{get_item(item_id).label}" + (f" ×{fa(qty)}" if qty > 1 else ""))
+            await tx.execute(
+                "UPDATE players SET boost_until = MAX(boost_until, ?) + ? WHERE id = ?", (now, INVITE_BOOST_HOURS * 3600, inviter_id)
+            )
+            prizes.append(f"🚀 بوست دو برابر {fa(INVITE_BOOST_HOURS)} ساعته")
             return InviteResult(inviter, prizes)
 
     # --- gift boxes from the owner ----------------------------------------------------------------------

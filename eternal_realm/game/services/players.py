@@ -29,6 +29,9 @@ class LevelUp:
     new_level: int
 
 
+NEWCOMER_BOOST_DAYS = 3
+
+
 @dataclass
 class DailyReward:
     gold: int
@@ -37,6 +40,8 @@ class DailyReward:
     chest: str = ""
     #: days of streak until the next chest
     next_chest_in: int = 0
+    #: crystals paid for a full week in a row
+    crystal: int = 0
 
 
 def streak_chest(streak: int) -> str:
@@ -214,6 +219,15 @@ class PlayerService:
         return wait
 
     # --- daily reward -------------------------------------------------------------------------
+    async def grant_welcome_boost(self, player_id: int) -> None:
+        """A newcomer's gift: three days of the 2x boost (given once, when the hero is born through the bot)."""
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            await tx.execute(
+                "UPDATE players SET boost_until = MAX(boost_until, ?) + ? WHERE id = ?",
+                (now, NEWCOMER_BOOST_DAYS * DAY, player_id),
+            )
+
     async def claim_daily(self, player_id: int) -> DailyReward:
         balance, now = self.ctx.balance, self.ctx.now()
         async with self.ctx.db.transaction() as tx:
@@ -234,7 +248,12 @@ class PlayerService:
             chest = streak_chest(streak)
             if chest:
                 await inv_repo.add_stack(tx, player_id, chest, 1)
+            crystal = 3 if streak % 7 == 0 else 0
+            if crystal:
+                await wallet.apply(
+                    tx, player_id, crystal=crystal, reason="daily_week", now=now, ref=f"dailyweek:{player_id}:{now // DAY}"
+                )
             from ...db.repos import season as season_repo
 
             await season_repo.add_points(tx, player_id, "daily", now)
-            return DailyReward(gold, streak, chest, 7 - streak % 7)
+            return DailyReward(gold, streak, chest, 7 - streak % 7, crystal)

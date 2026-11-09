@@ -95,6 +95,7 @@ class PaymentService:
                 have_city = await tx.scalar("SELECT 1 FROM cities WHERE player_id = ?", (player.id,), 0)
             if not have_city:
                 raise GameError("اول در «فرمانروایی» شهرتان را بنا کنید؛ این بسته مخصوص شهر است و پولی از شما کسر نشد.")
+            await self._check_city_pack(player)
         if pack.pet:
             async with self.ctx.db.read() as tx:
                 have = await tx.fetchone(
@@ -148,11 +149,31 @@ class PaymentService:
 
             if target.level > XP_PACK_MAX_LEVEL:
                 raise GameError(f"بسته‌ی تجربه برای قهرمان‌های تا سطح {fa(XP_PACK_MAX_LEVEL)} است و {target.name} از آن بالاتر است.")
+        if pack.city or pack.city_shield_hours:
+            await self._check_city_pack(payer, qty)
         amount = pack.price_rial * qty
         async with self.ctx.db.transaction() as tx:
             payload = f"ER-{secrets.token_hex(8)}"
             order_id = await repo.create(tx, payer.id, pack.id, amount, payload, self.ctx.now(), gift_to=target_id, qty=qty)
         return Order(order_id, payer.id, pack, amount, "pending", payload, target_id, qty)
+
+    async def _check_city_pack(self, player: Player, wanted: int = 1) -> None:
+        """Resource bundles for a city are limited per week, so money cannot simply buy a whole city."""
+        from ..data.packs import CITY_PACK_WEEKLY_LIMIT
+
+        ids = [p.id for p in PACKS.values() if p.city or p.city_shield_hours]
+        week_ago = self.ctx.now() - 7 * 86400
+        async with self.ctx.db.read() as tx:
+            bought = int(await tx.scalar(
+                "SELECT COALESCE(SUM(qty), 0) FROM orders WHERE player_id = ? AND status = 'delivered' AND delivered_at >= ?"
+                " AND pack_id IN (" + ",".join("?" * len(ids)) + ")",
+                (player.id, week_ago, *ids), 0,
+            ))
+        if bought + wanted > CITY_PACK_WEEKLY_LIMIT:
+            raise GameError(
+                f"🏰 در هر هفته حداکثر {fa(CITY_PACK_WEEKLY_LIMIT)} بسته‌ی فرمانروایی می‌شود خرید و شما {fa(bought)} تا خریده‌اید. "
+                "پولی از شما کسر نشد؛ بعداً دوباره بیایید و شهرتان را با دست خودتان هم بسازید."
+            )
 
     async def _check_xp_pack(self, player: Player, pack: Pack) -> None:
         """Experience packs are for climbing, not for the top: a level limit and a few per week."""

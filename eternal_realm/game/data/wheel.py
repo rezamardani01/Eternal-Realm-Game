@@ -63,7 +63,21 @@ SLICES: tuple[Slice, ...] = (
     Slice("armor", "🐲", "زره اژدها", 1.5, items=(("dragon_armor", 1),), jackpot=True),
     Slice("class", "🎫", "برگه‌ی تغییر کلاس", 1, items=(("class_ticket", 1),)),
 )
-_BY_ID = {s.id: s for s in SLICES}
+#: the prizes of the daily free spin: friendly, never empty, sometimes lovely
+FREE_SLICES: tuple[Slice, ...] = (
+    Slice("f_gold_s", "🪙", "۳٬۰۰۰ سکه", 20, gold=3_000),
+    Slice("f_gold_m", "💰", "۸٬۰۰۰ سکه", 12, gold=8_000),
+    Slice("f_crystal_s", "💎", "۲ کریستال", 14, crystal=2),
+    Slice("f_crystal_m", "💎", "۵ کریستال", 6, crystal=5),
+    Slice("f_crystal_l", "💠", "۱۰ کریستال", 2, crystal=10, jackpot=True),
+    Slice("f_wooden", "📦", "صندوقچه چوبی", 12, items=(("wooden_chest", 1),)),
+    Slice("f_potion", "⚡", "۲ معجون انرژی", 10, items=(("energy_potion", 2),)),
+    Slice("f_ore", "⛓️", "۶ سنگ آهن", 8, items=(("iron_ore", 6),)),
+    Slice("f_herb", "🌿", "۸ گیاه شفابخش", 6, items=(("herb", 8),)),
+    Slice("f_big", "🔋", "معجون انرژی بزرگ", 6, items=(("big_energy_potion", 1),)),
+    Slice("f_magic", "🎁", "صندوقچه جادویی", 4, items=(("magic_chest", 1),), jackpot=True),
+)
+_BY_ID = {s.id: s for s in (*SLICES, *FREE_SLICES)}
 
 #: spins per pack are in packs.py; this is the size of the strip shown while the wheel turns
 STRIP = 5
@@ -78,8 +92,9 @@ def odds() -> list[tuple[Slice, float]]:
     return [(s, s.weight / total) for s in SLICES]
 
 
-def spin(rng: random.Random) -> Slice:
-    return rng.choices(SLICES, weights=[s.weight for s in SLICES], k=1)[0]
+def spin(rng: random.Random, free: bool = False) -> Slice:
+    table = FREE_SLICES if free else SLICES
+    return rng.choices(table, weights=[s.weight for s in table], k=1)[0]
 
 
 def describe(s: Slice) -> str:
