@@ -79,7 +79,7 @@ async def play(services, duel_id, a, b):
     raise AssertionError("duel did not end")
 
 
-async def test_the_invitation_says_how_the_two_compare(h, services, db):
+async def test_the_invitation_does_not_give_away_how_the_two_compare(h, services, db):
     novice = await hero(services, db, 1, "تازه‌کار", 3)
     giant = await hero(services, db, 2, "غولک", 40)
     note = await services.duels.compare(novice, giant)
@@ -87,7 +87,7 @@ async def test_the_invitation_says_how_the_two_compare(h, services, db):
     even = await services.duels.compare(novice, novice)
     assert "برابر" in even and "هم‌شأن" in even
     await h.say(1, "مبارزه", group=True, reply_to=h.message_of(2))
-    assert "قدرت" in h.session.last_text() and "غولک" in h.session.last_text()
+    assert "فراخوان دوئل" in h.session.last_text() and "قدرت" not in h.session.last_text() and "برابر" not in h.session.last_text()
 
 
 async def test_a_duel_between_a_novice_and_a_giant_is_capped_and_the_giants_win_pays_nothing(services, db):

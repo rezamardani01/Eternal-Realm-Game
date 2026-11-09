@@ -27,6 +27,5 @@ async def duel(ctx: CommandContext) -> None:
     service = ctx.services.duels
     duel_ = await service.challenge(ctx.chat_id, ctx.me, target)
     seconds = ctx.services.ctx.balance.duel_invite_seconds
-    note = await service.compare(ctx.me, target)
-    sent = await ctx.reply(views.duel_invite(ctx.me, target, seconds, note), keyboards.duel_invite(duel_.id))
+    sent = await ctx.reply(views.duel_invite(ctx.me, target, seconds), keyboards.duel_invite(duel_.id))
     await service.attach_message(duel_.id, sent.message_id)
