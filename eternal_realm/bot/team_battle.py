@@ -36,7 +36,7 @@ def lobby_text(lobby: Lobby, seconds_left: int) -> str:
         out.append(_team_title(team))
         for seat in range(SEATS):
             player = lobby.at(team, seat)
-            out.append(f"{player.char_class.emoji} {player.mention}" if player else f"▫️ جایگاه {fa(seat + 1)} خالی")
+            out.append(f"{player.char_class.emoji} {player.mention}" if player else f"▫️ جایگاه {fa(seat + 1)}")
         out.append("")
     out += [
         "هر کس روی یک جایگاه بزند همان‌جا می‌نشیند؛ روی جایگاه خودش که بزند برمی‌خیزد.",
@@ -50,21 +50,23 @@ def lobby_text(lobby: Lobby, seconds_left: int) -> str:
     return "\n".join(out)
 
 
-def _member_lines(f: Fighter, current: bool) -> list[str]:
+def _member_lines(f: Fighter, current: bool, short: bool = False) -> list[str]:
     percent = team_fight.hp_percent(f)
     if f.hp <= 0:
         return [f"💀 {f.mention or f.name} — از پا افتاد"]
     head = f"{'👉' if current else f.emoji} {f.mention or bold(f.name)}"
+    if short:  # big teams: one line each so the message stays under the platform limit
+        return [f"{head} — {fa(percent)}٪"]
     return [head, f"❤️ {bar(f.hp, f.max_hp, 8)} {fa(percent)}٪ · {team_fight.describe(f)}"]
 
 
-def battle_text(update: TeamUpdate, turn_seconds: int) -> str:
+def battle_text(update: TeamUpdate, turn_seconds: int, short: bool = False) -> str:
     battle = update.battle
     out = [f"⚔️ {bold('نبرد تیمی')}", ""]
     for team in (0, 1):
         out.append(_team_title(team))
         for i in battle.members(team):
-            out += _member_lines(battle.fighters[i], not battle.finished and i == battle.actor)
+            out += _member_lines(battle.fighters[i], not battle.finished and i == battle.actor, short)
         out.append("")
     story = [f"• {line.strip()}" for line in update.lines if line.strip()][-6:]
     if story:
@@ -73,7 +75,8 @@ def battle_text(update: TeamUpdate, turn_seconds: int) -> str:
         f"🎯 نوبت {battle.current.mention or bold(battle.current.name)} ({TEAM_NAMES[battle.current_team]})",
         f"🔁 دور {fa(battle.round)} از {fa(battle.max_rounds)} · ⏳ {duration(turn_seconds)}",
     ]
-    return "\n".join(out)
+    text = "\n".join(out)
+    return text if short or len(text) < 3600 else battle_text(update, turn_seconds, True)
 
 
 def result_text(update: TeamUpdate) -> str:
@@ -107,13 +110,14 @@ def result_text(update: TeamUpdate) -> str:
 # --- buttons ------------------------------------------------------------------------------------
 def lobby_buttons(lobby: Lobby) -> Rows:
     rows: Rows = [[Button.inline(f"{TEAM_MARKS[t]} {TEAM_NAMES[t]}", TeamCb(action="info", id=lobby.id)) for t in (0, 1)]]
-    for seat in range(SEATS):
+    for pair in range(0, SEATS, 2):  # two seats of each team side by side on every row
         row = []
         for team in (0, 1):
-            player = lobby.at(team, seat)
-            label = f"{player.char_class.emoji} {player.name}" if player else f"➕ جایگاه {fa(seat + 1)}"
-            row.append(Button.inline(label, TeamCb(action="sit", id=lobby.id, arg=team * 10 + seat),
-                                     style="primary" if player else None))
+            for seat in (pair, pair + 1):
+                player = lobby.at(team, seat)
+                label = f"{player.char_class.emoji} {player.name}" if player else f"➕ {fa(seat + 1)}"
+                row.append(Button.inline(label, TeamCb(action="sit", id=lobby.id, arg=team * 10 + seat),
+                                         style="primary" if player else None))
         rows.append(row)
     rows.append([
         Button.inline("⚔️ شروع مبارزه", TeamCb(action="start", id=lobby.id), style="success"),

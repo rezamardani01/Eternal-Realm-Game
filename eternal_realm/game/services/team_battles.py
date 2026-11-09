@@ -20,7 +20,7 @@ from .duels import Payout
 from .pets import PetService
 from .players import PlayerService
 
-SEATS = 5
+SEATS = 10
 LOBBY_SECONDS = 300
 DAY = 24 * 3600
 

@@ -188,3 +188,12 @@ async def test_home_buttons_shop_next_to_settings_and_a_red_leave_with_confirmat
     assert leave["style"] == "danger"
     await h.click(1, leave["callback_data"])  # asks first, nothing happens yet
     assert "مطمئن" in h.session.last_text() and (await services.clans.of(leader.id)) is not None
+
+
+async def test_donation_screen_lists_the_top_donors(h, services, db):
+    leader = await hero(services, db, 1, "رهبر", gold=10_000)
+    await services.clans.create(leader, "ققنوس ها")
+    await services.clans.donate(leader, 700)
+    await h.panel(1, "clandonate")
+    text = h.session.last_text()
+    assert "برترین اهداکنندگان" in text and "رهبر" in text and "۷۰۰" in text

@@ -401,13 +401,16 @@ async def clan_donate(c: Ctx) -> Screen:
     if mine is None:
         raise GameError("شما عضو هیچ خاندانی نیستید.")
     need = next((n for n in (1000 * lv * lv for lv in range(1, 60)) if n > mine.donated), mine.donated)
+    donors = sorted((m for m in await c.services.clans.members(mine.id) if m["donated"] > 0), key=lambda m: -m["donated"])[:5]
+    board = "".join(f"\n{('🥇', '🥈', '🥉', '🏅', '🏅')[i]} {m['name']} — {fa(m['donated'])} سکه" for i, m in enumerate(donors))
     text = (
         f"💰 {bold('خزانه‌ی خاندان')}\n\n"
         f"🪙 موجودی خزانه: {fa(mine.treasury)} سکه\n"
         f"⭐ سطح خاندان: {fa(mine.level)}\n"
         f"🎯 برای سطح بعد: {fa(max(0, need - mine.donated))} سکه‌ی دیگر\n\n"
         f"👛 کیف شما: {fa(c.player.gold)} سکه\n\n"
-        "هر سطح، جای بیشتری برای عضو تازه باز می‌کند. چقدر کمک می‌کنید؟"
+        + (f"🏆 {bold('برترین اهداکنندگان')}{board}\n\n" if board else "")
+        + "هر سطح، جای بیشتری برای عضو تازه باز می‌کند. چقدر کمک می‌کنید؟"
     )
     rows = keyboards.grid([c.btn(f"🪙 {fa(n)}", "clangiveq", n) for n in DONATION_STEPS], 2)
     rows.append(c.back("clan"))

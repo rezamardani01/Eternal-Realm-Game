@@ -131,7 +131,7 @@ async def test_the_group_flow_with_buttons(h, services):
     for line in text.splitlines():  # house rule: at most one emoji per line, and only at its start
         assert len(re.findall(EMOJI, line)) <= 1, line
     assert len(h.session.last_markup_rows()) == 7  # team names, five rows of seats and the control row
-    await h.click(101, h.session.last_markup_rows()[1][1]["callback_data"], group=True)  # the second team's first seat
+    await h.click(101, h.session.last_markup_rows()[1][2]["callback_data"], group=True)  # the second team's first seat
     assert "قهرمان1" in h.session.last_text()
     await h.click(101, h.button_data("شروع"), group=True)  # not the creator
     assert "فقط سازنده" in " ".join(x.get("text", "") for x in h.session.callback_answers())
