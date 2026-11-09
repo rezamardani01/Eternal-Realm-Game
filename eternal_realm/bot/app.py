@@ -14,7 +14,7 @@ from ..context import AppContext
 from ..db.database import Database
 from . import boss, clan_panel, group_dungeon, membership, duels, events, maintenance, onboarding, panel, payments, quest_panel  # noqa: F401
 from .lockdown import MaintenanceMiddleware
-from . import achievement_panel, admin_panel, bet_panel, invite_panel, ascend_panel, altar_panel, card_panel, contest_panel, craft_panel, dungeon_panel, mission_panel, offers, path_panel, pet_panel, transfer_panel, vip_panel  # noqa: F401
+from . import team_battle, achievement_panel, admin_panel, bet_panel, invite_panel, ascend_panel, altar_panel, card_panel, contest_panel, craft_panel, dungeon_panel, mission_panel, offers, path_panel, pet_panel, transfer_panel, vip_panel  # noqa: F401
 from .commands import REGISTRY
 from .commands import router as commands_router
 from .membership import MembershipMiddleware
@@ -43,7 +43,7 @@ def build_dispatcher(services: Services) -> Dispatcher:
     REGISTRY.configure(services.ctx.settings.command_overrides)
     # order matters: FSM-bound onboarding first, free-text commands last
     _attach(
-        dp, onboarding.router, panel.listing_router, admin_panel.router, bet_panel.router, panel.router, payments.router, duels.router, boss.router,
+        dp, onboarding.router, panel.listing_router, admin_panel.router, bet_panel.router, panel.router, payments.router, duels.router, team_battle.router, boss.router,
         membership.router, group_dungeon.router,
         events.router, clan_panel.router, commands_router,
     )

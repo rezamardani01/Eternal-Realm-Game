@@ -102,6 +102,9 @@ async def janitor(bot: Bot, services: Services, interval: float = 20.0) -> None:
             from .bet_panel import announce_expired
 
             await announce_expired(bot, services)
+            from .team_battle import announce as announce_teams
+
+            await announce_teams(bot, services)
             await services.payments.expire_stale()
         except asyncio.CancelledError:
             raise

@@ -526,6 +526,31 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (player_id, family, step)
     );
     """,
+    # 38: team battles (a lobby with seats, then the fight)
+    """
+    CREATE TABLE team_battles (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id    INTEGER NOT NULL,
+        message_id INTEGER,
+        creator_id INTEGER NOT NULL REFERENCES players (id),
+        status     TEXT    NOT NULL,
+        state      TEXT    NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+    );
+    CREATE INDEX idx_team_battles_open ON team_battles (status, expires_at);
+    CREATE TABLE team_battle_members (
+        battle_id INTEGER NOT NULL REFERENCES team_battles (id),
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        team      INTEGER NOT NULL,
+        seat      INTEGER NOT NULL,
+        paid_at   INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (battle_id, player_id),
+        UNIQUE (battle_id, team, seat)
+    );
+    CREATE INDEX idx_team_members_player ON team_battle_members (player_id, paid_at);
+    """,
 ]
 
 

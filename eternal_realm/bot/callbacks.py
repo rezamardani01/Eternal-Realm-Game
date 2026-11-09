@@ -32,6 +32,14 @@ class DuelCb(CallbackData, prefix="d"):
     id: int
 
 
+class TeamCb(CallbackData, prefix="tb"):
+    """A tap in a team battle: ``arg`` is ``team * 10 + seat`` for seats."""
+
+    action: str
+    id: int
+    arg: int = 0
+
+
 class BetCb(CallbackData, prefix="bt"):
     action: str
     id: int
