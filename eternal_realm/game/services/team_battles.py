@@ -11,7 +11,7 @@ from ...db.repos import inventory as inv_repo
 from ...db.repos import players as player_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
-from ..engine import team_fight
+from ..engine import combat, team_fight
 from ..engine.combat import Action, Fighter
 from ..engine.team_fight import TeamBattle
 from ..models import Player
@@ -201,7 +201,10 @@ class TeamBattleService:
                     fighter.pet_emoji, fighter.pet_name, fighter.pet_power = striker
                 fighters.append(fighter)
                 teams.append(team)
+            sides = [[f for f, t in zip(fighters, teams, strict=True) if t == side] for side in (0, 1)]
+            ratio, strong = combat.level_field(sides)
             battle = TeamBattle.start(fighters, teams, self.ctx.rng)
+            battle.power_ratio, battle.strong_team = ratio, strong
             await tx.execute(
                 "UPDATE team_battles SET status = 'active', state = ?, updated_at = ?, expires_at = ?"
                 " WHERE id = ? AND status = 'lobby'",
@@ -281,8 +284,9 @@ class TeamBattleService:
             if index not in battle.auto and (owner or earlier < b.duel_daily_reward_cap):
                 foes = levels[1 - team]
                 if won:
-                    payout.gold = b.duel_win_gold + 2 * (sum(foes) // max(1, len(foes)))
-                    payout.xp = b.duel_win_xp
+                    worth = combat.reward_factor(battle.power_ratio, battle.strong_team == team) if battle.strong_team >= 0 else 1.0
+                    payout.gold = round((b.duel_win_gold + 2 * (sum(foes) // max(1, len(foes)))) * worth)
+                    payout.xp = round(b.duel_win_xp * worth)
                 else:
                     payout.xp = b.duel_lose_xp
             boost = await self.players.boost_factor(tx, pid)

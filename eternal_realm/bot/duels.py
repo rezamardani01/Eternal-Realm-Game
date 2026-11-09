@@ -64,7 +64,8 @@ async def on_duel_button(query: CallbackQuery, callback_data: DuelCb, services: 
             raise GameError("حریف شما دیگر در قلمرو نیست.")
         fresh = await services.duels.challenge(message.chat.id, player, other)
         seconds = services.ctx.balance.duel_invite_seconds
-        sent = await message.answer(views.duel_invite(player, other, seconds), buttons=keyboards.duel_invite(fresh.id))
+        note = await services.duels.compare(player, other)
+        sent = await message.answer(views.duel_invite(player, other, seconds, note), buttons=keyboards.duel_invite(fresh.id))
         await services.duels.attach_message(fresh.id, sent.message_id)
         await query.answer("⚔️ فراخوان تازه فرستاده شد!")
         return

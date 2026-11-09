@@ -81,6 +81,9 @@ class Battle:
     #: index of the winning fighter, ``None`` for a draw (only meaningful when finished)
     winner: int | None = None
     surrendered: bool = False
+    #: how much stronger the stronger fighter really was before the cap, and who it was (-1 = nobody)
+    power_ratio: float = 1.0
+    strong: int = -1
 
     # --- persistence --------------------------------------------------------------------------
     def to_dict(self) -> dict[str, Any]:
@@ -104,6 +107,56 @@ class Battle:
         """Faster fighter acts first; a tie is decided by a coin flip."""
         first = 0 if a.speed > b.speed else 1 if b.speed > a.speed else rng.randint(0, 1)
         return cls([a, b], actor=first, max_rounds=max_rounds)
+
+
+#: in a fight between heroes the stronger side keeps at most this much of its advantage
+PVP_CAP = 1.7
+#: a companion's strike in a fight between heroes never exceeds this share of its owner's attack (plus a little)
+PVP_PET_SHARE = 0.25
+
+
+def power_of(f: Fighter) -> float:
+    """One number for how strong a fighter is (hit points, attack, defence, magic, speed, luck and the pet)."""
+    return f.max_hp / 4 + f.atk * 3 + f.defense * 2 + f.magic * 2.4 + f.speed + f.luck + f.pet_power * 2
+
+
+def _shrink(f: Fighter, k: float) -> None:
+    f.max_hp = max(1, round(f.max_hp * k))
+    f.hp = min(f.max_hp, max(1, round(f.hp * k)))
+    f.atk, f.defense, f.magic = max(1, round(f.atk * k)), round(f.defense * k), round(f.magic * k)
+    f.speed, f.luck = max(1, round(f.speed * k)), round(f.luck * k)
+    f.pet_power = round(f.pet_power * k)
+
+
+def cap_pet(f: Fighter) -> None:
+    if f.pet_power:
+        f.pet_power = min(f.pet_power, round(f.atk * PVP_PET_SHARE) + 4)
+
+
+def level_field(sides: list[list[Fighter]], cap: float = PVP_CAP) -> tuple[float, int]:
+    """Cap the stronger side's advantage in a fight between heroes (companions are capped too).
+
+    ``sides`` is a list of teams (a duel is two teams of one). Teams are compared by the average power of their
+    members. Returns the real ratio before the cap and the index of the stronger team (``-1`` when equal)."""
+    for side in sides:
+        for f in side:
+            cap_pet(f)
+    powers = [sum(power_of(f) for f in side) / max(1, len(side)) for side in sides]
+    high, low = max(powers), min(powers)
+    if low <= 0 or high == low:
+        return 1.0, -1
+    ratio, strong = high / low, powers.index(high)
+    if ratio > cap:
+        for f in sides[strong]:
+            _shrink(f, cap / ratio)
+    return ratio, strong
+
+
+def reward_factor(ratio: float, strong: bool) -> float:
+    """What a win is worth: beating somebody much weaker pays little or nothing, beating somebody stronger pays more."""
+    if strong:
+        return 1.0 if ratio < 1.5 else 0.6 if ratio < 2 else 0.3 if ratio < 3 else 0.0
+    return min(2.0, 1 + (ratio - 1) / 2)
 
 
 def _dodge_chance(actor: Fighter, target: Fighter) -> float:

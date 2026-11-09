@@ -1140,12 +1140,13 @@ def bet_lines(update) -> list[str]:  # noqa: ANN001 - DuelUpdate
     return lines
 
 
-def duel_invite(challenger, target, seconds: int) -> str:  # noqa: ANN001 - Player
+def duel_invite(challenger, target, seconds: int, note: str = "") -> str:  # noqa: ANN001 - Player
     return "\n".join([
         f"⚔️ {bold('فراخوان دوئل')}",
         "",
         f"{challenger.char_class.emoji} {challenger.mention} · سطح {fa(challenger.level)}",
         f"🏆 {fa(challenger.wins)} پیروزی · 💀 {fa(challenger.losses)} شکست",
+        *([note] if note else []),
         "",
         f"فرمانده {target.mention} ، دعوت را می‌پذیرید؟",
         f"⏳ {duration(seconds)} فرصت دارید.",

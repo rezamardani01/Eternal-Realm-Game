@@ -32,6 +32,9 @@ class TeamBattle:
     winner: int | None = None
     #: fighters (by index) who let their turn time out; they are played automatically from then on
     auto: list[int] = field(default_factory=list)
+    #: how much stronger the stronger team really was before the cap, and which team (-1 = neither)
+    power_ratio: float = 1.0
+    strong_team: int = -1
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

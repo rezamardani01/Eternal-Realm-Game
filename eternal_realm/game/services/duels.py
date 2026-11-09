@@ -12,6 +12,7 @@ from ...db.repos import players as player_repo
 from ...db.repos import inventory as inv_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
+from ...shared.text import fa
 from ..engine import combat
 from ..engine.combat import Action, Battle, Fighter
 from ..models import Player
@@ -97,6 +98,28 @@ class DuelService:
         assert row is not None
         return Duel.from_row(row)
 
+    async def _fighter(self, tx: Tx, p: Player) -> Fighter:
+        stats = await self.characters.stats_in(tx, p)
+        fighter = Fighter.for_player(p.id, p.name, p.char_class, stats, p.mention)
+        striker = await PetService(self.ctx).striker_in(tx, p.id, stats.atk)
+        if striker:
+            fighter.pet_emoji, fighter.pet_name, fighter.pet_power = striker
+        return fighter
+
+    async def compare(self, a: Player, b: Player) -> str:
+        """One line telling both sides how their strength compares (shown on the invitation)."""
+        async with self.ctx.db.read() as tx:
+            fa_, fb = await self._fighter(tx, a), await self._fighter(tx, b)
+        pa, pb = combat.power_of(fa_), combat.power_of(fb)
+        ratio = max(pa, pb) / max(1.0, min(pa, pb))
+        if ratio < 1.15:
+            return "⚖️ قدرتتان تقریباً برابر است؛ نبردی هم‌شأن!"
+        stronger, weaker = (a, b) if pa > pb else (b, a)
+        text = f"⚖️ قدرت {stronger.name} {fa(f'{ratio:.1f}'.replace('.', '٫'))} برابر {weaker.name} است"
+        if ratio > combat.PVP_CAP:
+            return text + f"؛ در نبرد، برتری او تا {fa('۱٫۷')} برابر محدود می‌شود و جایزه‌ی بردن از ضعیف‌تر کم است."
+        return text + "."
+
     async def _is_owner_id(self, tx, player_id: int) -> bool:  # noqa: ANN001
         uid = await tx.scalar("SELECT platform_user_id FROM players WHERE id = ?", (player_id,), 0)
         return int(uid) == self.ctx.settings.owner_id
@@ -137,15 +160,10 @@ class DuelService:
             challenger = await player_repo.get(tx, row["challenger_id"])
             target = await player_repo.get(tx, row["target_id"])
             assert challenger is not None and target is not None
-            fighters = []
-            for p in (challenger, target):
-                stats = await self.characters.stats_in(tx, p)
-                fighter = Fighter.for_player(p.id, p.name, p.char_class, stats, p.mention)
-                striker = await PetService(self.ctx).striker_in(tx, p.id, stats.atk)
-                if striker:
-                    fighter.pet_emoji, fighter.pet_name, fighter.pet_power = striker
-                fighters.append(fighter)
+            fighters = [await self._fighter(tx, p) for p in (challenger, target)]
+            ratio, strong = combat.level_field([[fighters[0]], [fighters[1]]])
             battle = Battle.start(fighters[0], fighters[1], b.duel_max_rounds, self.ctx.rng)
+            battle.power_ratio, battle.strong = ratio, strong
             if not await repo.start(tx, duel_id, json.dumps(battle.to_dict()), now, now + b.duel_turn_seconds):
                 raise GameError("این دعوت‌نامه دیگر معتبر نیست؛ پذیرفته، رد یا منقضی شده است.")
             fresh = await repo.get(tx, duel_id)
@@ -196,6 +214,8 @@ class DuelService:
 
         if battle.winner is None:
             return {}
+        if battle.winner == battle.strong and battle.power_ratio >= 2:
+            return {}  # beating somebody far weaker changes no rating
         win, lose = battle.fighters[battle.winner], battle.fighters[1 - battle.winner]
         if win.player_id is None or lose.player_id is None:
             return {}
@@ -237,6 +257,9 @@ class DuelService:
                     payout.xp = b.duel_win_xp
                 elif lost or battle.winner is None:
                     payout.xp = b.duel_lose_xp
+            if won:  # a win over somebody much weaker pays little, a win over somebody stronger pays more
+                worth = combat.reward_factor(battle.power_ratio, battle.strong == index) if battle.strong >= 0 else 1.0
+                payout.gold, payout.xp = round(payout.gold * worth), round(payout.xp * worth)
             boost = await self.players.boost_factor(tx, pid)
             payout.gold, payout.xp = payout.gold * boost, payout.xp * boost
             if payout.gold:
