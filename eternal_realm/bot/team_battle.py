@@ -19,7 +19,7 @@ from .services import Services
 
 router = Router(name="team_battle")
 
-TEAM_MARKS = ("🔵", "🔴")
+TEAM_MARKS = ("🟢", "🔴")
 TEAM_NAMES = ("تیم اول", "تیم دوم")
 ACTIONS = {"attack": Action.ATTACK, "skill": Action.SKILL, "defend": Action.DEFEND, "surrender": Action.SURRENDER}
 
@@ -117,7 +117,7 @@ def lobby_buttons(lobby: Lobby) -> Rows:
                 player = lobby.at(team, seat)
                 label = f"{player.char_class.emoji} {player.name}" if player else "➕"
                 row.append(Button.inline(label, TeamCb(action="sit", id=lobby.id, arg=team * 10 + seat),
-                                         style="primary" if player else None))
+                                         style=("success", "danger")[team] if player else None))
         rows.append(row)
     rows.append([
         Button.inline("⚔️ شروع مبارزه", TeamCb(action="start", id=lobby.id), style="success"),
