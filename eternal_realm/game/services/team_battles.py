@@ -153,17 +153,18 @@ class TeamBattleService:
             return await self._load(tx, battle_id), note
 
     async def cancel(self, battle_id: int, by: Player) -> Lobby:
+        """The creator may call the whole thing off, in the lobby or in the middle of the fight (nothing is paid)."""
         now = self.ctx.now()
         async with self.ctx.db.transaction() as tx:
             lobby = await self._load(tx, battle_id)
             if by.id != lobby.creator_id and not self.players.is_owner(by):
                 raise GameError("فقط سازنده‌ی مبارزه می‌تواند آن را لغو کند.")
             await tx.execute(
-                "UPDATE team_battles SET status = 'cancelled', updated_at = ? WHERE id = ? AND status = 'lobby'",
+                "UPDATE team_battles SET status = 'cancelled', updated_at = ? WHERE id = ? AND status IN ('lobby', 'active')",
                 (now, battle_id),
             )
             if tx.rowcount == 0:
-                raise GameError("این مبارزه دیگر در حال ثبت‌نام نیست.")
+                raise GameError("این مبارزه پیش‌تر تمام شده است.")
             lobby.status = "cancelled"
             return lobby
 

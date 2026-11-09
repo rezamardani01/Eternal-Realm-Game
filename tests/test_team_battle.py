@@ -159,3 +159,17 @@ async def test_the_result_panel_is_tidy(services):
     for line in text.splitlines():
         if not line.startswith("•"):  # the story lines come from the duel engine
             assert len(re.findall(EMOJI, line)) <= 1, line
+
+
+async def test_the_creator_can_cancel_even_mid_fight(services):
+    a, b = await heroes(services, 2)
+    lobby = await services.teams.create(-500, a)
+    await services.teams.sit(lobby.id, b, 1, 0)
+    await services.teams.start(lobby.id, a)
+    with pytest.raises(GameError):
+        await services.teams.cancel(lobby.id, b)
+    await services.teams.cancel(lobby.id, a)
+    assert (await services.teams.get(lobby.id)).status == "cancelled"
+    with pytest.raises(GameError):
+        await services.teams.act(lobby.id, a, Action.ATTACK)
+    await services.teams.create(-500, b)  # everyone is free again

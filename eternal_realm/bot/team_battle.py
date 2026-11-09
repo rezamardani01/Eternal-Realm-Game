@@ -132,6 +132,7 @@ def action_buttons(battle_id: int, fighter: Fighter) -> Rows:
             Button.inline("🛡️ دفاع", TeamCb(action="defend", id=battle_id)),
             Button.inline("🏳️ تسلیم", TeamCb(action="surrender", id=battle_id), style="danger"),
         ],
+        [Button.inline("❌ لغو مبارزه (سازنده)", TeamCb(action="cancel", id=battle_id))],
     ]
 
 
@@ -174,7 +175,7 @@ async def on_team_button(query: CallbackQuery, callback_data: TeamCb, services: 
         await message.edit_text(text, buttons=buttons)
     elif action == "cancel":
         await service.cancel(battle_id, player)
-        await message.edit_text("🏳️ مبارزه‌ی تیمی را سازنده‌اش لغو کرد. هر وقت خواستید دوباره بسازید!")
+        await message.edit_text("🏳️ مبارزه‌ی تیمی را سازنده‌اش لغو کرد و پاداشی داده نشد. هر وقت خواستید دوباره بسازید!")
     elif action == "again":
         lobby = await service.create(message.chat.id, player)
         sent = await message.answer(lobby_text(lobby, _seconds_left(services, lobby)), buttons=lobby_buttons(lobby))
