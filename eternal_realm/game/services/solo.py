@@ -51,6 +51,8 @@ class Payout:
     items: dict[str, int] = field(default_factory=dict)
     level_up: LevelUp | None = None
     notes: list[str] = field(default_factory=list)
+    #: for a story stage: 1 bronze, 2 silver, 3 gold (0 = not a stage)
+    grade: int = 0
 
 
 @dataclass
@@ -99,6 +101,15 @@ class SoloService:
             " ON CONFLICT (player_id, day, key) DO UPDATE SET n = n + 1", (pid, day, key),
         )
         return await self._daily(tx, pid, key)
+
+    async def recent_results(self, player_id: int, count: int = 3) -> list[str]:
+        """The verdicts of the last few finished fights (newest first): won, lost or fled."""
+        async with self.ctx.db.read() as tx:
+            rows = await tx.fetchall(
+                "SELECT status FROM solo_fights WHERE player_id = ? AND status != 'active' ORDER BY id DESC LIMIT ?",
+                (player_id, count),
+            )
+        return [r["status"] for r in rows]
 
     async def overview(self, player_id: int) -> dict[str, int]:
         """Everything the hub shows: story progress, dungeon records, today's boss and arena counts."""
@@ -311,6 +322,7 @@ class SoloService:
             return await self._pay(tx, pid, 0, xp)
         gold, xp, crystal, items = info.get("gold", 0), info.get("xp", 0), 0, {}
         notes: list[str] = []
+        grade = 0
         if kind == "arena":
             wins = await self._bump_daily(tx, pid, "arena")
             if wins > data.ARENA_FULL_WINS:
@@ -322,6 +334,14 @@ class SoloService:
                 await self._set_progress(tx, pid, "story", info["stage"])
             if info.get("chest"):
                 items[info["chest"]] = 1
+            hero_hp = fight.battle.fighters[0].hp / max(1, fight.battle.fighters[0].max_hp)
+            grade = 3 if hero_hp >= 0.75 else 2 if hero_hp >= 0.4 else 1  # bronze: won; silver/gold: won with health to spare
+            best = await self._progress(tx, pid, f"grade:{info['stage']}")
+            if grade > best:
+                await self._set_progress(tx, pid, f"grade:{info['stage']}", grade)
+                crystal += grade - best  # a better grade pays the difference in crystals
+                if grade > 1:
+                    notes.append(f"درجه‌ی {data.GRADES[grade]} برای این مرحله: {fa(grade - best)} کریستال هدیه.")
             last = max(s.number for s in data.STAGES if s.chapter == stage.chapter)
             if info["stage"] == last and not await self._progress(tx, pid, f"chapter:{stage.chapter}"):
                 await self._set_progress(tx, pid, f"chapter:{stage.chapter}", 1)
@@ -346,6 +366,8 @@ class SoloService:
             await self._set_progress(tx, pid, f"boss:{info['boss']}", kills + 1)
         pay = await self._pay(tx, pid, gold, xp, crystal, items)
         pay.notes = notes
+        if kind == "story":
+            pay.grade = grade
         return pay
 
     async def abandon(self, player: Player) -> None:

@@ -278,6 +278,8 @@ STAGES: tuple[Stage, ...] = (
 )
 _STAGE = {s.number: s for s in STAGES}
 CHAPTER_DONE_CRYSTALS = 5
+#: a stage is graded by the health the hero kept: 1 bronze (won), 2 silver (40%+), 3 gold (75%+)
+GRADES = {1: "برنزی", 2: "نقره‌ای", 3: "طلایی"}
 
 
 def get_stage(number: int) -> Stage:

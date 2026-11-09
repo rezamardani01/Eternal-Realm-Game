@@ -54,6 +54,12 @@ async def trip(c: Ctx) -> Screen:
         LINE, await _energy_line(c),
     ]
     rows = []
+    tips = await c.services.advisor.for_player(c.player)
+    if tips:
+        lines += ["", f"💡 {bold('پیشنهاد فرمانده')}"]
+        for tip in tips:
+            lines.append(f"{tip.emoji} {tip.text}")
+            rows.append([c.btn(f"{tip.emoji} {tip.text}"[:60], tip.screen, tip.arg)])
     if fight is not None:
         lines += ["", f"⚔️ نبرد نیمه‌کاره: {fight.info.get('title', '')}"]
         rows.append([c.btn("⚔️ ادامه‌ی نبرد", "sfight", style="danger")])
@@ -137,6 +143,8 @@ def _after(c: Ctx, update: SoloUpdate) -> Screen:
         text += [f"🎁 {bold('پاداش')}", *_reward_lines(update.payout)]
     if update.payout.level_up:
         text.append(f"🎉 به سطح {fa(update.payout.level_up.new)} رسیدید!")
+    if update.won and update.payout.grade:
+        text.append(f"🏅 درجه‌ی این مرحله: {data.GRADES[update.payout.grade]}")
     text += [f"✨ {n}" for n in update.payout.notes]
     if not update.won and not update.fled:
         text += ["", "شکست درس است؛ تجهیزاتتان را بهتر کنید و دوباره بیایید."]
@@ -228,9 +236,14 @@ async def story_chapter(c: Ctx) -> Screen:
     title, emoji, need, _ = data.CHAPTERS[number]
     lines = [f"{emoji} {bold('فصل ' + fa(number) + ': ' + title)}", ""]
     rows = []
+    progress = await c.services.solo.overview(p.id)
     for s in (x for x in data.STAGES if x.chapter == number):
         mark = "✅" if s.number <= cleared else "▶️" if s.number == cleared + 1 else "🔒"
-        lines.append(f"{mark} مرحله‌ی {fa(s.number)}: {s.title}" + (" (باس فصل)" if s.boss else ""))
+        grade = progress.get(f"grade:{s.number}", 0)
+        lines.append(
+            f"{mark} مرحله‌ی {fa(s.number)}: {s.title}" + (" (باس فصل)" if s.boss else "")
+            + (f" · درجه‌ی {data.GRADES[grade]}" if grade else "")
+        )
         if s.number <= cleared + 1 and p.level >= need:
             rows.append([c.btn(f"{mark} {fa(s.number)}. {s.title}", "stage", s.number)])
     if p.level < need:

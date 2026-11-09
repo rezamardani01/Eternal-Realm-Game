@@ -129,8 +129,8 @@ async def test_the_story_goes_stage_by_stage_pays_a_third_on_replay_and_gates_ch
     crystals = (await services.players.require(1)).crystal
     await services.solo.start_stage(p, 6, "fight")
     boss = await finish(services, db, p)
-    assert boss.payout.crystal == data.CHAPTER_DONE_CRYSTALS and any("فصل" in n for n in boss.payout.notes)
-    assert (await services.players.require(1)).crystal == crystals + data.CHAPTER_DONE_CRYSTALS
+    assert boss.payout.crystal >= data.CHAPTER_DONE_CRYSTALS and any("فصل" in n for n in boss.payout.notes)
+    assert (await services.players.require(1)).crystal == crystals + boss.payout.crystal
     async with db.read() as tx:
         assert await tx.scalar("SELECT qty FROM inventory WHERE player_id = ? AND item_id = 'magic_chest'", (p.id,), 0) == 1
     with pytest.raises(GameError, match="سطح"):
@@ -257,3 +257,49 @@ async def test_the_clan_word_works_in_a_group_again(h, services, db):
     await hero(services, db)
     await h.say(1, "خاندان", group=True)
     assert "خاندان" in h.session.last_text()
+
+
+async def test_stage_grades_follow_the_health_kept_and_better_grades_pay_crystals(services, db):
+    p = await hero(services, db, level=3)
+    await services.solo.start_stage(p, 1, "fight")
+    async with db.transaction() as tx:  # win with a sliver of health: bronze
+        row = await tx.fetchone("SELECT id, state FROM solo_fights WHERE player_id = ? AND status = 'active'", (p.id,))
+        state = json.loads(row["state"])
+        state["fighters"][1]["hp"] = 1
+        state["fighters"][0]["hp"] = 2
+        state["fighters"][0]["max_hp"] = 100
+        await tx.execute("UPDATE solo_fights SET state = ? WHERE id = ?", (json.dumps(state), row["id"]))
+    for _ in range(40):
+        update = await services.solo.act(p, Action.ATTACK)
+        if update.finished:
+            break
+    if update.won:
+        assert update.payout.grade == 1
+        assert (await services.solo.overview(p.id))["grade:1"] == 1
+    crystals = (await services.players.require(1)).crystal
+    await services.solo.start_stage(p, 1, "fight")
+    gold = await finish(services, db, p)  # full health: gold, and the two grades of difference are paid in crystals
+    assert gold.won and gold.payout.grade == 3 and (await services.solo.overview(p.id))["grade:1"] == 3
+    assert (await services.players.require(1)).crystal >= crystals + 1
+    assert any("طلایی" in n for n in gold.payout.notes)
+
+
+async def test_the_advisor_reads_the_real_situation(services, db, clock):
+    p = await hero(services, db, level=3)
+    tips = await services.advisor.for_player(p, 10)
+    kinds = [t.screen for t in tips]
+    assert "wheel" in kinds and "stage" in kinds  # the free spin and the next story stage
+    assert tips[0].screen == "wheel" or tips[0].screen == "ach" or tips[0].screen == "missions"
+    await services.solo.start_arena(p, "normal")
+    assert (await services.advisor.for_player(p, 10))[0].screen == "sfight"  # a fight in progress comes first
+    for _ in range(3):  # three defeats in a row: an easier road is offered
+        await services.solo.act(p, Action.SURRENDER)
+        await services.solo.start_arena(p, "normal")
+    await services.solo.act(p, Action.SURRENDER)
+    assert any(t.screen == "arenago" and t.arg == "easy" for t in await services.advisor.for_player(p, 10))
+    clock.advance(5 * 86400)
+    await services.players.claim_daily(p.id)
+    clock.advance(5 * 86400)
+    assert any(t.screen == "daily" for t in await services.advisor.for_player(await services.players.require(1), 10))
+    big = await hero(services, db, uid=2, level=30)
+    assert any(t.screen == "sbossv" for t in await services.advisor.for_player(big, 10))

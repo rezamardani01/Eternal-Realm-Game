@@ -27,6 +27,7 @@ from ..game.services.inventory import InventoryService
 from ..game.services.invites import InviteService
 from ..game.services.market import MarketService
 from ..game.services.achievements import AchievementService
+from ..game.services.advisor import AdvisorService
 from ..game.services.alerts import AlertService
 from ..game.services.city import CityService
 from ..game.services.solo import SoloService
@@ -77,6 +78,7 @@ class Services:
     city: CityService
     alerts: AlertService
     solo: SoloService
+    advisor: AdvisorService
     wheel: WheelService
     teams: TeamBattleService
     gdungeon: GroupDungeonService
@@ -101,6 +103,12 @@ class Services:
         offers = OfferService(ctx)
         bosses = BossService(ctx, players, inventory, characters, cards)
         duels = DuelService(ctx, players, characters)
+        solo = SoloService(ctx, players, characters, inventory)
+        wheel = WheelService(ctx, inventory)
+        city = CityService(ctx)
+        achievements = AchievementService(ctx, inventory)
+        missions = MissionService(ctx, offers)
+        advisor = AdvisorService(ctx, solo, achievements, missions, wheel, city, inventory)
         return cls(
             ctx=ctx,
             players=players,
@@ -125,13 +133,14 @@ class Services:
             crafting=CraftingService(ctx, inventory),
             season=SeasonService(ctx, inventory, cards),
             offers=offers,
-            missions=MissionService(ctx, offers),
-            achievements=AchievementService(ctx, inventory),
+            missions=missions,
+            achievements=achievements,
             exchange=ExchangeService(ctx),
-            city=CityService(ctx),
+            city=city,
             alerts=AlertService(ctx),
-            solo=SoloService(ctx, players, characters, inventory),
-            wheel=WheelService(ctx, inventory),
+            solo=solo,
+            advisor=advisor,
+            wheel=wheel,
             teams=TeamBattleService(ctx, players, characters),
             gdungeon=GroupDungeonService(ctx, players, characters, inventory),
             contests=ContestService(ctx),
