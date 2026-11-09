@@ -71,7 +71,13 @@ async def on_duel_button(query: CallbackQuery, callback_data: DuelCb, services: 
     elif action in ACTIONS:
         update = await services.duels.act(duel_id, player, ACTIONS[action])
         text, buttons = render(update, turn_seconds)
-        await message.edit_text(text, buttons=buttons)
+        if update.finished:  # the fight message goes away and the result arrives as a fresh one
+            with contextlib.suppress(BaleAPIError):
+                await message.delete()
+            sent = await message.answer(text, buttons=buttons) if buttons else await message.answer(text)
+            await services.duels.attach_message(duel_id, sent.message_id)
+        else:
+            await message.edit_text(text, buttons=buttons)
     else:
         raise GameError("این دکمه از کار افتاده است؛ فرمان تازه‌ای بدهید.")
     await query.answer()
@@ -87,7 +93,10 @@ async def _announce(bot: Bot, services: Services, item: DuelUpdate | Duel) -> No
         text = "⌛ فراخوان دوئل بی‌پاسخ ماند و در باد گم شد. هر وقت خواستید دوباره دعوت کنید!"
     buttons = keyboards.duel_result(item) if isinstance(item, DuelUpdate) else None
     with contextlib.suppress(BaleAPIError):
-        if buttons:
+        if isinstance(item, DuelUpdate) and item.finished:
+            await bot.delete_message(duel.chat_id, duel.message_id)
+            await bot.send_message(duel.chat_id, text, buttons=buttons) if buttons else await bot.send_message(duel.chat_id, text)
+        elif buttons:
             await bot.edit_message_text(duel.chat_id, duel.message_id, text, buttons=buttons)
         else:
             await bot.edit_message_text(duel.chat_id, duel.message_id, text)

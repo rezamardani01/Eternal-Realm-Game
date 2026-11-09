@@ -194,7 +194,13 @@ async def on_team_button(query: CallbackQuery, callback_data: TeamCb, services: 
     elif action in ACTIONS:
         update = await service.act(battle_id, player, ACTIONS[action])
         text, buttons = render(update, turn_seconds)
-        await message.edit_text(text, buttons=buttons)
+        if update.finished:  # the fight message goes away and the result arrives as a fresh one
+            with contextlib.suppress(BaleAPIError):
+                await message.delete()
+            sent = await message.answer(text, buttons=buttons)
+            await service.attach_message(battle_id, sent.message_id)
+        else:
+            await message.edit_text(text, buttons=buttons)
     else:
         raise GameError("این دکمه از کار افتاده است؛ فرمان تازه‌ای بدهید.")
     await query.answer()
@@ -211,7 +217,11 @@ async def announce(bot, services: Services) -> None:  # noqa: ANN001
         with contextlib.suppress(BaleAPIError):
             if isinstance(item, TeamUpdate):
                 text, buttons = render(item, turn_seconds)
-                await bot.edit_message_text(lobby.chat_id, lobby.message_id, text, buttons=buttons)
+                if item.finished:
+                    await bot.delete_message(lobby.chat_id, lobby.message_id)
+                    await bot.send_message(lobby.chat_id, text, buttons=buttons)
+                else:
+                    await bot.edit_message_text(lobby.chat_id, lobby.message_id, text, buttons=buttons)
             else:
                 await bot.edit_message_text(
                     lobby.chat_id, lobby.message_id, "⌛ مبارزه‌ی تیمی شروع نشد و ثبت‌نامش بسته شد. هر وقت خواستید دوباره بسازید!"

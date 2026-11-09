@@ -45,7 +45,9 @@ async def announce(bot: Bot, services: Services, action: EventAction) -> None:
                 sent = await bot.send_message(view.chat_id, text_for(view))
             await services.events.attach_message(view.id, sent.message_id)
         elif view.message_id is not None:
-            await bot.edit_message_text(view.chat_id, view.message_id, text_for(view))
+            with contextlib.suppress(BaleAPIError):  # the finished fight goes away and its result arrives fresh
+                await bot.delete_message(view.chat_id, view.message_id)
+            await bot.send_message(view.chat_id, text_for(view))
     except BaleAPIError:
         log.warning("could not post event %s in chat %s", view.kind, view.chat_id)
 
@@ -55,7 +57,10 @@ async def _show(query: CallbackQuery, view: EventView) -> None:
         return
     buttons = keyboards.event_buttons(view)
     with contextlib.suppress(BaleAPIError):
-        if buttons:
+        if view.status != "active" and not buttons:
+            await query.message.delete()
+            await query.message.answer(text_for(view))
+        elif buttons:
             await query.message.edit_text(text_for(view), buttons=buttons)
         else:
             await query.message.edit_text(text_for(view))
