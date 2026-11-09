@@ -479,8 +479,10 @@ async def city_train(c: Ctx) -> Screen:
     level = city.levels.get(t.building, 0)
     g, f, w, i = t.cost
     cost = [f"{d.RES_INFO[r][0]} {d.RES_INFO[r][1]}: {fa(v)}" for r, v in (("gold", g), ("food", f), ("wood", w), ("iron", i)) if v]
+    special = d.get_special(t.id)
     lines = [
         f"{t.emoji} {bold(t.name)}", "", t.about, "",
+        f"✨ {bold('ویژگی ویژه: ' + special[0])}", special[1], "",
         f"⚔️ قدرت حمله: {fa(t.atk)}",
         f"🛡️ قدرت دفاع: {fa(t.defense)}",
         f"❤️ جان: {fa(t.hp)}",
@@ -798,6 +800,9 @@ def _attacked_text(r) -> str:  # noqa: ANN001 - AttackResult
     taken = [_res_line(k, v) for k, v in r.loot.items() if v]
     if taken:
         lines += ["", bold("منابع ازدست‌رفته"), *taken]
+    dead = [t for t in _troop_lines(r.def_lost) if t != "هیچ"]
+    if dead:
+        lines += ["", bold("سربازان ازدست‌رفته"), *dead]
     lines += ["", f"🔰 سپر دفاعی تازه: {duration(r.shield)}" if r.shield else "⚠️ این حمله سپر دفاعی به شما نداد"]
     return "\n".join(lines)
 
@@ -818,6 +823,7 @@ def _result_text(r, now: int) -> str:  # noqa: ANN001 - AttackResult
         "",
         f"🎁 {bold('غنائم')}", *_loot_lines(r.loot), "",
         f"🩸 {bold('تلفات لشکر شما')}", *_troop_lines(r.lost),
+        "", f"💀 {bold('تلفات سربازان دشمن')}", *_troop_lines(r.def_lost),
     ]
     if r.xp:
         lines += ["", f"⭐ {fa(r.xp)} تجربه برای فرمانده"]
@@ -849,7 +855,8 @@ async def city_report(c: Ctx) -> Screen:
     if mine:
         head = f"⚔️ {bold('گزارش حمله‌ی شما به شهر ' + row['defender_name'])}"
         lines = [head, "", *data["log"], "", _stars(row["stars"]), f"📊 میزان تخریب: {fa(round(row['destruction'] * 100))}٪",
-                 "", f"🎁 {bold('غنائم')}", *_loot_lines(data["loot"]), "", f"🩸 {bold('تلفات لشکر شما')}", *_troop_lines(data["att_lost"])]
+                 "", f"🎁 {bold('غنائم')}", *_loot_lines(data["loot"]), "", f"🩸 {bold('تلفات لشکر شما')}", *_troop_lines(data["att_lost"]),
+                 "", f"💀 {bold('تلفات سربازان دشمن')}", *_troop_lines(data["def_lost"])]
     else:
         won = row["stars"] == 0
         lines = [

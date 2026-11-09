@@ -189,6 +189,7 @@ class AttackResult:
     defender_city: str
     attacker_name: str
     xp: int = 0
+    def_lost: dict[str, int] = field(default_factory=dict)
 
 
 def clean_city_name(raw: str) -> str:
@@ -781,7 +782,7 @@ class CityService:
             )
             return AttackResult(
                 attack_id, out.stars, out.destruction, loot, sent, out.att_lost, out.log, out.destroyed, out.castle_down,
-                gain, shield, target.owner_uid, target.name, me.name, xp,
+                gain, shield, target.owner_uid, target.name, me.name, xp, out.def_lost,
             )
 
     async def _mark_used(self, tx: Tx, player_id: int, created_at: int) -> bool:

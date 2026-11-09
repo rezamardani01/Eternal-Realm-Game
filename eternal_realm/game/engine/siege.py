@@ -12,7 +12,8 @@ from dataclasses import dataclass, field
 
 from ...shared.text import fa
 from ..data.city import (
-    DEFAULT_HP_PER_LEVEL, DESTRUCTION_ORDER, HP_PER_LEVEL, TRAP_FIRES_PER_BATTLE, get_building, get_trap, get_troop,
+    DEFAULT_HP_PER_LEVEL, DESTRUCTION_ORDER, HP_PER_LEVEL, MIN_ATTACKER_LOSS, TRAP_FIRES_PER_BATTLE, get_building,
+    get_trap, get_troop,
 )
 
 ROUNDS = 3
@@ -59,7 +60,8 @@ def total_hp(levels: dict[str, int]) -> int:
 
 
 def _hp_pool(units: dict[str, float]) -> float:
-    return sum(q * get_troop(k).hp for k, q in units.items())
+    # the knight's heavy armour: a third more effective hit points
+    return sum(q * get_troop(k).hp * (1.33 if k == "knight" else 1.0) for k, q in units.items())
 
 
 def _count(units: dict[str, float]) -> float:
@@ -76,8 +78,13 @@ def _thin(units: dict[str, float], damage: float) -> None:
         units[k] *= keep
 
 
-def _troop_damage(units: dict[str, float], bonus: float) -> float:
-    return sum(q * get_troop(k).atk for k, q in units.items()) * bonus
+def _troop_damage(units: dict[str, float], bonus: float, opening: bool = False) -> float:
+    """Total strike; archers (rain of arrows) and light cavalry (charge) hit harder in the opening round."""
+    total = 0.0
+    for k, q in units.items():
+        factor = 1.25 if opening and k == "archer" else 1.3 if opening and k == "cavalry" else 1.0
+        total += q * get_troop(k).atk * factor
+    return total * bonus
 
 
 def _cavalry_share(units: dict[str, float]) -> float:
@@ -112,6 +119,7 @@ def simulate(
             trap_damage += fired * get_trap(trap_id).damage * rng.uniform(0.9, 1.1)
             out.traps_used[trap_id] = fired
     if trap_damage:
+        trap_damage *= 1 - 0.3 * (att.get("sword", 0.0) / max(1.0, _count(att)))  # shield-bearers in the front rank
         before = _count(att)
         _thin(att, trap_damage)
         log.append(f"🪤 تله‌های شهر کار کردند و {fa(round(before - _count(att)))} مهاجم را از پا انداختند.")
@@ -123,7 +131,7 @@ def simulate(
         if _count(att) < 0.5:
             break
         spear_bonus = 1 + 0.6 * _cavalry_share(att) * (dfn.get("spear", 0) / max(1.0, _count(dfn))) if dfn else 1.0
-        hit_on_defenders = _troop_damage(att, bonus) * rng.uniform(0.9, 1.1)
+        hit_on_defenders = _troop_damage(att, bonus, opening=number == 1) * rng.uniform(0.9, 1.1)
         hit_on_attackers = (_troop_damage(dfn, 1.0) * spear_bonus + tower * TOWER_DAMAGE) * rng.uniform(0.9, 1.1)
         shield_def = _defence_value(dfn)
         shield_att = _defence_value(att)
@@ -145,12 +153,12 @@ def simulate(
     guard = (_count(dfn) / sum(dfn0.values())) if dfn0 else 0.0
     siege_units = {k: q for k, q in att.items() if get_troop(k).siege}
     towers = att.get("tower_siege", 0)
-    wall_eff = wall * (0.6 if towers >= 1 else 1.0)
+    wall_eff = wall * (0.6 if towers >= 0.5 else 1.0)
     structure = 0.0
     for k, q in att.items():
         t = get_troop(k)
         factor = 1 / (1 + 0.05 * wall_eff) if t.siege else 1 / (1 + 0.20 * wall_eff)
-        structure += q * t.struct * factor * bonus
+        structure += q * t.struct * factor * bonus * (1.15 if k == "catapult" else 1.0)
     structure *= (1 - 0.6 * guard) * SIEGE_ROUNDS * rng.uniform(0.92, 1.08)
     total = total_hp(levels)
     remaining, destroyed, castle_down = structure, [], False
@@ -178,7 +186,9 @@ def simulate(
         log.append(f"🔥 {names}{' و ...' if len(destroyed) > 4 else ''} ویران شد.")
     log.append(f"📊 میزان تخریب شهر: {fa(round(out.destruction * 100))}٪")
 
-    # losses: the hospital heals part of the dead
+    # losses: every battle costs blood, then the hospital heals part of the dead
+    for k, start in att0.items():
+        att[k] = min(att.get(k, 0.0), start * (1 - MIN_ATTACKER_LOSS))
     out.att_alive = _round_survivors(att0, att, attacker_hospital)
     out.def_alive = _round_survivors(dfn0, dfn, hospital)
     out.stars = (out.destruction >= 0.5) + castle_down + (out.destruction >= 0.9)

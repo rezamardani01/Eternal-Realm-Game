@@ -510,3 +510,52 @@ async def test_finished_work_is_announced_unless_the_city_is_muted(services, db,
     assert await services.city.collect_alerts() == []  # muted: nothing is sent...
     await services.city.set_alerts(p, True)
     assert await services.city.collect_alerts() == []  # ...and the old news is not replayed later
+
+
+def test_every_soldier_has_a_special_and_it_works_in_battle():
+    assert set(d.SPECIALS) == {t.id for t in d.TROOPS}
+    assert all(name and text for name, text in d.SPECIALS.values())
+    # every battle costs blood, even a walkover
+    weak = siege.Defence({}, {}, {"castle": 1}, "ضعیف")
+    out = siege.simulate({"sword": 100, "archer": 50}, weak, random.Random(1))
+    assert out.att_lost["sword"] >= 8 and out.att_lost["archer"] >= 4
+    # archers open with a volley, so a round-one-only fight favours them over plain swordsmen of the same attack
+    spears = siege.Defence({"sword": 50}, {}, {"castle": 1, "tower": 0}, "نگهبان")
+    a = siege.simulate({"archer": 60}, spears, random.Random(2))
+    b = siege.simulate({"sword": 60}, spears, random.Random(2))
+    assert sum(a.def_alive.values()) <= sum(b.def_alive.values()) + 5
+    # knights are harder to kill than swordsmen of the same strength
+    trap = siege.Defence({"sword": 120}, {}, {"castle": 3, "tower": 5}, "برج")
+    k = siege.simulate({"knight": 30}, trap, random.Random(3))
+    s_ = siege.simulate({"sword": 30}, trap, random.Random(3))
+    assert sum(k.att_alive.values()) / 30 >= sum(s_.att_alive.values()) / 30
+    # swordsmen in front soften traps
+    mined = siege.Defence({}, {"fire": 8}, {"castle": 3}, "تله")
+    with_swords = siege.simulate({"sword": 100, "archer": 5}, mined, random.Random(4))
+    without = siege.simulate({"archer": 105}, mined, random.Random(4))
+    assert sum(with_swords.att_alive.values()) / 105 >= sum(without.att_alive.values()) / 105 - 0.05
+
+
+async def test_the_special_is_on_the_soldier_screen_and_losses_on_both_reports(h, services, db):
+    p, city = await make_city(services, db, 1, "آذرگان")
+    for t in d.TROOPS:
+        await h.panel(1, "citytr", t.id)
+        text = h.session.last_text()
+        assert "ویژگی ویژه" in text and d.SPECIALS[t.id][0] in text
+    dp, dfn = await make_city(services, db, 2, "شیرکوه")
+    await give(db, city.id, sword=100)
+    await give(db, dfn.id, sword=30)
+    await stock(db, city.id, food=10_000)
+    await stock(db, dfn.id, gold=40_000)
+    await h.panel(1, "citysearch")
+    await h.panel(1, "cityprep")
+    await h.panel(1, "cityall")
+    h.session.reset()
+    await h.panel(1, "citygo")
+    result = h.session.last_text()
+    assert "تلفات لشکر شما" in result and "تلفات سربازان دشمن" in result and "غنائم" in result
+    victim = [p_ for n, p_ in h.session.calls if n == "sendMessage" and p_.get("chat_id") == 2][-1]["text"]
+    assert "منابع ازدست‌رفته" in victim and "سربازان ازدست‌رفته" in victim
+    after = await services.city.mine(dp, visit=False)
+    assert after.res["gold"] < 40_000 + 700  # what the raid took is really gone from the victim
+    assert (await services.city.mine(p)).troops["sword"] < 100  # and some of the raiders never came home

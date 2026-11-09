@@ -162,6 +162,27 @@ TROOPS: tuple[Troop, ...] = (
 _TROOP = {t.id: t for t in TROOPS}
 
 
+#: every soldier has a gift of his own: (name, what it does in battle) - the numbers match engine/siege.py
+SPECIALS: dict[str, tuple[str, str]] = {
+    "sword": ("سپرداران پیشرو", "صفوف اول لشکر؛ هر چه شمشیرزن بیشتر باشد، آسیب تله‌ها به لشکر تا ۳۰٪ کمتر می‌شود."),
+    "spear": ("دیوار نیزه", "سواره‌نظام و شوالیه‌ی دشمن را از اسب می‌اندازد؛ مهاجمِ سواره‌نظام تا ۶۰٪ بیشتر آسیب می‌بیند."),
+    "archer": ("باران تیر", "در نخستین دور نبرد، قدرت حمله‌شان ۲۵٪ بیشتر است."),
+    "cavalry": ("یورش برق‌آسا", "در نخستین دور نبرد با یورش ناگهانی ۳۰٪ قدرت حمله‌ی بیشتری دارد."),
+    "knight": ("زره‌ی سنگین", "جان مؤثرش یک‌سوم بیشتر است؛ سخت‌تر از پا درمی‌آید."),
+    "ram": ("دروازه‌شکن", "دیوار شهر تقریباً جلودارش نیست و ساختمان‌ها را به‌سرعت می‌شکند."),
+    "catapult": ("سنگ‌باران", "ویرانی گسترده؛ ۱۵٪ آسیب بیشتر به ساختمان‌ها می‌زند."),
+    "tower_siege": ("پل دیوار", "اگر یکی از آن‌ها زنده بماند، تأثیر دیوار شهر روی همه‌ی لشکر ۴۰٪ کمتر می‌شود."),
+}
+
+
+def get_special(troop_id: str) -> tuple[str, str]:
+    return SPECIALS[troop_id]
+
+
+#: every battle costs blood: this share of each kind of attacker never comes home
+MIN_ATTACKER_LOSS = 0.08
+
+
 def get_troop(troop_id: str) -> Troop:
     return _TROOP[troop_id]
 
