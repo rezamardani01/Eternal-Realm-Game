@@ -26,7 +26,7 @@ async def set_message(tx: Tx, duel_id: int, message_id: int) -> None:
 async def open_for(tx: Tx, player_ids: tuple[int, int]) -> Row | None:
     a, b = player_ids
     return await tx.fetchone(
-        "SELECT * FROM duels WHERE status IN ('pending', 'active')"
+        "SELECT * FROM duels WHERE status = 'active'"
         " AND (challenger_id IN (?, ?) OR target_id IN (?, ?)) LIMIT 1",
         (a, b, a, b),
     )

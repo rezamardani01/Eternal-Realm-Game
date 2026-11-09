@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from ...context import AppContext
 from ...db.database import Row, Tx
 from ...db.repos import duels as repo
+from ...db.repos import open_requests
 from ...db.repos import players as player_repo
 from ...db.repos import inventory as inv_repo
 from ...db.repos import wallet
@@ -90,6 +91,7 @@ class DuelService:
                     raise player_repo.away_error(left, None if pid == challenger.id else target.name)
             pair = (challenger.id, target.id)
             await repo.expire_pending_for(tx, pair, now)
+            await open_requests.close_all(tx, challenger.id, now)  # a new request replaces the old open ones
             if await repo.open_for(tx, pair) is not None:
                 raise GameError("یکی از شما هم‌اکنون در میدان نبرد است. بگذارید آن نبرد تمام شود، بعد دوباره دعوت کنید.")
             if (
@@ -168,6 +170,10 @@ class DuelService:
                 left = await player_repo.is_away(tx, p.id, now)
                 if left is not None:
                     raise player_repo.away_error(left, None if p.id == by.id else p.name)
+            if await repo.open_for(tx, (challenger.id, target.id)) is not None:
+                raise GameError("یکی از شما هم‌اکنون در میدان نبرد است؛ بگذارید آن نبرد تمام شود.")
+            await open_requests.close_all(tx, challenger.id, now, keep_duel=duel_id)
+            await open_requests.close_all(tx, target.id, now, keep_duel=duel_id)
             fighters = [await self._fighter(tx, p) for p in (challenger, target)]
             ratio, strong = combat.level_field([[fighters[0]], [fighters[1]]])
             battle = Battle.start(fighters[0], fighters[1], b.duel_max_rounds, self.ctx.rng)

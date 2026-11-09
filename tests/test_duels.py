@@ -77,12 +77,13 @@ async def test_validations(services):
     a, b = await two_players(services)
     with pytest.raises(GameError):
         await services.duels.challenge(-500, a, a)
-    duel = await services.duels.challenge(-500, a, b)
+    old = await services.duels.challenge(-500, a, b)
+    duel = await services.duels.challenge(-500, a, b)  # a new request closes the old open one
     with pytest.raises(GameError):
-        await services.duels.challenge(-500, b, a)  # one open duel at a time
-    await services.duels.decline(duel.id, b)
-    with pytest.raises(GameError):
-        await services.duels.accept(duel.id, b)
+        await services.duels.accept(old.id, b)
+    await services.duels.accept(duel.id, b)
+    with pytest.raises(GameError, match="میدان نبرد"):
+        await services.duels.challenge(-500, b, a)  # a running fight still blocks
 
 
 async def test_pair_daily_limit(services):

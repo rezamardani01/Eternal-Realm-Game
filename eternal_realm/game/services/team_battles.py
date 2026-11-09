@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from ...context import AppContext
 from ...db.database import Tx
 from ...db.repos import inventory as inv_repo
+from ...db.repos import open_requests
 from ...db.repos import players as player_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
@@ -95,8 +96,8 @@ class TeamBattleService:
             raise player_repo.away_error(left)
         busy = await tx.fetchone(
             "SELECT b.id FROM team_battles b JOIN team_battle_members m ON m.battle_id = b.id"
-            " WHERE m.player_id = ? AND (b.status = 'active' OR (b.status = 'lobby' AND b.expires_at > ?)) LIMIT 1",
-            (player_id, now),
+            " WHERE m.player_id = ? AND b.status = 'active' LIMIT 1",
+            (player_id,),
         )
         if busy is not None:
             raise GameError("شما هم‌اکنون در یک مبارزه‌ی تیمی هستید؛ اول آن را تمام کنید یا از جایگاهتان برخیزید.")
@@ -105,6 +106,7 @@ class TeamBattleService:
     async def create(self, chat_id: int, creator: Player) -> Lobby:
         now = self.ctx.now()
         async with self.ctx.db.transaction() as tx:
+            await open_requests.close_all(tx, creator.id, now)
             await self._ensure_free(tx, creator.id, now)
             battle_id = await tx.execute(
                 "INSERT INTO team_battles (chat_id, creator_id, status, created_at, updated_at, expires_at)"
@@ -161,6 +163,7 @@ class TeamBattleService:
                         (team, seat, battle_id, player.id),
                     )
                 else:
+                    await open_requests.close_all(tx, player.id, now, keep_lobby=battle_id)
                     await self._ensure_free(tx, player.id, now)
                     await tx.execute(
                         "INSERT INTO team_battle_members (battle_id, player_id, team, seat) VALUES (?, ?, ?, ?)",

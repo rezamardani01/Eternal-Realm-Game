@@ -73,13 +73,13 @@ async def test_seats_start_rules_and_a_full_fight(services, db):
 async def test_a_hero_can_only_be_in_one_battle(services):
     a, b = await heroes(services, 2)
     first = await services.teams.create(-500, a)
+    again = await services.teams.create(-500, a)  # a new request closes the old open lobby
     with pytest.raises(GameError):
-        await services.teams.create(-500, a)
+        await services.teams.sit(first.id, b, 1, 0)
     second = await services.teams.create(-500, b)
+    await services.teams.sit(second.id, a, 1, 0)  # joining another lobby takes the hero out of their own
     with pytest.raises(GameError):
-        await services.teams.sit(second.id, a, 1, 0)
-    await services.teams.cancel(first.id, a)
-    await services.teams.sit(second.id, a, 1, 0)
+        await services.teams.sit(again.id, b, 1, 0)
 
 
 async def test_turns_go_team_by_team(services):
