@@ -178,7 +178,10 @@ async def on_team_button(query: CallbackQuery, callback_data: TeamCb, services: 
     if action == "start":
         update = await service.start(battle_id, player)
         text, buttons = render(update, turn_seconds)
-        await message.edit_text(text, buttons=buttons)
+        with contextlib.suppress(BaleAPIError):  # the lobby goes away and the fight opens as a fresh message at the bottom
+            await message.delete()
+        sent = await message.answer(text, buttons=buttons)
+        await service.attach_message(battle_id, sent.message_id)
     elif action == "cancel":
         await service.cancel(battle_id, player)
         await message.edit_text("🏳️ مبارزه‌ی تیمی را سازنده‌اش لغو کرد و پاداشی داده نشد. هر وقت خواستید دوباره بسازید!")

@@ -86,6 +86,25 @@ class ExpeditionService:
             )
         return Trip(kind_id, now, now + hours * 3600, hours)
 
+    @staticmethod
+    def recall_cost(left_seconds: int) -> int:
+        """Crystals to bring the hero home at once: one for every hour still to go (at least one)."""
+        return max(1, -(-left_seconds // 3600))
+
+    async def recall(self, player: Player) -> int:
+        """Pay crystals and the hero is back now; the report is then collected as usual. Returns the price."""
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            row = await tx.fetchone("SELECT * FROM expeditions WHERE player_id = ?", (player.id,))
+            if row is None:
+                raise GameError("قهرمان شما در اعزام نیست.")
+            if row["ends_at"] <= now:
+                raise GameError("قهرمان شما همین حالا هم برگشته؛ گزارشش را بگیرید.")
+            cost = self.recall_cost(row["ends_at"] - now)
+            await wallet.apply(tx, player.id, crystal=-cost, reason="expedition_recall", now=now)
+            await tx.execute("UPDATE expeditions SET ends_at = ? WHERE player_id = ?", (now, player.id))
+        return cost
+
     async def claim(self, player: Player) -> Report:
         now, rng = self.ctx.now(), self.ctx.rng
         async with self.ctx.db.transaction() as tx:

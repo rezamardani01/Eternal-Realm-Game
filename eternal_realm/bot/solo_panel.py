@@ -573,7 +573,11 @@ async def expedition(c: Ctx) -> Screen:
             f"⏳ {duration(trip.ends_at - now)} تا بازگشت",
             "", "وقتی برگشت برایتان پیام می‌فرستم.",
         ]
-        return Screen("\n".join(lines), [[c.btn("🔄 تازه‌سازی", "expd")], c.back("trip", "🧭 سفر قهرمان")])
+        cost = c.services.expeditions.recall_cost(trip.ends_at - now)
+        return Screen("\n".join(lines), [
+            [c.btn("🔄 تازه‌سازی", "expd"), c.btn(f"⏪ برگرداندن قهرمان · {fa(cost)}💎", "expdback", style="danger")],
+            c.back("trip", "🧭 سفر قهرمان"),
+        ])
     lines += [
         "قهرمانتان را برای ساعت‌ها به کاری بفرستید؛ حتی وقتی در بازی نیستید برمی‌گردد و گزارش می‌دهد.",
         f"⏳ مدت: {', '.join(fa(h) for h in ed.HOURS)} ساعت · هر روز حداکثر {fa(ed.DAILY_LIMIT)} اعزام (امروز {fa(used)})",
@@ -583,6 +587,36 @@ async def expedition(c: Ctx) -> Screen:
     rows = [[c.btn(f"{k.emoji} {k.name} · {k.about}", "expdk", k.id)] for k in ed.KINDS]
     rows.append(c.back("trip", "🧭 سفر قهرمان"))
     return Screen("\n".join(lines), rows)
+
+
+@screen("expdback")
+async def expedition_recall_confirm(c: Ctx) -> Screen:
+    _guard(c)
+    now = c.services.ctx.now()
+    trip = await c.services.expeditions.current(c.player.id)
+    if trip is None or trip.ends_at <= now:
+        return await expedition(c)
+    from ..shared.text import duration
+
+    cost = c.services.expeditions.recall_cost(trip.ends_at - now)
+    p = await c.refresh()
+    lines = [
+        f"⏪ {bold('برگرداندن قهرمان')}", LINE,
+        f"⏳ {duration(trip.ends_at - now)} تا بازگشت طبیعی مانده است.",
+        f"💎 با پرداخت {fa(cost)} کریستال همین حالا برمی‌گردد و پاداش کامل اعزام را می‌گیرید.",
+        f"👛 کریستال شما: {fa(p.crystal)}",
+    ]
+    rows = [[c.btn(f"✅ پرداخت {fa(cost)} کریستال", "expdbackgo", style="success")], c.back("expd")]
+    return Screen("\n".join(lines), rows)
+
+
+@screen("expdbackgo")
+async def expedition_recall(c: Ctx) -> Screen:
+    _guard(c)
+    cost = await c.services.expeditions.recall(c.player)
+    shown = await expedition(c)
+    shown.toast = f"⏪ قهرمان برگشت · {fa(cost)} کریستال"
+    return shown
 
 
 @screen("expdk")

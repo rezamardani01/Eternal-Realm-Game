@@ -700,3 +700,21 @@ def test_the_away_refusal_tells_the_exact_time_left():
     text = away_text(2 * 3600 + 5 * 60 + 9)
     assert "۲ ساعت و ۵ دقیقه و ۹ ثانیه" in text
     assert "۴۵ ثانیه" in away_text(45, "آرش")
+
+
+async def test_a_hero_can_be_called_back_for_crystals(h, services, db, clock):
+    p = await hero(services, db)
+    await services.expeditions.start(p, "mine", 4)
+    with pytest.raises(GameError):  # no crystals yet
+        await services.expeditions.recall(p)
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET crystal = 10 WHERE id = ?", (p.id,))
+    await h.panel(1, "expd")
+    assert any("برگرداندن قهرمان" in x for x in h.labels())
+    await h.panel(1, "expdback")
+    assert "۴ کریستال" in h.session.last_text()
+    await h.panel(1, "expdbackgo")
+    assert "گرفتن گزارش" in " ".join(h.labels())
+    assert (await services.players.require(1)).crystal == 6
+    report = await services.expeditions.claim(await services.players.require(1))
+    assert report.hours == 4
