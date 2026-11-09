@@ -88,14 +88,13 @@ class PaymentService:
                 st = await season_repo.state(tx, player.id, self.ctx.now())
             if st.premium:
                 raise GameError("بلیط این فصل را از قبل دارید؛ خرید دوباره لازم نیست و پولی کسر نشد.")
-        if pack.xp:
-            await self._check_xp_pack(player, pack)
+        if pack.xp and player.level >= self.ctx.balance.max_level:
+            raise GameError("قهرمان شما به بالاترین سطح رسیده و تجربه‌ی بیشتری نمی‌گیرد؛ پولی کسر نشد.")
         if pack.city or pack.city_shield_hours:
             async with self.ctx.db.read() as tx:
                 have_city = await tx.scalar("SELECT 1 FROM cities WHERE player_id = ?", (player.id,), 0)
             if not have_city:
                 raise GameError("اول در «فرمانروایی» شهرتان را بنا کنید؛ این بسته مخصوص شهر است و پولی از شما کسر نشد.")
-            await self._check_city_pack(player)
         if pack.pet:
             async with self.ctx.db.read() as tx:
                 have = await tx.fetchone(
@@ -144,58 +143,13 @@ class PaymentService:
             raise GameError(f"{target.name} بلیط این فصل را دارد؛ چیز دیگری هدیه بدهید. پولی کسر نشد.")
         if (pack.city or pack.city_shield_hours) and not has_city:
             raise GameError(f"{target.name} هنوز شهری در فرمانروایی ندارد و این بسته به کارش نمی‌آید. پولی کسر نشد.")
-        if pack.xp:
-            from ..data.packs import XP_PACK_MAX_LEVEL
-
-            if target.level > XP_PACK_MAX_LEVEL:
-                raise GameError(f"بسته‌ی تجربه برای قهرمان‌های تا سطح {fa(XP_PACK_MAX_LEVEL)} است و {target.name} از آن بالاتر است.")
-        if pack.city or pack.city_shield_hours:
-            await self._check_city_pack(payer, qty)
+        if pack.xp and target.level >= self.ctx.balance.max_level:
+            raise GameError(f"{target.name} به بالاترین سطح رسیده و تجربه‌ی بیشتری نمی‌گیرد. پولی کسر نشد.")
         amount = pack.price_rial * qty
         async with self.ctx.db.transaction() as tx:
             payload = f"ER-{secrets.token_hex(8)}"
             order_id = await repo.create(tx, payer.id, pack.id, amount, payload, self.ctx.now(), gift_to=target_id, qty=qty)
         return Order(order_id, payer.id, pack, amount, "pending", payload, target_id, qty)
-
-    async def _check_city_pack(self, player: Player, wanted: int = 1) -> None:
-        """Resource bundles for a city are limited per week, so money cannot simply buy a whole city."""
-        from ..data.packs import CITY_PACK_WEEKLY_LIMIT
-
-        ids = [p.id for p in PACKS.values() if p.city or p.city_shield_hours]
-        week_ago = self.ctx.now() - 7 * 86400
-        async with self.ctx.db.read() as tx:
-            bought = int(await tx.scalar(
-                "SELECT COALESCE(SUM(qty), 0) FROM orders WHERE player_id = ? AND status = 'delivered' AND delivered_at >= ?"
-                " AND pack_id IN (" + ",".join("?" * len(ids)) + ")",
-                (player.id, week_ago, *ids), 0,
-            ))
-        if bought + wanted > CITY_PACK_WEEKLY_LIMIT:
-            raise GameError(
-                f"🏰 در هر هفته حداکثر {fa(CITY_PACK_WEEKLY_LIMIT)} بسته‌ی فرمانروایی می‌شود خرید و شما {fa(bought)} تا خریده‌اید. "
-                "پولی از شما کسر نشد؛ بعداً دوباره بیایید و شهرتان را با دست خودتان هم بسازید."
-            )
-
-    async def _check_xp_pack(self, player: Player, pack: Pack) -> None:
-        """Experience packs are for climbing, not for the top: a level limit and a few per week."""
-        from ..data.packs import XP_PACK_MAX_LEVEL, XP_PACK_WEEKLY_LIMIT
-
-        if player.level > XP_PACK_MAX_LEVEL:
-            raise GameError(
-                f"⭐ بسته‌های تجربه برای قهرمان‌های تا سطح {fa(XP_PACK_MAX_LEVEL)} است؛ شما سطح {fa(player.level)} هستید. "
-                "پولی از شما کسر نشد."
-            )
-        week_ago = self.ctx.now() - 7 * 86400
-        async with self.ctx.db.read() as tx:
-            bought = int(await tx.scalar(
-                "SELECT COUNT(*) FROM orders WHERE player_id = ? AND status = 'delivered' AND delivered_at >= ?"
-                " AND pack_id IN (" + ",".join("?" * len(XP_PACK_IDS)) + ")",
-                (player.id, week_ago, *XP_PACK_IDS), 0,
-            ))
-        if bought >= XP_PACK_WEEKLY_LIMIT:
-            raise GameError(
-                f"⭐ در هر هفته حداکثر {fa(XP_PACK_WEEKLY_LIMIT)} بسته‌ی تجربه می‌شود خرید و شما سهمیه‌ی این هفته را "
-                "گرفته‌اید. پولی از شما کسر نشد؛ هفته‌ی بعد دوباره بیایید."
-            )
 
     async def check_precheckout(self, platform_user_id: int, payload: str, amount: int) -> str | None:
         """``None`` when the payment may go ahead, else the reason shown to the buyer."""

@@ -3,7 +3,7 @@ import pytest
 from eternal_realm.bot.services import Services
 from eternal_realm.config import Settings
 from eternal_realm.context import AppContext
-from eternal_realm.game.data.packs import PACKS, SECTIONS, XP_PACK_MAX_LEVEL, XP_PACK_WEEKLY_LIMIT
+from eternal_realm.game.data.packs import PACKS, SECTIONS
 from eternal_realm.game.engine import loot
 from eternal_realm.shared.errors import GameError
 
@@ -58,7 +58,7 @@ async def test_the_treasury_has_two_separate_sections(h, services, db):
     await h.panel(10, "premium")
     await h.tap(10, "بسته‌های تجربه")
     text = h.session.last_text()
-    assert "سطح شما" in text and "حدود" in text and f"تا سطح {XP_PACK_MAX_LEVEL}".replace("40", "۴۰") in text
+    assert "سطح شما" in text and "حدود" in text and "هر تعداد" in text
     assert len([b for b in h.session.last_buttons() if "تومان" in b["text"]]) == 3
 
 
@@ -121,21 +121,13 @@ async def test_experience_packs_help_low_levels_more_than_high_ones(services, db
     assert "تجربه به شما رسید" in a.granted and "سطح" in a.granted and "تجربه به شما رسید" in b.granted
 
 
-async def test_experience_packs_stop_at_the_level_limit_and_are_limited_per_week(services, db, clock):
-    top = await hero(services, db, 10, "آرش", level=XP_PACK_MAX_LEVEL + 1)
-    with pytest.raises(GameError, match="سطح"):
-        await services.payments.create_order(top, "xp_s")  # nothing is charged: no order was made
-    async with db.read() as tx:
-        assert await tx.scalar("SELECT COUNT(*) FROM orders", (), 0) == 0
-    climber = await hero(services, db, 11, "سارا", level=5)
-    for _ in range(XP_PACK_WEEKLY_LIMIT):
+async def test_experience_packs_have_no_weekly_or_level_limit(services, db, clock):
+    high = await hero(services, db, 10, "آرش", level=60)
+    assert (await services.payments.create_order(high, "xp_s")).amount == PACKS["xp_s"].price_rial
+    await hero(services, db, 11, "سارا", level=5)
+    for _ in range(8):
         await buy(services, await services.players.require(11), "xp_s")
-    with pytest.raises(GameError, match="سهمیه"):
-        await services.payments.create_order(await services.players.require(11), "xp_s")
-    await buy(services, await services.players.require(11), "boost_24")  # other products are not limited
-    clock.advance(8 * 86400)
     assert (await services.payments.create_order(await services.players.require(11), "xp_s")).amount == PACKS["xp_s"].price_rial
-    del climber
 
 
 async def test_owner_can_gift_a_boost(h, services, db):

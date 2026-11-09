@@ -81,8 +81,8 @@ async def test_gifts_that_would_be_useless_are_refused_before_any_money_moves(se
     with pytest.raises(GameError, match="چنین بسته"):
         await services.payments.create_gift_order(a, b.id, "nope", 1)
     async with db.transaction() as tx:
-        await tx.execute("UPDATE players SET level = 60 WHERE id = ?", (b.id,))
-    with pytest.raises(GameError, match="سطح"):
+        await tx.execute("UPDATE players SET level = 500 WHERE id = ?", (b.id,))
+    with pytest.raises(GameError, match="بالاترین سطح"):
         await services.payments.create_gift_order(a, b.id, "xp_s", 1)
     async with db.transaction() as tx:
         await services.pets.grant(tx, b.id, "fox")

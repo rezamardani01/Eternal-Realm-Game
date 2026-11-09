@@ -1207,7 +1207,6 @@ async def lucky_odds(c: Ctx) -> Screen:
 
 def _boost_or_xp_section(c: Ctx, p) -> Screen:  # noqa: ANN001 - Player
     """The two sections that sell speed: the 2x boost, and experience packs sized by the buyer's own level."""
-    from ..game.data.packs import XP_PACK_MAX_LEVEL, XP_PACK_WEEKLY_LIMIT
     from ..game.engine import progression
 
     now = c.services.ctx.now()
@@ -1240,8 +1239,7 @@ def _boost_or_xp_section(c: Ctx, p) -> Screen:  # noqa: ANN001 - Player
             f"📋 {bold('چطور کار می‌کند؟')}",
             "📈 هر بسته مقدار ثابتی تجربه می‌دهد",
             "🧙 سطح پایین‌تر یعنی سطح بیشتر؛ سطح بالاتر یعنی کمتر",
-            f"🎚️ تا سطح {fa(XP_PACK_MAX_LEVEL)} کار می‌کند",
-            f"📅 هر هفته حداکثر {fa(XP_PACK_WEEKLY_LIMIT)} بسته",
+            "♾️ هر تعداد و هر زمان که بخواهید می‌توانید بخرید",
             "",
             f"🧙 سطح شما: {bold(fa(p.level))}",
             "",
@@ -1256,8 +1254,6 @@ def _boost_or_xp_section(c: Ctx, p) -> Screen:  # noqa: ANN001 - Player
             lines += [f"{pack.emoji} {pack.title} · {fa(pack.price_toman)} تومان", f"📈 {fa(pack.xp)} تجربه = {result}", ""]
         if lines[-1] == "":
             lines.pop()
-        if p.level > XP_PACK_MAX_LEVEL:
-            lines += ["", f"⚠️ سطح شما از {fa(XP_PACK_MAX_LEVEL)} بیشتر است و این بسته‌ها برایتان کار نمی‌کند"]
     lines.append("")
     if not enabled:
         lines.append("🔒 خرید با پول واقعی فعلاً بسته است")

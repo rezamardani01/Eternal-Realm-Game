@@ -8,7 +8,6 @@ from eternal_realm.db.repos import season as season_repo
 from eternal_realm.db.repos import wallet
 from eternal_realm.game.data import wheel as wheel_data
 from eternal_realm.game.data.achievements import FAMILIES
-from eternal_realm.game.data.packs import CITY_PACK_WEEKLY_LIMIT
 from eternal_realm.game.data.pets import PETS
 from eternal_realm.shared.errors import GameError
 
@@ -125,10 +124,7 @@ async def test_city_bundles_are_limited_per_week(services, db, clock):
         await wallet.apply(tx, p.id, gold=100_000, reason="t", now=services.ctx.now())
         await tx.execute("UPDATE players SET level = 10 WHERE id = ?", (p.id,))
     await services.city.found(await services.players.require(1), "آذرگان", d.FLAGS[0][0])
-    for n in range(CITY_PACK_WEEKLY_LIMIT):
+    for n in range(8):
         order = await services.payments.create_order(await services.players.require(1), "city_food")
         await services.payments.complete(1, order.payload, order.amount, f"c{n}")
-    with pytest.raises(GameError, match="حداکثر"):
-        await services.payments.create_order(await services.players.require(1), "city_food")
-    clock.advance(8 * 86400)
     await services.payments.create_order(await services.players.require(1), "city_food")
