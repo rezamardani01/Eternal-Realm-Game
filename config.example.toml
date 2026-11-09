@@ -26,7 +26,7 @@ provider_token = "WALLET-TEST-1111111111111111"
 
 # برای تغییر ضرایب بازی، مقادیر زیر را باز کنید (همه اختیاری‌اند)
 # [balance]
-# max_level = 100
+# max_level = 500
 # energy_regen_seconds = 90
 # duel_turn_seconds = 90
 # transfer_daily_limit = 50000

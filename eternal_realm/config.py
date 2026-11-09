@@ -16,7 +16,7 @@ class ConfigError(RuntimeError):
 class Balance:
     """Every tunable number of the game. Override any of them under ``[balance]``."""
 
-    max_level: int = 100
+    max_level: int = 500
     base_energy: int = 100
     energy_per_level: int = 2
     energy_regen_seconds: int = 90
