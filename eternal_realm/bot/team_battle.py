@@ -134,7 +134,7 @@ def action_buttons(battle_id: int, fighter: Fighter) -> Rows:
             Button.inline("🛡️ دفاع", TeamCb(action="defend", id=battle_id)),
             Button.inline("🏳️ تسلیم", TeamCb(action="surrender", id=battle_id), style="danger"),
         ],
-        [Button.inline("❌ لغو مبارزه (سازنده)", TeamCb(action="cancel", id=battle_id))],
+        [Button.inline("❌ لغو مبارزه", TeamCb(action="cancel", id=battle_id))],
     ]
 
 
