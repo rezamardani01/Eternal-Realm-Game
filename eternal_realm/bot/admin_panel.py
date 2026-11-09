@@ -633,7 +633,7 @@ async def clans(c: Ctx) -> Screen:
     lines = [f"🏯 {bold('خاندان‌ها')}", ""]
     if rows_:
         for r in rows_:
-            lines.append(f"🏰 {bold(r['name'])} · رهبر {r['leader']} · {fa(r['members'])} عضو · خزانه {fa(r['treasury'])}"
+            lines.append(f"🏰 {bold(r['name'])} · مالک {r['leader']} · {fa(r['members'])} عضو · خزانه {fa(r['treasury'])}"
                          + ("" if r["open"] else " · 🔒"))
     else:
         lines.append("هنوز خاندانی ساخته نشده است.")

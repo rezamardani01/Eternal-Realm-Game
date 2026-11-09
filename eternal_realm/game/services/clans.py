@@ -19,9 +19,9 @@ from .inventory import InventoryService
 NAME_MIN, NAME_MAX = 3, 16
 #: role id -> (emoji, title, power); a higher power outranks a lower one
 ROLES: dict[str, tuple[str, str, int]] = {
-    "leader": ("👑", "رهبر", 3),
-    "deputy": ("🛡️", "معاون", 2),
-    "elder": ("🔰", "ریش‌سفید", 1),
+    "leader": ("👑", "مالک", 3),
+    "deputy": ("🛡️", "قائم‌مقام", 2),
+    "elder": ("🔰", "پیشکسوت", 1),
     "member": ("👤", "عضو", 0),
 }
 DONATION_STEPS = (100, 500, 1_000, 5_000)
@@ -183,7 +183,7 @@ class ClanService:
             if row is None:
                 raise GameError("این خاندان دیگر وجود ندارد.")
             if not row["open"] and not invited:
-                raise GameError("درهای این خاندان بسته است؛ فقط با دعوت رهبر یا معاون می‌شود وارد شد.")
+                raise GameError("درهای این خاندان بسته است؛ فقط با دعوت مالک یا قائم‌مقام می‌شود وارد شد.")
             level = int(await tx.scalar("SELECT level FROM players WHERE id = ?", (player.id,), player.level))
             if level < row["min_level"]:
                 raise GameError(
@@ -206,8 +206,8 @@ class ClanService:
             if member["role"] == "leader":
                 if await repo.count_members(tx, clan["id"]) > 1:
                     raise GameError(
-                        "شما رهبر هستید و نمی‌توانید خاندان را وسط راه رها کنید. "
-                        "اول رهبری را به یکی از اعضا بدهید (از بخش اعضا)."
+                        "شما مالک هستید و نمی‌توانید خاندان را وسط راه رها کنید. "
+                        "اول مالکیت را به یکی از اعضا بدهید (از بخش اعضا)."
                     )
                 await repo.delete(tx, clan["id"])
                 return "disbanded"
@@ -222,7 +222,7 @@ class ClanService:
         async with self.ctx.db.transaction() as tx:
             member, clan = await self._mine(tx, player.id)
             if member["role"] != "leader":
-                raise GameError("فقط رهبر می‌تواند خاندان را منحل کند.")
+                raise GameError("فقط مالک می‌تواند خاندان را منحل کند.")
             await repo.delete(tx, clan["id"])
 
     # --- managing --------------------------------------------------------------------------------
@@ -231,7 +231,7 @@ class ClanService:
             me, _ = await self._mine(tx, actor.id)
             target = await self._target(tx, me, target_id)
             if role_power(me["role"]) < 2:
-                raise GameError("اخراج اعضا کار رهبر و معاون است.")
+                raise GameError("اخراج اعضا کار مالک و قائم‌مقام است.")
             if role_power(target["role"]) >= role_power(me["role"]):
                 raise GameError("نمی‌توانید کسی را که هم‌مقام یا بالاتر از شماست اخراج کنید.")
             await repo.remove_member(tx, target_id)
@@ -246,10 +246,10 @@ class ClanService:
             target = await self._target(tx, me, target_id)
             mine = role_power(me["role"])
             if mine < 2:
-                raise GameError("مقام دادن کار رهبر و معاون است.")
+                raise GameError("مقام دادن کار مالک و قائم‌مقام است.")
             if role_power(target["role"]) >= mine or role_power(role) >= mine:
                 raise GameError(
-                    "شما فقط می‌توانید به مقام‌های پایین‌تر از خودتان مقام بدهید. معاونت دادن فقط با رهبر است."
+                    "شما فقط می‌توانید به مقام‌های پایین‌تر از خودتان مقام بدهید. قائم‌مقامت دادن فقط با مالک است."
                 )
             await repo.set_role(tx, target_id, role)
         return ROLES[role][1]
@@ -259,7 +259,7 @@ class ClanService:
             me, clan = await self._mine(tx, actor.id)
             target = await self._target(tx, me, target_id)
             if me["role"] != "leader":
-                raise GameError("فقط رهبر می‌تواند رهبری را به دیگری بدهد.")
+                raise GameError("فقط مالک می‌تواند مالکیت را به دیگری بدهد.")
             await repo.set_role(tx, target_id, "leader")
             await repo.set_role(tx, actor.id, "deputy")
             await repo.set_leader(tx, clan["id"], target["player_id"])
@@ -270,14 +270,14 @@ class ClanService:
         async with self.ctx.db.transaction() as tx:
             me, clan = await self._mine(tx, actor.id)
             if role_power(me["role"]) < 2:
-                raise GameError("باز و بسته کردن درِ خاندان کار رهبر و معاون است.")
+                raise GameError("باز و بسته کردن درِ خاندان کار مالک و قائم‌مقام است.")
             await repo.set_open(tx, clan["id"], value)
 
     # --- the leader's settings -------------------------------------------------------------------
     async def _as_leader(self, tx: Tx, actor: Player) -> Row:
         member, clan = await self._mine(tx, actor.id)
         if member["role"] != "leader":
-            raise GameError("این تنظیم فقط دست رهبر خاندان است.")
+            raise GameError("این تنظیم فقط دست مالک خاندان است.")
         return clan
 
     async def set_fine(self, actor: Player, amount: int) -> int:

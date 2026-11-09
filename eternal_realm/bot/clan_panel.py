@@ -44,7 +44,7 @@ def clan_text(view: ClanView, mention: bool = False) -> str:
     lines = [
         f"🏯 {bold('خاندان ' + view.name)}",
         "",
-        f"👑 رهبر: {view.leader_mention if mention else view.leader}",
+        f"👑 مالک: {view.leader_mention if mention else view.leader}",
         f"⭐ سطح خاندان: {fa(view.level)}",
         f"👥 اعضا: {fa(view.size)} از {fa(view.capacity)}",
         f"💪 قدرت (جمع سطح اعضا): {fa(view.power)}",
@@ -141,7 +141,7 @@ async def clan_member(c: Ctx) -> Screen:
                 rows.append([c.btn(f"{emoji} مقام {title}", "clanrole", pid, role)])
         rows.append([c.btn("🚫 اخراج از خاندان", "clankq", pid, style="danger")])
     if pid != c.player.id and mine.my_role == "leader":
-        rows.append([c.btn("👑 واگذاری رهبری", "clanxq", pid)])
+        rows.append([c.btn("👑 واگذاری مالکیت", "clanxq", pid)])
     rows.append(c.back("clanmembers", "🔙 بازگشت", "0"))
     return Screen(text, rows)
 
@@ -173,8 +173,8 @@ async def clan_kick(c: Ctx) -> Screen:
 async def clan_transfer_ask(c: Ctx) -> Screen:
     _, m = await _member_row(c, _int(c.a))
     text = (
-        f"👑 {bold('واگذاری رهبری به ' + m['name'])}\n\n"
-        "او رهبر خاندان می‌شود و شما معاون می‌مانید. این کار را فقط رهبر تازه می‌تواند برگرداند."
+        f"👑 {bold('واگذاری مالکیت به ' + m['name'])}\n\n"
+        "او مالک خاندان می‌شود و شما قائم‌مقام می‌مانید. این کار را فقط مالک تازه می‌تواند برگرداند."
     )
     return Screen(text, [[c.btn("👑 بله، واگذار کن", "clanxfer", c.a, style="danger"), c.btn("↩️ نه", "clanmember", c.a)]])
 
@@ -183,7 +183,7 @@ async def clan_transfer_ask(c: Ctx) -> Screen:
 async def clan_transfer(c: Ctx) -> Screen:
     name = await c.services.clans.transfer(c.player, _int(c.a))
     shown = await clan(c)
-    shown.toast = f"👑 رهبری به {name} رسید"
+    shown.toast = f"👑 مالکیت به {name} رسید"
     shown.alert = True
     return shown
 
@@ -193,7 +193,7 @@ async def clan_transfer(c: Ctx) -> Screen:
 async def clan_settings(c: Ctx) -> Screen:
     mine = await c.services.clans.of(c.player.id)
     if mine is None or role_power(mine.my_role or "member") < 2:
-        raise GameError("مدیریت خاندان کار رهبر و معاون است.")
+        raise GameError("مدیریت خاندان کار مالک و قائم‌مقام است.")
     door = "بسته کردن در (فقط دعوت)" if mine.open else "باز کردن در (ورود آزاد)"
     leader = mine.my_role == "leader"
     text = [
@@ -207,7 +207,7 @@ async def clan_settings(c: Ctx) -> Screen:
         "برای دعوت یک نفر، روی پیامش در گروه ریپلای کنید و بنویسید «دعوت خاندان».",
     ]
     if not leader:
-        text += ["", "تنظیم عکس، جریمه و سطح عضویت فقط با رهبر است."]
+        text += ["", "تنظیم عکس، جریمه و سطح عضویت فقط با مالک است."]
     rows = [[c.btn("🚪 " + door, "clandoor", "0" if mine.open else "1")]]
     if leader:
         rows += [
@@ -254,7 +254,7 @@ async def clan_fine(c: Ctx) -> Screen:
 async def clan_photo(c: Ctx) -> Screen:
     mine = await c.services.clans.of(c.player.id)
     if mine is None or mine.my_role != "leader":
-        raise GameError("عکس خاندان را فقط رهبر می‌تواند تنظیم کند.")
+        raise GameError("عکس خاندان را فقط مالک می‌تواند تنظیم کند.")
     price = c.services.ctx.balance.clan_photo_gold
     text = (
         f"🖼️ {bold('عکس خاندان')}\n\n"
@@ -273,7 +273,7 @@ async def clan_photo(c: Ctx) -> Screen:
 async def clan_photo_ask(c: Ctx) -> Screen:
     mine = await c.services.clans.of(c.player.id)
     if mine is None or mine.my_role != "leader":
-        raise GameError("عکس خاندان را فقط رهبر می‌تواند تنظیم کند.")
+        raise GameError("عکس خاندان را فقط مالک می‌تواند تنظیم کند.")
     if c.state is None:
         raise GameError("برای فرستادن عکس از پیوی یا همان گروه شروع کنید.")
     await c.state.set_state(ClanFlow.photo)
@@ -323,7 +323,7 @@ async def got_clan_photo(message: Message, state: FSMContext, services: Services
     mine = await services.clans.of(player.id)
     await state.clear()
     if mine is None or mine.my_role != "leader":
-        raise GameError("عکس خاندان را فقط رهبر می‌تواند تنظیم کند.")
+        raise GameError("عکس خاندان را فقط مالک می‌تواند تنظیم کند.")
     file_id = message.photo[-1].file_id  # type: ignore[index]
     _photos[user.id] = file_id
     price = services.ctx.balance.clan_photo_gold
@@ -442,7 +442,7 @@ async def clan_create_do(c: Ctx) -> Screen:
     price = c.services.ctx.balance.clan_create_gold
     text = (
         f"🏯 {bold('خاندان ' + view.name + ' ساخته شد!')}\n\n"
-        f"{c.who(c.player)} نخستین رهبر این خاندان شد و {bold(fa(price))} سکه از کیفش رفت.\n\n"
+        f"{c.who(c.player)} نخستین مالک این خاندان شد و {bold(fa(price))} سکه از کیفش رفت.\n\n"
         "حالا دوستانتان را دعوت کنید (روی پیامشان ریپلای کنید و «دعوت خاندان» بنویسید)."
     )
     return Screen(text, [[c.btn("🏯 پنل خاندان", "clan")]])
@@ -495,7 +495,7 @@ async def clan_join_ask(c: Ctx) -> Screen:
     if view is None:
         raise GameError("این خاندان دیگر وجود ندارد.")
     if not view.open:
-        raise GameError("درهای این خاندان بسته است؛ فقط با دعوت رهبر یا معاون می‌شود وارد شد.")
+        raise GameError("درهای این خاندان بسته است؛ فقط با دعوت مالک یا قائم‌مقام می‌شود وارد شد.")
     p = await c.refresh()
     lines = [f"🏯 {bold('پیوستن به خاندان ' + view.name)}", "", f"🎓 حداقل سطح عضویت: {fa(view.min_level)} (سطح شما: {fa(p.level)})"]
     if view.exit_fine:

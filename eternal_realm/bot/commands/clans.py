@@ -57,7 +57,7 @@ async def clan_invite(ctx: CommandContext) -> None:
     if mine is None:
         raise GameError("شما عضو خاندانی نیستید. اول یکی بسازید: «ساخت خاندان نام».")
     if mine.my_role not in ("leader", "deputy"):
-        raise GameError("دعوت کردن کار رهبر و معاون است.")
+        raise GameError("دعوت کردن کار مالک و قائم‌مقام است.")
     target = await ctx.replied_player()
     if target is None:
         raise GameError("روی پیام کسی که می‌خواهید دعوت کنید ریپلای کنید و «دعوت خاندان» بنویسید.")

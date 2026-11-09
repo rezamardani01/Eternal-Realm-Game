@@ -44,7 +44,7 @@ async def test_create_join_roles_kick(services, db):
     for p in (a, b, c):
         await services.clans.join(p, clan.id)
 
-    assert await services.clans.set_role(leader, a.id, "deputy") == "معاون"
+    assert await services.clans.set_role(leader, a.id, "deputy") == "قائم‌مقام"
     # a deputy cannot make another deputy, but can make an elder
     with pytest.raises(GameError, match="پایین‌تر"):
         await services.clans.set_role(a, b.id, "deputy")
@@ -52,13 +52,13 @@ async def test_create_join_roles_kick(services, db):
     # nobody kicks someone of equal or higher rank
     with pytest.raises(GameError, match="هم‌مقام"):
         await services.clans.kick(a, leader.id)
-    with pytest.raises(GameError, match="کار رهبر و معاون"):
+    with pytest.raises(GameError, match="کار مالک و قائم‌مقام"):
         await services.clans.kick(c, b.id)
     assert await services.clans.kick(a, c.id) == "رها"
     assert await services.clans.of(c.id) is None
 
     # leader cannot just leave; leadership can be transferred
-    with pytest.raises(GameError, match="رهبر"):
+    with pytest.raises(GameError, match="مالک"):
         await services.clans.leave(leader)
     await services.clans.transfer(leader, a.id)
     view = await services.clans.of(a.id)
@@ -103,8 +103,8 @@ async def test_glass_flow_in_group(h, services, db):
     await h.click(1, h.button_data("اعضا"), group=True)
     assert "آرش" in "".join(h.labels())
     await h.click(1, h.button_data("آرش"), group=True)
-    assert any("مقام معاون" in label for label in h.labels())
-    await h.click(1, h.button_data("مقام معاون"), group=True)
+    assert any("مقام قائم‌مقام" in label for label in h.labels())
+    await h.click(1, h.button_data("مقام قائم‌مقام"), group=True)
     assert (await services.clans.of(2)).my_role == "deputy"
     await h.click(1, h.button_data("اخراج"), group=True)
     await h.click(1, h.button_data("بله"), group=True)

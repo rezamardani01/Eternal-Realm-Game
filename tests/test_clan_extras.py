@@ -50,7 +50,7 @@ async def test_minimum_level_and_the_plus_minus_buttons(h, services, db):
     await h.panel(1, "clanlvl", "dn")  # never below 1
     assert (await services.clans.get(clan.id)).min_level == 1
     await services.clans.join(newbie, clan.id)
-    with pytest.raises(GameError, match="رهبر"):
+    with pytest.raises(GameError, match="مالک"):
         await services.clans.set_min_level(newbie, 5)
 
 
@@ -88,7 +88,7 @@ async def test_the_clan_picture_costs_gold_every_time(services, db):
     await services.clans.join(other, clan.id)
     price = services.ctx.balance.clan_photo_gold
     gold = (await services.players.require(1)).gold
-    with pytest.raises(GameError, match="رهبر"):
+    with pytest.raises(GameError, match="مالک"):
         await services.clans.set_photo(other, "F0")
     await services.clans.set_photo(leader, "F1")
     await services.clans.set_photo(leader, "F2")
