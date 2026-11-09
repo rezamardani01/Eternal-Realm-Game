@@ -27,6 +27,7 @@ from ..game.services.inventory import InventoryService
 from ..game.services.invites import InviteService
 from ..game.services.market import MarketService
 from ..game.services.achievements import AchievementService
+from ..game.services.exchange import ExchangeService
 from ..game.services.missions import MissionService
 from ..game.services.team_battles import TeamBattleService
 from ..game.services.membership import MembershipService
@@ -68,6 +69,7 @@ class Services:
     offers: OfferService
     missions: MissionService
     achievements: AchievementService
+    exchange: ExchangeService
     teams: TeamBattleService
     gdungeon: GroupDungeonService
     contests: ContestService
@@ -117,6 +119,7 @@ class Services:
             offers=offers,
             missions=MissionService(ctx, offers),
             achievements=AchievementService(ctx, inventory),
+            exchange=ExchangeService(ctx),
             teams=TeamBattleService(ctx, players, characters),
             gdungeon=GroupDungeonService(ctx, players, characters, inventory),
             contests=ContestService(ctx),

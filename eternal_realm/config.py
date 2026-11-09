@@ -48,6 +48,10 @@ class Balance:
     event_interval_seconds: int = 7200
     event_min_active: int = 2
     clan_create_gold: int = 1000
+    #: exchange centre: gold per crystal before the fee, the fee in percent, crystals one hero may buy per day
+    exchange_rate: int = 600
+    exchange_fee_percent: int = 10
+    exchange_daily_buy_limit: int = 100
     clan_photo_gold: int = 3000
     clan_fine_max: int = 50_000
     clan_min_level_max: int = 100

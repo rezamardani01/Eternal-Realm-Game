@@ -572,6 +572,19 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (battle_id, player_id)
     );
     """,
+    # 41: the exchange centre's trades (and the fees the bot kept)
+    """
+    CREATE TABLE exchange_log (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        direction TEXT    NOT NULL,
+        crystals  INTEGER NOT NULL,
+        gold      INTEGER NOT NULL,
+        fee       INTEGER NOT NULL,
+        at        INTEGER NOT NULL
+    );
+    CREATE INDEX idx_exchange_player ON exchange_log (player_id, direction, at);
+    """,
 ]
 
 
