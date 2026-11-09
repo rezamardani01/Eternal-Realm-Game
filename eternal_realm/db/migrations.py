@@ -564,6 +564,14 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (player_id, day, offer)
     );
     """,
+    # 40: heroes the creator threw out of a team battle
+    """
+    CREATE TABLE team_battle_bans (
+        battle_id INTEGER NOT NULL REFERENCES team_battles (id),
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        PRIMARY KEY (battle_id, player_id)
+    );
+    """,
 ]
 
 

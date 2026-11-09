@@ -120,13 +120,27 @@ class TeamBattleService:
         if team not in (0, 1) or not 0 <= seat < SEATS:
             raise GameError("این جایگاه وجود ندارد.")
         async with self.ctx.db.transaction() as tx:
-            row = await tx.fetchone("SELECT status, expires_at FROM team_battles WHERE id = ?", (battle_id,))
+            row = await tx.fetchone("SELECT status, expires_at, creator_id FROM team_battles WHERE id = ?", (battle_id,))
             if row is None or row["status"] != "lobby" or row["expires_at"] <= now:
                 raise GameError("ثبت‌نام این مبارزه بسته شده است.")
+            creator_id = row["creator_id"]
+            if await tx.scalar(
+                "SELECT 1 FROM team_battle_bans WHERE battle_id = ? AND player_id = ?", (battle_id, player.id), 0
+            ):
+                raise GameError("سازنده‌ی مبارزه شما را از این مبارزه بیرون کرده است؛ نمی‌توانید جایگاهی بگیرید.")
             holder = await tx.scalar(
                 "SELECT player_id FROM team_battle_members WHERE battle_id = ? AND team = ? AND seat = ?",
                 (battle_id, team, seat), None,
             )
+            if holder is not None and holder != player.id and player.id == creator_id:
+                await tx.execute(
+                    "DELETE FROM team_battle_members WHERE battle_id = ? AND player_id = ?", (battle_id, holder)
+                )
+                await tx.execute(
+                    "INSERT OR IGNORE INTO team_battle_bans (battle_id, player_id) VALUES (?, ?)", (battle_id, holder)
+                )
+                gone = await player_repo.get(tx, holder)
+                return await self._load(tx, battle_id), f"{gone.name if gone else 'او'} از مبارزه بیرون انداخته شد."
             if holder == player.id:
                 await tx.execute(
                     "DELETE FROM team_battle_members WHERE battle_id = ? AND player_id = ?", (battle_id, player.id)
@@ -157,8 +171,8 @@ class TeamBattleService:
         now = self.ctx.now()
         async with self.ctx.db.transaction() as tx:
             lobby = await self._load(tx, battle_id)
-            if by.id != lobby.creator_id and not self.players.is_owner(by):
-                raise GameError("فقط سازنده‌ی مبارزه می‌تواند آن را لغو کند.")
+            if by.id != lobby.creator_id:
+                raise GameError("فقط سازنده‌ی همین مبارزه می‌تواند آن را لغو کند.")
             await tx.execute(
                 "UPDATE team_battles SET status = 'cancelled', updated_at = ? WHERE id = ? AND status IN ('lobby', 'active')",
                 (now, battle_id),
@@ -172,8 +186,8 @@ class TeamBattleService:
         b, now = self.ctx.balance, self.ctx.now()
         async with self.ctx.db.transaction() as tx:
             lobby = await self._load(tx, battle_id)
-            if by.id != lobby.creator_id and not self.players.is_owner(by):
-                raise GameError("فقط سازنده‌ی مبارزه می‌تواند آن را شروع کند.")
+            if by.id != lobby.creator_id:
+                raise GameError("فقط سازنده‌ی همین مبارزه می‌تواند آن را شروع کند.")
             if lobby.status != "lobby" or lobby.expires_at <= now:
                 raise GameError("ثبت‌نام این مبارزه بسته شده است.")
             if not any(t == 0 for t, _, _ in lobby.members) or not any(t == 1 for t, _, _ in lobby.members):
@@ -197,7 +211,7 @@ class TeamBattleService:
                 raise GameError("این مبارزه دیگر در حال ثبت‌نام نیست.")
             lobby.status, lobby.battle = "active", battle
         first = "اول" if battle.first_team == 0 else "دوم"
-        return TeamUpdate(lobby, battle, [f"⚔️ شیپور نبرد نواخته شد! تیم {first} چابک‌تر است و آغاز می‌کند."])
+        return TeamUpdate(lobby, battle, [f"⚔️ شیپور نبرد نواخته شد! قرعه به نام تیم {first} افتاد و او آغاز می‌کند."])
 
     # --- play ---------------------------------------------------------------------------------
     async def act(self, battle_id: int, by: Player, action: Action) -> TeamUpdate:

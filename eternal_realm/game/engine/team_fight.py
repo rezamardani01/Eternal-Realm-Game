@@ -62,14 +62,8 @@ class TeamBattle:
 
     @classmethod
     def start(cls, fighters: list[Fighter], teams: list[int], rng: random.Random) -> TeamBattle:
-        """The team with the quicker members (on average) opens; a tie is a coin flip."""
-
-        def speed(team: int) -> float:
-            speeds = [f.speed for f, t in zip(fighters, teams, strict=True) if t == team]
-            return sum(speeds) / len(speeds)
-
-        a, b = speed(0), speed(1)
-        first = 0 if a > b else 1 if b > a else rng.randint(0, 1)
+        """Which team opens is drawn by lot."""
+        first = rng.randint(0, 1)
         battle = cls(fighters, teams, first_team=first)
         battle.actor = battle.members(first)[0]
         return battle

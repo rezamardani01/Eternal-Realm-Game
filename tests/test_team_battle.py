@@ -173,3 +173,34 @@ async def test_the_creator_can_cancel_even_mid_fight(services):
     with pytest.raises(GameError):
         await services.teams.act(lobby.id, a, Action.ATTACK)
     await services.teams.create(-500, b)  # everyone is free again
+
+
+async def test_the_creator_throws_a_hero_out_for_good(services):
+    a, b, c = await heroes(services, 3)
+    lobby = await services.teams.create(-500, a)
+    await services.teams.sit(lobby.id, b, 1, 0)
+    with pytest.raises(GameError):  # another hero cannot take someone's seat
+        await services.teams.sit(lobby.id, c, 1, 0)
+    lobby, note = await services.teams.sit(lobby.id, a, 1, 0)  # the creator taps b's name
+    assert "بیرون" in note and lobby.seat_of(b.id) is None
+    for team, seat in ((1, 0), (0, 1)):
+        with pytest.raises(GameError, match="بیرون کرده"):
+            await services.teams.sit(lobby.id, b, team, seat)
+    await services.teams.sit(lobby.id, c, 1, 0)
+    with pytest.raises(GameError, match="سازنده"):
+        await services.teams.start(lobby.id, c)
+    with pytest.raises(GameError, match="سازنده"):
+        await services.teams.cancel(lobby.id, c)
+
+
+async def test_the_opening_team_is_drawn_by_lot(services):
+    a, b = await heroes(services, 2)
+    firsts = set()
+    for _ in range(30):
+        lobby = await services.teams.create(-500, a)
+        await services.teams.sit(lobby.id, b, 1, 0)
+        update = await services.teams.start(lobby.id, a)
+        firsts.add(update.battle.first_team)
+        assert "قرعه" in update.lines[0]
+        await services.teams.cancel(lobby.id, a)
+    assert firsts == {0, 1}
