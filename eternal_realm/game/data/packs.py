@@ -33,6 +33,10 @@ class Pack:
     xp: int = 0
     #: spins of the wheel of fortune the pack adds
     spins: int = 0
+    #: resources added to the buyer's city (gold, food, wood, stone, iron)
+    city: dict[str, int] = field(default_factory=dict)
+    #: hours of city shield the pack adds
+    city_shield_hours: int = 0
 
     @property
     def price_toman(self) -> int:
@@ -56,6 +60,7 @@ SECTIONS = {
     "boost": "🚀 بوست دو برابر",
     "xp": "⭐ بسته‌های تجربه",
     "wheel": "🎡 گردونه شانس",
+    "city": "🏰 منابع فرمانروایی",
 }
 
 #: experience packs stop working above this level, and each player may buy this many a week
@@ -116,6 +121,19 @@ PACKS: dict[str, Pack] = {
         Pack("wheel_2", "🎡", "۲ فرصت گردونه شانس", 150_000, spins=2, section="wheel"),
         Pack("wheel_5", "🎡", "۵ فرصت گردونه شانس", 350_000, spins=5, section="wheel"),
         Pack("wheel_10", "🎡", "۱۰ فرصت گردونه شانس", 650_000, spins=10, section="wheel"),
+        Pack("city_res_s", "📦", "بسته‌ی منابع شهر · کوچک", 60_000, section="city",
+             city={"gold": 10_000, "food": 5_000, "wood": 5_000, "stone": 4_000, "iron": 2_000}),
+        Pack("city_res_m", "📦", "بسته‌ی منابع شهر · متوسط", 200_000, section="city",
+             city={"gold": 40_000, "food": 20_000, "wood": 20_000, "stone": 15_000, "iron": 8_000}),
+        Pack("city_res_l", "📦", "بسته‌ی منابع شهر · بزرگ", 600_000, section="city",
+             city={"gold": 150_000, "food": 80_000, "wood": 80_000, "stone": 60_000, "iron": 30_000}),
+        Pack("city_build", "🏗️", "بسته‌ی ساخت‌وساز", 90_000, section="city",
+             city={"gold": 20_000, "wood": 40_000, "stone": 40_000, "iron": 10_000}),
+        Pack("city_army", "⚔️", "بسته‌ی لشکرسازی", 120_000, section="city",
+             city={"gold": 40_000, "food": 30_000, "wood": 10_000, "iron": 20_000}),
+        Pack("city_food", "🌾", "بسته‌ی آذوقه و غله", 40_000, section="city", city={"food": 60_000}),
+        Pack("city_shield_24", "🔰", "سپر دفاعی شهر ۲۴ ساعته", 50_000, section="city", city_shield_hours=24),
+        Pack("city_shield_72", "🔰", "سپر دفاعی شهر ۷۲ ساعته", 120_000, section="city", city_shield_hours=72),
         Pack("lucky_s", "🎲", "بسته شانسی کوچک", 60_000, section="lucky", lucky=True),
         Pack("lucky_m", "🎲", "بسته شانسی متوسط", 200_000, section="lucky", lucky=True),
         Pack("lucky_l", "🎲", "بسته شانسی بزرگ", 600_000, section="lucky", lucky=True),

@@ -675,6 +675,19 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_city_attacks_def ON city_attacks (defender_pid, seen, id);
     CREATE INDEX idx_city_attacks_pair ON city_attacks (attacker_city, defender_city, created_at);
     """,
+    # 44: messages the realm sends on its own (hunger, full storage, finished training, ended shields)
+    """
+    CREATE TABLE city_alerts (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        city_id    INTEGER NOT NULL REFERENCES cities (id),
+        key        TEXT    NOT NULL,
+        text       TEXT    NOT NULL,
+        created_at INTEGER NOT NULL,
+        sent       INTEGER NOT NULL DEFAULT 0,
+        UNIQUE (city_id, key)
+    );
+    CREATE INDEX idx_city_alerts_unsent ON city_alerts (sent, id);
+    """,
 ]
 
 

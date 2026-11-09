@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
+import logging
 
 from baleropy import F, Router
 from baleropy.exceptions import BaleAPIError
@@ -19,6 +21,7 @@ from .panel import Ctx, Screen, _int, screen
 from .services import Services
 
 router = Router(name="city")
+log = logging.getLogger("eternal_realm.city")
 
 
 class CityFlow(StatesGroup):
@@ -362,7 +365,9 @@ async def city_people(c: Ctx) -> Screen:
 @screen("citystock")
 async def city_stock(c: Ctx) -> Screen:
     city = await _city(c)
-    prod, eaten = city.rates()
+    now = c.services.ctx.now()
+    boost = 2.0 if city.boost_until > now else 1.0
+    prod, eaten = city.rates(boost)
     cap = city.storage
     lines = [f"🌾 {bold('منابع و آذوقه')}", "", f"📦 ظرفیت انبار: {fa(cap)} (سکه: {fa(cap * 2)})", ""]
     for r in d.RES:
@@ -374,6 +379,8 @@ async def city_stock(c: Ctx) -> Screen:
         "",
         f"🍞 مصرف غذا: {fa(round(eaten))} در ساعت (مردم و سربازان)",
     ]
+    if boost > 1:
+        lines.append(f"🚀 بوست دو برابر فعال است؛ تولید شهر دو برابر می‌شود ({duration(city.boost_until - now)} مانده)")
     net_food = prod["food"] - eaten
     if net_food < 0:
         lines.append(f"⏳ غذا تا {duration(int(city.res['food'] / -net_food * 3600))} دیگر تمام می‌شود")
@@ -704,17 +711,29 @@ async def city_go(c: Ctx) -> Screen:
     text = _result_text(result, c.services.ctx.now())
     if result.defender_uid and c.message is not None:
         with contextlib.suppress(BaleAPIError):
-            note = (
-                f"⚠️ {bold('شهر شما مورد حمله قرار گرفت!')}\n\n"
-                f"لشکر {result.attacker_name} به شهر {result.defender_city} تاخت.\n"
-                f"{_stars(result.stars)}\n\n📜 گزارش را از «فرمانروایی ← گزارش جنگ‌ها» ببینید."
+            await c.message.bot.send_message(
+                result.defender_uid, _attacked_text(result),
+                buttons=[[keyboards.panel_button("📜 دیدن گزارش و انتقام", "cityrep", result.defender_uid, str(result.attack_id))]],
             )
-            await c.message.bot.send_message(result.defender_uid, note)
     rows = [
         [c.btn("🔍 حریف تازه", "citysearch", style="danger"), c.btn("📜 گزارش‌ها", "cityreports")],
         c.back("city"),
     ]
     return Screen(text, rows)
+
+
+def _attacked_text(r) -> str:  # noqa: ANN001 - AttackResult
+    lines = [
+        f"⚠️ {bold('شهر شما مورد حمله قرار گرفت!')}", "",
+        f"🗡️ لشکر {r.attacker_name} به شهر {r.defender_city} تاخت.",
+        _stars(r.stars),
+        f"📊 میزان تخریب: {fa(round(r.destruction * 100))}٪",
+    ]
+    taken = [_res_line(k, v) for k, v in r.loot.items() if v]
+    if taken:
+        lines += ["", bold("منابع ازدست‌رفته"), *taken]
+    lines += ["", f"🔰 سپر دفاعی تازه: {duration(r.shield)}" if r.shield else "⚠️ این حمله سپر دفاعی به شما نداد"]
+    return "\n".join(lines)
 
 
 def _result_text(r, now: int) -> str:  # noqa: ANN001 - AttackResult
@@ -822,3 +841,20 @@ async def city_map(c: Ctx) -> Screen:
     rows = [[c.btn("🗡️ حمله به شهرها", "cityatk", style="danger")], c.back("city")]
     return Screen("\n".join(lines), rows)
 
+
+
+# --- the realm talks to its ruler on its own -------------------------------------------------------------------------------
+async def processor(bot, services: Services, interval: float = 120.0) -> None:  # noqa: ANN001
+    """Every couple of minutes: send the hunger, full-storage, finished-training and ended-shield messages that are due."""
+    while True:
+        try:
+            for alert in await services.city.collect_alerts():
+                with contextlib.suppress(BaleAPIError):
+                    await bot.send_message(
+                        alert.uid, alert.text, buttons=[[keyboards.panel_button("🏰 رفتن به فرمانروایی", "city", alert.uid)]]
+                    )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("city alerts failed")
+        await asyncio.sleep(interval)

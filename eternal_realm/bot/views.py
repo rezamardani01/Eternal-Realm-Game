@@ -571,6 +571,13 @@ def pack_description(pack, now: int | None = None) -> str:  # noqa: ANN001 - Pac
             f"شامل: {fa(tier.guaranteed_gold)} سکه‌ی تضمینی + {fa(tier.rolls)} جایزه‌ی تصادفی "
             f"از تم «{theme.name}»"
         )
+    if pack.city or pack.city_shield_hours:
+        from ..game.data.city import RES, RES_INFO
+
+        parts = [f"{RES_INFO[r][1]} {fa(pack.city[r])}" for r in RES if pack.city.get(r)]
+        if pack.city_shield_hours:
+            parts.append(f"سپر دفاعی {fa(pack.city_shield_hours)} ساعته")
+        return "شامل (مستقیم به شهر فرمانروایی شما می‌رسد): " + "، ".join(parts)
     if pack.spins:
         return f"شامل: {fa(pack.spins)} فرصت چرخش گردونه شانس با جایزه‌های ارزشمند"
     parts = []
@@ -622,7 +629,7 @@ def delivery(order, granted: str = "") -> str:  # noqa: ANN001 - Order
 SECTION_NAMES = {
     "coins": "بسته‌ی سکه", "crystals": "بسته‌ی کریستال", "bundles": "بسته‌ی ویژه",
     "materials": "منابع", "lucky": "بسته‌ی شانسی روزانه", "deal": "تخفیف روز", "boost": "بوست دو برابر",
-    "xp": "بسته‌ی تجربه", "wheel": "گردونه شانس",
+    "xp": "بسته‌ی تجربه", "wheel": "گردونه شانس", "city": "منابع فرمانروایی",
 }
 
 

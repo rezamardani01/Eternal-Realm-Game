@@ -70,6 +70,7 @@ async def run(settings: Settings) -> None:
             asyncio.create_task(events.processor(bot, services), name="event-processor"),
             asyncio.create_task(offers.processor(bot, services), name="offer-processor"),
             asyncio.create_task(path_panel.processor(bot, services), name="path-notifier"),
+            asyncio.create_task(city_panel.processor(bot, services), name="city-alerts"),
         ]
         try:
             await dp.start_polling(bot, skip_updates=True)

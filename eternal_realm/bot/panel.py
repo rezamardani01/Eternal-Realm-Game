@@ -1046,6 +1046,7 @@ PREMIUM_SECTIONS = {
     "path": ("🎟️", "بلیط مسیر قهرمانی", "جایزه‌های ویژه‌ی ۱۰۰ مرحله‌ی این فصل را باز می‌کند. کاملاً اختیاری است؛ جایزه‌های رایگان برای همه هست."),
     "pets": ("🐱", "حیوان خانگی", "یار وفاداری که در نبردها کنارتان می‌ماند و قدرتتان را بیشتر می‌کند."),
     "boost": ("🚀", "بوست دو برابر", "تا پایان بوست، دریافتی‌هایتان دو برابر می‌شود."),
+    "city": ("🏰", "منابع فرمانروایی", "سکه، غذا، چوب، سنگ و آهن برای شهرتان؛ مستقیم به انبار شهر می‌رسد و ساخت‌وساز، ارتقا و لشکرسازی را سریع‌تر می‌کند."),
     "xp": ("⭐", "بسته‌های تجربه", "سریع‌تر سطح بالا بروید و زودتر به آیتم‌ها و مرحله‌های تازه برسید."),
 }
 BUY_HINT = "👇 یک بسته را بزنید؛ فاکتور پرداخت بله برایتان می‌آید"
@@ -1077,7 +1078,7 @@ async def premium(c: Ctx) -> Screen:
         [c.btn("⛓️ خرید منابع", "prem", "materials"), c.btn("🐱 حیوان خانگی", "prem", "pets")],
         [c.btn("🎫 خدمات قهرمان", "prem", "services"), c.btn("🎟️ مسیر قهرمانی", "prem", "path")],
         [c.btn("🚀 بوست دو برابر", "prem", "boost", style="primary"), c.btn("⭐ بسته‌های تجربه", "prem", "xp", style="primary")],
-        [c.btn("💠 اشتراک VIP", "vip")],
+        [c.btn("💠 اشتراک VIP", "vip"), c.btn("🏰 منابع فرمانروایی", "prem", "city")],
         [c.btn("🏷️ تخفیف‌های امروز", "deals", style="success")],
         c.back("home"),
     ]
@@ -1226,7 +1227,7 @@ async def premium_section(c: Ctx) -> Screen:
         lines.append("🔒 خرید با پول واقعی فعلاً بسته است؛ با بازی کردن هم می‌توانید به این‌ها برسید!")
     else:
         for pack in (x for x in PACKS.values() if x.section == c.a and not x.lucky):
-            if c.a == "bundles":  # bundles hide their contents in the button, so say them here
+            if c.a in ("bundles", "city"):  # these hide their contents in the button, so say them here
                 lines += [f"{pack.emoji} {bold(pack.title)} · {fa(pack.price_toman)} تومان", f"🎁 {views.pack_description(pack, c.services.ctx.now()).removeprefix('شامل: ')}", ""]
             rows.append([Button.inline(f"{pack.label} — {fa(pack.price_toman)} تومان", BuyCb(kind="cash", id=pack.id), style="success")])
         if c.a == "bundles":

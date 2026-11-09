@@ -56,6 +56,8 @@ class City:
     owner_name: str = ""
     owner_uid: int = 0
     clan: str = ""
+    #: when the owner's bought 2x boost ends (it doubles what the city produces)
+    boost_until: int = 0
 
     # --- derived numbers -------------------------------------------------------------------
     @property
@@ -128,9 +130,9 @@ class City:
     def amount(self, res: str) -> int:
         return int(self.res[res])
 
-    def rates(self) -> tuple[dict[str, float], float]:
-        """Per-hour production of each resource and the food eaten per hour."""
-        mult = 0.5 if self.happiness < 30 else 1.0
+    def rates(self, boost: float = 1.0) -> tuple[dict[str, float], float]:
+        """Per-hour production of each resource and the food eaten per hour (``boost`` doubles production)."""
+        mult = (0.5 if self.happiness < 30 else 1.0) * boost
         prod = {r: 0.0 for r in d.RES}
         for b, lv in self.levels.items():
             if b in d.PRODUCTION:
@@ -145,8 +147,9 @@ class City:
 
 
 @dataclass
-class Found:
-    city: City
+class Alert:
+    uid: int
+    text: str
 
 
 @dataclass
@@ -208,9 +211,11 @@ class CityService:
             Batch(r["id"], r["kind"], r["qty"], r["ready_at"])
             for r in await tx.fetchall("SELECT * FROM city_training WHERE city_id = ? ORDER BY ready_at", (cid,))
         ]
-        owner = await tx.fetchone("SELECT display_name, platform_user_id FROM players WHERE id = ?", (city.player_id,))
+        owner = await tx.fetchone(
+            "SELECT display_name, platform_user_id, boost_until FROM players WHERE id = ?", (city.player_id,)
+        )
         if owner:
-            city.owner_name, city.owner_uid = owner["display_name"], owner["platform_user_id"]
+            city.owner_name, city.owner_uid, city.boost_until = owner["display_name"], owner["platform_user_id"], owner["boost_until"]
         clan = await tx.fetchone(
             "SELECT c.name FROM clan_members m JOIN clans c ON c.id = m.clan_id WHERE m.player_id = ?", (city.player_id,)
         )
@@ -244,24 +249,33 @@ class CityService:
             )
             await tx.execute("DELETE FROM city_training WHERE id = ?", (batch.id,))
             c.training.remove(batch)
+            troop = d.get_troop(batch.kind)
+            await self._alert(
+                tx, c.id, f"train:{batch.id}", now,
+                f"{troop.emoji} {fa(batch.qty)} {troop.name} آموزششان را تمام کردند و آماده‌ی نبردند!",
+            )
         hours = min(max(0, now - c.last_tick), d.MAX_ELAPSED_HOURS * 3600) / 3600
         if hours > 0:
             cap = c.storage
+            clock = now - hours * 3600
             while hours > 1e-9:
                 dt = min(1.0, hours)
                 hours -= dt
-                prod, eaten = c.rates()
+                boosted = max(0.0, min(dt * 3600, c.boost_until - clock))  # seconds of this step under the 2x boost
+                prod, eaten = c.rates(1 + boosted / (dt * 3600))
+                clock += dt * 3600
                 starving = False
+                before = dict(c.res)
                 c.res["food"] += prod["food"] * dt - eaten * dt
                 if c.res["food"] < 0:
                     c.res["food"], starving = 0.0, True
                 for r in d.RES:
                     if r != "food":
                         c.res[r] += prod[r] * dt
-                for r in d.RES:
+                for r in d.RES:  # production stops at the storage limit, but bought or looted stock above it is kept
                     limit = cap * 2 if r == "gold" else cap
                     if c.res[r] > limit:
-                        c.res[r] = float(limit)
+                        c.res[r] = float(max(limit, before[r]))
                 if starving:
                     c.happiness = max(0.0, c.happiness - 6 * dt)
                     if c.happiness <= 0:
@@ -274,6 +288,62 @@ class CityService:
         if owner_visit:
             c.last_active = now
         await self._save(tx, c)
+
+    async def _alert(self, tx: Tx, city_id: int, key: str, now: int, text: str) -> None:
+        await tx.execute(
+            "INSERT OR IGNORE INTO city_alerts (city_id, key, text, created_at, sent) VALUES (?, ?, ?, ?, 0)",
+            (city_id, key, text, now),
+        )
+
+    async def collect_alerts(self) -> list[Alert]:
+        """Look over every recently active city and hand back the messages that are due (each is sent once)."""
+        now = self.ctx.now()
+        out: list[Alert] = []
+        async with self.ctx.db.transaction() as tx:
+            ids = [r["id"] for r in await tx.fetchall("SELECT id FROM cities WHERE last_active > ?", (now - 14 * DAY,))]
+            for cid in ids:
+                c = await self._by_id(tx, cid)
+                if c is None:
+                    continue
+                await self._tick(tx, c, now)
+                bucket = now // (12 * 3600)
+                prod, eaten = c.rates()
+                net = prod["food"] - eaten
+                if c.res["food"] <= 0 or c.happiness < 30:
+                    await self._alert(
+                        tx, c.id, f"hunger:{bucket}", now,
+                        f"🍞 {c.name} گرسنه است!\n\nانبار غذا خالی شده و رضایت مردم به {fa(round(c.happiness))}٪ رسیده؛ "
+                        "اگر چاره‌ای نکنید تولید نصف می‌شود و شورش در راه است. مزرعه را ارتقا دهید یا بسته‌ی آذوقه بخرید.",
+                    )
+                elif net < 0 and c.res["food"] / -net < 3:
+                    await self._alert(
+                        tx, c.id, f"foodlow:{bucket}", now,
+                        f"🌾 غذای {c.name} رو به پایان است!\n\nمصرف مردم و سربازان از تولید بیشتر است و آذوقه تا "
+                        f"{fa(max(1, int(c.res['food'] / -net)))} ساعت دیگر تمام می‌شود.",
+                    )
+                limit = c.storage
+                full = [r for r in d.RES if c.res[r] >= (limit * 2 if r == "gold" else limit) * 0.98]
+                if full:
+                    names = "، ".join(d.RES_INFO[r][1] for r in full)
+                    await self._alert(
+                        tx, c.id, f"full:{bucket}", now,
+                        f"📦 انبار {c.name} پر شد!\n\n{names} به سقف ظرفیت رسیده و تولید بیشتر هدر می‌رود. "
+                        "خرج کنید یا انبار را ارتقا دهید.",
+                    )
+                if 0 < c.shield_until <= now:
+                    await self._alert(
+                        tx, c.id, f"shield:{c.shield_until}", now,
+                        f"🔰 سپر دفاعی {c.name} تمام شد!\n\nاز این لحظه دشمنان می‌توانند به شهر شما بتازند. "
+                        "ارتش و دیوار را بسنجید یا سپر تازه بخرید.",
+                    )
+            rows = await tx.fetchall(
+                "SELECT a.id, a.text, p.platform_user_id AS uid FROM city_alerts a JOIN cities c ON c.id = a.city_id"
+                " JOIN players p ON p.id = c.player_id WHERE a.sent = 0 ORDER BY a.id LIMIT 200"
+            )
+            for r in rows:
+                out.append(Alert(r["uid"], r["text"]))
+                await tx.execute("UPDATE city_alerts SET sent = 1 WHERE id = ?", (r["id"],))
+        return out
 
     async def mine(self, player: Player, *, visit: bool = True) -> City | None:
         """The hero's city, brought up to date (``None`` when they have not founded one)."""

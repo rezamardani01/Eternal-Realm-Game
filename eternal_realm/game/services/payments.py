@@ -85,6 +85,11 @@ class PaymentService:
                 raise GameError("بلیط این فصل را از قبل دارید؛ خرید دوباره لازم نیست و پولی کسر نشد.")
         if pack.xp:
             await self._check_xp_pack(player, pack)
+        if pack.city or pack.city_shield_hours:
+            async with self.ctx.db.read() as tx:
+                have_city = await tx.scalar("SELECT 1 FROM cities WHERE player_id = ?", (player.id,), 0)
+            if not have_city:
+                raise GameError("اول در «فرمانروایی» شهرتان را بنا کنید؛ این بسته مخصوص شهر است و پولی از شما کسر نشد.")
         if pack.pet:
             async with self.ctx.db.read() as tx:
                 have = await tx.fetchone(
@@ -212,6 +217,8 @@ class PaymentService:
             granted = f"⭐ {fa(pack.xp)} تجربه به شما رسید\n" + (
                 f"🎉 از سطح {fa(buyer.level)} به سطح {fa(level)} رسیدید" if gained else "هنوز به سطح بعد نرسیده‌اید؛ ادامه بدهید"
             )
+        if pack.city or pack.city_shield_hours:
+            granted = await self._deliver_city(tx, order.player_id, pack, now)
         if pack.spins:
             await tx.execute("UPDATE players SET wheel_spins = wheel_spins + ? WHERE id = ?", (pack.spins, order.player_id))
             granted = f"🎡 {fa(pack.spins)} فرصت گردونه شانس به شما رسید؛ همین حالا بچرخانید!"
@@ -240,6 +247,29 @@ class PaymentService:
                 )
                 granted = "حیوان از قبل را داشتید؛ ۲۰ کریستال جایگزین شد."
         return granted
+
+    async def _deliver_city(self, tx, player_id: int, pack: Pack, now: int) -> str:  # noqa: ANN001
+        """Resources and shields go straight into the buyer's city (gold goes to the hero if the city is gone)."""
+        from ..data.city import RES, RES_INFO
+
+        city = await tx.fetchone("SELECT id FROM cities WHERE player_id = ?", (player_id,))
+        lines = []
+        if city is None:
+            gold = pack.city.get("gold", 0)
+            if gold:
+                await wallet.apply(tx, player_id, gold=gold, reason=f"order:{pack.id}:no_city", now=now)
+            return "شهری نداشتید؛ سکه‌ی بسته به کیف شما رفت."
+        if pack.city:
+            sets = ", ".join(f"{r} = {r} + ?" for r in RES)
+            await tx.execute(f"UPDATE cities SET {sets} WHERE id = ?", (*[pack.city.get(r, 0) for r in RES], city["id"]))
+            lines = [f"{RES_INFO[r][0]} {RES_INFO[r][1]}: {fa(pack.city[r])}" for r in RES if pack.city.get(r)]
+        if pack.city_shield_hours:
+            await tx.execute(
+                "UPDATE cities SET shield_until = MAX(shield_until, ?) + ? WHERE id = ?",
+                (now, pack.city_shield_hours * 3600, city["id"]),
+            )
+            lines.append(f"🔰 سپر دفاعی {fa(pack.city_shield_hours)} ساعته")
+        return "🏰 به شهر شما رسید:\n" + "\n".join(lines)
 
     async def expire_stale(self) -> int:
         async with self.ctx.db.transaction() as tx:

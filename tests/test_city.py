@@ -320,3 +320,96 @@ async def test_a_raid_through_the_panel_ends_with_a_report(h, services, db, cloc
     report_id = next(b["callback_data"] for b in h.session.last_buttons() if "حمله‌ی" in b["text"])
     await h.click(2, report_id)
     assert "گزارش حمله به شهر" in h.session.last_text() and "انتقام" in " ".join(h.labels())
+
+
+async def buy(services, player, pack_id, uid):
+    order = await services.payments.create_order(player, pack_id)
+    return await services.payments.complete(uid, order.payload, order.amount, f"c-{pack_id}-{order.id}")
+
+
+async def test_paid_city_packs_resources_shields_and_the_storage_limit(services, db, clock):
+    nocity = await hero(services, db, 1, "بی‌شهر")
+    with pytest.raises(GameError, match="شهرتان را بنا کنید"):
+        await services.payments.create_order(nocity, "city_res_m")
+    p, city = await make_city(services, db, 2, "آذرگان")
+    before = await services.city.mine(p)
+    delivery = await buy(services, p, "city_res_l", 2)
+    assert "به شهر شما رسید" in delivery.granted
+    after = await services.city.mine(p)
+    assert after.res["wood"] >= before.res["wood"] + 80_000 - 1 and after.res["gold"] >= before.res["gold"] + 150_000 - 1
+    assert after.res["wood"] > after.storage  # bought stock above the limit...
+    clock.advance(6 * 3600)
+    later = await services.city.mine(p)
+    assert later.res["wood"] >= after.res["wood"]  # ...is never clipped by the next production tick
+    again = await services.payments.complete(2, (await services.payments.history(p))[0].payload, 600_000, "c-city_res_l-1")
+    assert again.duplicate
+    await buy(services, p, "city_shield_72", 2)
+    c = await services.city.mine(p)
+    assert c.shield_until >= services.ctx.now() + 72 * 3600 - 5
+    sold = await services.payments.history(p)
+    assert {o.pack.id for o in sold} >= {"city_res_l", "city_shield_72"}
+
+
+async def test_the_boost_doubles_what_the_city_produces(services, db, clock):
+    a, ca = await make_city(services, db, 1, "آذرگان")
+    b, cb = await make_city(services, db, 2, "شیرکوه")
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET boost_until = ? WHERE id = ?", (services.ctx.now() + 100 * 3600, b.id))
+    wa, wb = (await services.city.mine(a)).res["wood"], (await services.city.mine(b)).res["wood"]
+    clock.advance(4 * 3600)
+    ra, rb = await services.city.mine(a), await services.city.mine(b)
+    assert (rb.res["wood"] - wb) == pytest.approx(2 * (ra.res["wood"] - wa), rel=0.02)
+    # a boost that ends half way counts only for the time it lasted
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET boost_until = ? WHERE id = ?", (services.ctx.now() + 2 * 3600, a.id))
+    base = (await services.city.mine(a)).res["wood"]
+    clock.advance(4 * 3600)
+    got = (await services.city.mine(a)).res["wood"] - base
+    assert got == pytest.approx(40 * 6, rel=0.02)  # two boosted hours (x2) plus two plain ones
+
+
+async def test_the_realm_speaks_up_by_itself(services, db, clock):
+    p, city = await make_city(services, db, 1, "آذرگان")
+    await give(db, city.id, sword=1)
+    await stock(db, city.id, gold=500_000, food=500_000, wood=500_000, iron=500_000)
+    _, batch = await services.city.train(p, "sword", 20)
+    clock.advance(batch.ready_at - services.ctx.now() + 1)
+    first = await services.city.collect_alerts()
+    texts = [a.text for a in first]
+    assert any("آموزششان را تمام کردند" in t for t in texts) and all(a.uid == 1 for a in first)
+    assert await services.city.collect_alerts() == []  # each message goes out once
+    # hunger
+    await stock(db, city.id, food=0)
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE city_buildings SET level = 0 WHERE city_id = ? AND kind = 'farm'", (city.id,))
+    clock.advance(3600)
+    texts = [a.text for a in await services.city.collect_alerts()]
+    assert any("گرسنه است" in t for t in texts)
+    # a full storehouse
+    await stock(db, city.id, wood=9_999_999, food=500_000)
+    clock.advance(13 * 3600)
+    texts = [a.text for a in await services.city.collect_alerts()]
+    assert any("انبار" in t and "پر شد" in t for t in texts)
+    # the starting shield was removed by make_city; a fresh one that runs out is announced
+    await stock(db, city.id, shield_until=services.ctx.now() + 60)
+    clock.advance(120)
+    texts = [a.text for a in await services.city.collect_alerts()]
+    assert any("سپر دفاعی" in t and "تمام شد" in t for t in texts)
+    for text in texts:
+        for line in text.splitlines():
+            assert len(re.findall(EMOJI, line)) <= 1, line
+
+
+async def test_the_victim_gets_a_full_message_about_the_raid(h, services, db):
+    ap, a = await make_city(services, db, 1, "آذرگان")
+    dp, dfn = await make_city(services, db, 2, "شیرکوه")
+    await give(db, a.id, sword=80)
+    await stock(db, a.id, food=10_000)
+    await h.panel(1, "citysearch")
+    await h.panel(1, "cityprep")
+    await h.panel(1, "cityall")
+    h.session.reset()
+    await h.panel(1, "citygo")
+    dm = [p for n, p in h.session.calls if n == "sendMessage" and p.get("chat_id") == 2]
+    assert dm and "مورد حمله قرار گرفت" in dm[-1]["text"] and "میزان تخریب" in dm[-1]["text"]
+    assert any("انتقام" in b["text"] for row in dm[-1]["reply_markup"]["inline_keyboard"] for b in row)
