@@ -86,9 +86,9 @@ async def count(tx: Tx) -> int:
 
 
 async def is_away(tx: Tx, player_id: int, now: int) -> int | None:
-    """Seconds until the hero is back from an expedition (0 once back but the report is not collected); None when not away."""
-    ends = await tx.scalar("SELECT ends_at FROM expeditions WHERE player_id = ?", (player_id,), None)
-    return None if ends is None else max(0, int(ends) - now)
+    """Seconds until the hero is back from an expedition; None when not away (a hero that is back may fight at once, the report can wait)."""
+    ends = await tx.scalar("SELECT ends_at FROM expeditions WHERE player_id = ? AND ends_at > ?", (player_id, now), None)
+    return None if ends is None else int(ends) - now
 
 
 def away_text(left: int, who: str | None = None) -> str:

@@ -684,12 +684,10 @@ async def test_a_hero_away_on_an_expedition_cannot_fight_other_players(h, servic
         await services.teams.sit(lobby.id, a, 1, 0)
     await h.say(1, "مبارزه", group=True, reply_to=h.message_of(2))
     assert "اعزام" in h.session.last_text()
-    clock.advance(4 * 3600 + 1)  # back home, but until the report is collected the hero still counts as away
-    with pytest.raises(GameError, match="گزارش"):
-        await services.duels.challenge(-500, a, b)
-    await services.expeditions.claim(a)
+    clock.advance(4 * 3600 + 1)  # back home: reading the report is not required to fight
     duel = await services.duels.challenge(-500, a, b)
-    assert duel.id  # and a hero with an open duel cannot leave again
+    assert duel.id
+    await services.expeditions.claim(a)  # and a hero with an open duel cannot leave again
     with pytest.raises(GameError, match="مبارزه"):
         await services.expeditions.start(a, "mine", 1)
 
