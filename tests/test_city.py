@@ -108,19 +108,31 @@ async def test_production_eating_storage_and_hunger(services, db, clock):
     assert capped.res["wood"] <= capped.storage
 
 
-async def test_building_rules(services, db):
+async def settle(services, player, clock, hours=6):
+    clock.advance(hours * 3600)
+    return await services.city.mine(player)
+
+
+async def test_building_rules(services, db, clock):
     p, city = await make_city(services, db, 1, "آذرگان")
     await stock(db, city.id, gold=500_000, wood=500_000, stone=500_000, iron=500_000)
     with pytest.raises(GameError, match="قلعه باید به سطح"):
         await services.city.build(p, "siege")
     with pytest.raises(GameError, match="از سطح قلعه"):
         await services.city.build(p, "farm")  # a building may not outgrow the castle
-    c, lv = await services.city.build(p, "castle")
-    assert lv == 2 and c.slots_total == 6
-    _, lv = await services.city.build(p, "farm")
+    c, lv, seconds = await services.city.build(p, "castle")
+    assert lv == 2 and seconds > 0 and c.levels["castle"] == 1  # the work takes time
+    with pytest.raises(GameError, match="مشغول"):
+        await services.city.build(p, "warehouse")  # one construction at a time
+    c = await settle(services, p, clock)
+    assert c.levels["castle"] == 2 and c.slots_total == 6 and not c.builds
+    _, lv, _ = await services.city.build(p, "farm")
     assert lv == 2
+    await settle(services, p, clock)
     await services.city.build(p, "warehouse")
-    c, _ = await services.city.build(p, "market")
+    await settle(services, p, clock)
+    await services.city.build(p, "market")
+    c = await settle(services, p, clock)
     assert c.slots_used == 6
     with pytest.raises(GameError, match="جایگاه"):
         await services.city.build(p, "iron_mine")  # the castle opens a new slot only when it grows
@@ -413,3 +425,88 @@ async def test_the_victim_gets_a_full_message_about_the_raid(h, services, db):
     dm = [p for n, p in h.session.calls if n == "sendMessage" and p.get("chat_id") == 2]
     assert dm and "مورد حمله قرار گرفت" in dm[-1]["text"] and "میزان تخریب" in dm[-1]["text"]
     assert any("انتقام" in b["text"] for row in dm[-1]["reply_markup"]["inline_keyboard"] for b in row)
+
+
+async def test_crystals_finish_construction_and_training_at_once(services, db, clock):
+    p, city = await make_city(services, db, 1, "آذرگان")
+    await stock(db, city.id, gold=500_000, food=50_000, wood=500_000, stone=500_000, iron=500_000)
+    crystals = (await services.players.require(1)).crystal
+    c, lv, seconds = await services.city.build(p, "castle")
+    price = d.rush_crystals(seconds)
+    assert services.city.rush_price(c, services.ctx.now(), "build", c.builds[0].id) == price
+    c, paid = await services.city.rush(p, "build", c.builds[0].id)
+    assert paid == price and c.levels["castle"] == 2 and not c.builds
+    assert (await services.players.require(1)).crystal == crystals - price
+    _, batch = await services.city.train(p, "sword", 60)
+    c = await services.city.mine(p)
+    assert c.troops.get("sword", 0) == 0 and c.training
+    c, paid = await services.city.rush(p, "train", batch.id)
+    assert c.troops["sword"] == 60 and not c.training and paid >= 1
+    with pytest.raises(GameError, match="کاری در صف نیست"):
+        await services.city.rush(p, "all")
+    # everything at once
+    await services.city.build(p, "farm")
+    await services.city.train(p, "sword", 20)
+    c = await services.city.mine(p)
+    total = services.city.rush_price(c, services.ctx.now())
+    before = (await services.players.require(1)).crystal
+    c, paid = await services.city.rush(p, "all")
+    assert paid == total and (await services.players.require(1)).crystal == before - total
+    assert c.levels["farm"] == 2 and c.troops["sword"] == 80
+    # too few crystals
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET crystal = 0 WHERE id = ?", (p.id,))
+    await services.city.build(p, "warehouse")
+    with pytest.raises(GameError, match="کریستال"):
+        await services.city.rush(p, "all")
+    assert (await services.city.mine(p)).builds  # nothing was finished for free
+
+
+async def test_queue_settings_and_the_new_buttons(h, services, db, clock):
+    p, city = await make_city(services, db, 7, "آذرگان")
+    await stock(db, city.id, gold=500_000, food=50_000, wood=500_000, stone=500_000, iron=500_000)
+    await h.panel(7, "citybv", "castle")
+    assert "مدت ساخت" in h.session.last_text()
+    await h.panel(7, "citybok", "castle")
+    await h.panel(7, "citybv", "castle")
+    assert "در حال ارتقا" in h.session.last_text() and any("تکمیل فوری" in x for x in h.labels())
+    await h.panel(7, "city")
+    assert "دقیقه مانده" in h.session.last_text() and any("صف کارها (۱)" in x for x in h.labels())
+    assert {"⚙️ تنظیمات شهر", "🛒 خرید منابع از خزانه"} <= set(h.labels())
+    await h.panel(7, "cityqueue")
+    assert "صف کارها" in h.session.last_text() and any("تکمیل همه" in x for x in h.labels())
+    await h.panel(7, "cityrushq", "all", "0")
+    assert "تأیید تکمیل فوری" in h.session.last_text()
+    await h.panel(7, "cityrushok", "all", "0")
+    assert (await services.city.mine(p)).levels["castle"] == 2
+    await h.panel(7, "citytr", "sword")
+    assert any("بیشترین توان" in x for x in h.labels())
+    best = next(b for b in h.session.last_buttons() if "بیشترین توان" in b["text"])
+    await h.click(7, best["callback_data"])
+    assert "تأیید تربیت" in h.session.last_text()
+    await h.panel(7, "citycfg")
+    assert "پیام‌های خودکار: روشن" in h.session.last_text()
+    await h.panel(7, "citycfgal", "0")
+    assert "پیام‌های خودکار: خاموش" in h.session.last_text()
+    await h.panel(7, "citycfgflag")
+    await h.panel(7, "citycfgflagset", "3")
+    assert (await services.city.mine(p)).flag == d.FLAGS[3][0]
+    for screen_name in ("city", "citybuild", "cityqueue", "citycfg", "citycfgflag"):
+        await h.panel(7, screen_name)
+        for line in h.session.last_text().splitlines():
+            assert len(re.findall(EMOJI, line)) <= 1, (screen_name, line)
+
+
+async def test_finished_work_is_announced_unless_the_city_is_muted(services, db, clock):
+    p, city = await make_city(services, db, 1, "آذرگان")
+    await stock(db, city.id, gold=500_000, wood=500_000, stone=500_000, iron=500_000)
+    await services.city.build(p, "castle")
+    clock.advance(6 * 3600)
+    texts = [a.text for a in await services.city.collect_alerts()]
+    assert any("قلعه مرکزی به سطح ۲ رسید" in t for t in texts)
+    await services.city.set_alerts(p, False)
+    await services.city.build(p, "farm")
+    clock.advance(6 * 3600)
+    assert await services.city.collect_alerts() == []  # muted: nothing is sent...
+    await services.city.set_alerts(p, True)
+    assert await services.city.collect_alerts() == []  # ...and the old news is not replayed later

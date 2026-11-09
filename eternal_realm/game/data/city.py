@@ -92,6 +92,20 @@ def build_cost(building: Building, current_level: int) -> dict[str, int]:
     return {"gold": round(g * factor), "wood": round(w * factor), "stone": round(s * factor), "iron": round(i * factor)}
 
 
+#: crystals buy time: one crystal rushes this many seconds of construction or training
+RUSH_SECONDS_PER_CRYSTAL = 600
+
+
+def build_seconds(building: Building, current_level: int) -> int:
+    """How long the next level takes to raise (the castle takes twice as long)."""
+    seconds = 120 * (current_level + 1) ** 1.6 * (2 if building.id == "castle" else 1)
+    return round(seconds)
+
+
+def rush_crystals(seconds_left: int) -> int:
+    return max(1, -(-max(0, seconds_left) // RUSH_SECONDS_PER_CRYSTAL))
+
+
 def slots_for(castle_level: int) -> int:
     return 5 + (castle_level - 1)
 

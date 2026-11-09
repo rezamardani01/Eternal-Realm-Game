@@ -688,6 +688,18 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_city_alerts_unsent ON city_alerts (sent, id);
     """,
+    # 45: timed construction (rushed with crystals) and the alert switch
+    """
+    ALTER TABLE cities ADD COLUMN alerts INTEGER NOT NULL DEFAULT 1;
+    CREATE TABLE city_builds (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        city_id  INTEGER NOT NULL REFERENCES cities (id),
+        kind     TEXT    NOT NULL,
+        level    INTEGER NOT NULL,
+        ready_at INTEGER NOT NULL
+    );
+    CREATE INDEX idx_city_builds_city ON city_builds (city_id, ready_at);
+    """,
 ]
 
 

@@ -34,6 +34,14 @@ class Batch:
 
 
 @dataclass
+class Build:
+    id: int
+    kind: str
+    level: int
+    ready_at: int
+
+
+@dataclass
 class City:
     id: int
     player_id: int
@@ -58,6 +66,9 @@ class City:
     clan: str = ""
     #: when the owner's bought 2x boost ends (it doubles what the city produces)
     boost_until: int = 0
+    builds: list[Build] = field(default_factory=list)
+    #: the automatic messages (hunger, full storage...) are switched on
+    alerts: bool = True
 
     # --- derived numbers -------------------------------------------------------------------
     @property
@@ -70,7 +81,8 @@ class City:
 
     @property
     def slots_used(self) -> int:
-        return sum(1 for b, lv in self.levels.items() if b != "castle" and lv > 0)
+        planned = {b.kind for b in self.builds if self.levels.get(b.kind, 0) == 0}
+        return sum(1 for b, lv in self.levels.items() if b != "castle" and lv > 0) + len(planned - {"castle"})
 
     @property
     def pop_cap(self) -> int:
@@ -211,6 +223,11 @@ class CityService:
             Batch(r["id"], r["kind"], r["qty"], r["ready_at"])
             for r in await tx.fetchall("SELECT * FROM city_training WHERE city_id = ? ORDER BY ready_at", (cid,))
         ]
+        city.builds = [
+            Build(r["id"], r["kind"], r["level"], r["ready_at"])
+            for r in await tx.fetchall("SELECT * FROM city_builds WHERE city_id = ? ORDER BY ready_at", (cid,))
+        ]
+        city.alerts = bool(row["alerts"])
         owner = await tx.fetchone(
             "SELECT display_name, platform_user_id, boost_until FROM players WHERE id = ?", (city.player_id,)
         )
@@ -239,7 +256,21 @@ class CityService:
         )
 
     async def _tick(self, tx: Tx, c: City, now: int, *, owner_visit: bool = False) -> None:
-        """Bring the city up to date: finished training, production, eating, growth and mood."""
+        """Bring the city up to date: finished work, production, eating, growth and mood."""
+        for work in [w for w in c.builds if w.ready_at <= now]:
+            building = d.get_building(work.kind)
+            await tx.execute(
+                "INSERT INTO city_buildings (city_id, kind, level) VALUES (?, ?, ?)"
+                " ON CONFLICT (city_id, kind) DO UPDATE SET level = excluded.level",
+                (c.id, work.kind, work.level),
+            )
+            c.levels[work.kind] = work.level
+            await tx.execute("DELETE FROM city_builds WHERE id = ?", (work.id,))
+            c.builds.remove(work)
+            await self._alert(
+                tx, c.id, f"build:{work.id}", now,
+                f"{building.emoji} {building.name} به سطح {fa(work.level)} رسید!\n\nسازندگان کارشان را تمام کردند و ساختمان آماده‌ی بهره‌برداری است.",
+            )
         for batch in [b for b in c.training if b.ready_at <= now]:
             c.troops[batch.kind] = c.troops.get(batch.kind, 0) + batch.qty
             await tx.execute(
@@ -337,11 +368,13 @@ class CityService:
                         "ارتش و دیوار را بسنجید یا سپر تازه بخرید.",
                     )
             rows = await tx.fetchall(
-                "SELECT a.id, a.text, p.platform_user_id AS uid FROM city_alerts a JOIN cities c ON c.id = a.city_id"
-                " JOIN players p ON p.id = c.player_id WHERE a.sent = 0 ORDER BY a.id LIMIT 200"
+                "SELECT a.id, a.text, c.alerts AS on_, p.platform_user_id AS uid FROM city_alerts a"
+                " JOIN cities c ON c.id = a.city_id JOIN players p ON p.id = c.player_id"
+                " WHERE a.sent = 0 ORDER BY a.id LIMIT 200"
             )
             for r in rows:
-                out.append(Alert(r["uid"], r["text"]))
+                if r["on_"]:  # a muted city still has its queue emptied, it just hears nothing
+                    out.append(Alert(r["uid"], r["text"]))
                 await tx.execute("UPDATE city_alerts SET sent = 1 WHERE id = ?", (r["id"],))
         return out
 
@@ -411,8 +444,8 @@ class CityService:
         for r, v in cost.items():
             city.res[r] -= v
 
-    async def build(self, player: Player, kind: str) -> tuple[City, int]:
-        """Raise a building one level (or build it). Returns the city and the new level."""
+    async def build(self, player: Player, kind: str) -> tuple[City, int, int]:
+        """Start raising a building one level. Returns the city, the level it will reach and the seconds it takes."""
         try:
             b = d.get_building(kind)
         except KeyError:
@@ -421,6 +454,9 @@ class CityService:
         async with self.ctx.db.transaction() as tx:
             city = await self._need(tx, player, now)
             level = city.levels.get(kind, 0)
+            if city.builds:
+                busy = d.get_building(city.builds[0].kind)
+                raise GameError(f"سازندگان مشغول {busy.name} هستند؛ صبر کنید یا با کریستال کار را تمام کنید.")
             if level >= b.max_level:
                 raise GameError(f"{b.name} به بالاترین سطح خود رسیده است.")
             if kind == "castle":
@@ -435,14 +471,45 @@ class CityService:
                     raise GameError("جایگاه ساختمان خالی نیست؛ با ارتقای قلعه جایگاه‌های بیشتری باز می‌شود.")
             cost = d.build_cost(b, level)
             self._pay(city, {r: v for r, v in cost.items() if v})
-            await tx.execute(
-                "INSERT INTO city_buildings (city_id, kind, level) VALUES (?, ?, 1)"
-                " ON CONFLICT (city_id, kind) DO UPDATE SET level = level + 1",
-                (city.id, kind),
+            seconds = d.build_seconds(b, level)
+            work_id = await tx.execute(
+                "INSERT INTO city_builds (city_id, kind, level, ready_at) VALUES (?, ?, ?, ?)",
+                (city.id, kind, level + 1, now + seconds),
             )
-            city.levels[kind] = level + 1
+            city.builds.append(Build(work_id, kind, level + 1, now + seconds))
             await self._save(tx, city)
-            return city, level + 1
+            return city, level + 1, seconds
+
+    # --- crystals buy time ---------------------------------------------------------------------------------------
+    def rush_price(self, city: City, now: int, what: str = "all", item_id: int = 0) -> int:
+        works = [w.ready_at for w in city.builds] + [w.ready_at for w in city.training]
+        if what == "build":
+            works = [w.ready_at for w in city.builds if w.id == item_id]
+        elif what == "train":
+            works = [w.ready_at for w in city.training if w.id == item_id]
+        return sum(d.rush_crystals(t - now) for t in works if t > now)
+
+    async def rush(self, player: Player, what: str = "all", item_id: int = 0) -> tuple[City, int]:
+        """Finish work at once for crystals: one construction, one training batch, or everything in the queue."""
+        if what not in ("all", "build", "train"):
+            raise GameError("چنین کاری در صف نیست.")
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            city = await self._need(tx, player, now)
+            price = self.rush_price(city, now, what, item_id)
+            if price == 0:
+                raise GameError("کاری در صف نیست که بشود تسریعش کرد.")
+            await wallet.apply(tx, player.id, crystal=-price, reason="city_rush", now=now)
+            for work in city.builds:
+                if what == "all" or (what == "build" and work.id == item_id):
+                    work.ready_at = now
+                    await tx.execute("UPDATE city_builds SET ready_at = ? WHERE id = ?", (now, work.id))
+            for work in city.training:
+                if what == "all" or (what == "train" and work.id == item_id):
+                    work.ready_at = now
+                    await tx.execute("UPDATE city_training SET ready_at = ? WHERE id = ?", (now, work.id))
+            await self._tick(tx, city, now)
+            return city, price
 
     # --- army ----------------------------------------------------------------------------------------------
     async def train(self, player: Player, kind: str, qty: int) -> tuple[City, Batch]:
@@ -497,6 +564,24 @@ class CityService:
             )
             city.traps[kind] = have + d.TRAP_BATCH
             await self._save(tx, city)
+            return city
+
+    async def set_alerts(self, player: Player, on: bool) -> City:
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            city = await self._need(tx, player, now)
+            await tx.execute("UPDATE cities SET alerts = ? WHERE id = ?", (int(on), city.id))
+            city.alerts = on
+            return city
+
+    async def set_flag(self, player: Player, flag: str) -> City:
+        if flag not in d.FLAG_EMOJIS:
+            raise GameError("این پرچم وجود ندارد.")
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            city = await self._need(tx, player, now)
+            await tx.execute("UPDATE cities SET flag = ? WHERE id = ?", (flag, city.id))
+            city.flag = flag
             return city
 
     async def buy_shield(self, player: Player, hours: int) -> City:

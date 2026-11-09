@@ -50,6 +50,30 @@ def _parse_delta(text: str) -> int:
     return sign * _int(text[1:])
 
 
+LINE = "─" * 12
+
+
+def _work_line(city: City, now: int) -> str:
+    if city.builds:
+        w = city.builds[0]
+        b = d.get_building(w.kind)
+        return f"🏗️ {b.name} ← سطح {fa(w.level)} · {duration(w.ready_at - now)} مانده"
+    return "🏗️ سازندگان بیکارند"
+
+
+def _advice(city: City) -> str:
+    prod, eaten = city.rates()
+    if city.happiness < 30:
+        return "🍞 فرمانده: مردم گرسنه‌اند؛ مزرعه را بالا ببرید یا بسته‌ی آذوقه بخرید."
+    if prod["food"] < eaten:
+        return "🌾 فرمانده: مصرف غذا از تولید بیشتر است؛ مزرعه را ارتقا دهید."
+    if not city.builds:
+        return "🏗️ فرمانده: سازندگان بیکارند؛ ساختمانی را ارتقا دهید."
+    if not city.army and not city.training:
+        return "⚔️ فرمانده: شهر بی‌لشکر است؛ در سربازخانه نیرو تربیت کنید."
+    return "🌟 فرمانده: شهر آرام است و آماده‌ی فرمان شما."
+
+
 def _need_city_text() -> str:
     return "شما هنوز شهری ندارید. از «فرمانروایی» شهرتان را بنا کنید."
 
@@ -82,14 +106,21 @@ async def realm(c: Ctx) -> Screen:
     now = c.services.ctx.now()
     unseen = await c.services.city.unseen_reports(p.id)
     league = d.league_of(city.trophies)
+    working = len(city.builds) + len(city.training)
     text = [
         f"🏰 {bold('فرمانروایی')}",
-        "",
+        LINE,
         f"{city.flag} {bold('شهر ' + city.name)} · قلعه‌ی سطح {fa(city.castle)}",
         f"{league[0]} لیگ {league[1]} · {fa(city.trophies)} جام",
         _sign(city, now),
-        "",
-        "فرمانروا، شهرتان منتظر فرمان شماست 👇",
+        LINE,
+        *[_res_line(r, city.amount(r)) for r in d.RES],
+        LINE,
+        f"🏘️ جمعیت: {fa(int(city.pop))} · رضایت {fa(round(city.happiness))}٪",
+        f"⚔️ ارتش: {fa(city.army)} نفر · قدرت {fa(city.army_power)}",
+        _work_line(city, now),
+        LINE,
+        _advice(city),
     ]
     rows = [
         [c.btn("🏰 شهر من", "citymine"), c.btn("🏗️ ساختمان‌ها", "citybuild")],
@@ -97,6 +128,9 @@ async def realm(c: Ctx) -> Screen:
         [c.btn("⚔️ ارتش و سربازان", "citytroops"), c.btn("🛡️ دفاع شهر", "citydef")],
         [c.btn("🗡️ حمله به شهرها", "cityatk", style="danger"), c.btn("🗺️ نقشه جهان", "citymap")],
         [c.btn("🏆 لیگ و رتبه‌بندی", "cityleague"), c.btn(f"📜 گزارش جنگ‌ها{f' ({fa(unseen)})' if unseen else ''}", "cityreports")],
+        [c.btn(f"⏱️ صف کارها{f' ({fa(working)})' if working else ''}", "cityqueue", style="primary" if working else None),
+         c.btn("⚙️ تنظیمات شهر", "citycfg")],
+        [c.btn("🛒 خرید منابع از خزانه", "prem", "city", style="success")],
         c.back("home"),
     ]
     return Screen("\n".join(text), rows)
@@ -254,6 +288,7 @@ async def city_build(c: Ctx) -> Screen:
         "",
         f"🏛️ سطح قلعه: {fa(city.castle)}",
         f"📐 جایگاه ساختمان: {fa(city.slots_used)} از {fa(city.slots_total)} پر است",
+        _work_line(city, c.services.ctx.now()),
         "با ارتقای قلعه، هم سطح ساختمان‌ها بالاتر می‌رود و هم جایگاه تازه باز می‌شود.",
         "",
         "روی هر ساختمان بزنید 👇",
@@ -261,7 +296,10 @@ async def city_build(c: Ctx) -> Screen:
     buttons = []
     for b in d.BUILDINGS:
         lv = city.levels.get(b.id, 0)
+        building_now = any(w.kind == b.id for w in city.builds)
         tag = fa(lv) if lv else ("🔒" if b.id != "castle" and city.castle < b.needs else "—")
+        if building_now:
+            tag += " ⏳"
         buttons.append(c.btn(f"{b.emoji} {b.name} · {tag}", "citybv", b.id))
     rows = keyboards.grid(buttons, 2)
     rows.append(c.back("city"))
@@ -301,6 +339,15 @@ async def city_building(c: Ctx) -> Screen:
         lines.append(_effect(b, level))
     rows = []
     reason = ""
+    now = c.services.ctx.now()
+    working = next((w for w in city.builds if w.kind == b.id), None)
+    if working is not None:
+        left = working.ready_at - now
+        price = d.rush_crystals(left)
+        lines += ["", f"⏳ {bold('در حال ارتقا به سطح ' + fa(working.level))}", f"🕐 {duration(left)} مانده", _effect(b, working.level)]
+        rows.append([c.btn(f"💎 تکمیل فوری · {fa(price)} کریستال", "cityrushq", "build", working.id, style="success")])
+        rows.append(c.back("citybuild"))
+        return Screen("\n".join(lines), rows)
     if level >= (d.MAX_CASTLE if b.id == "castle" else b.max_level):
         reason = "به بالاترین سطح رسیده است."
     elif b.id != "castle" and level == 0 and city.castle < b.needs:
@@ -313,26 +360,29 @@ async def city_building(c: Ctx) -> Screen:
         lines += ["", f"🔒 {reason}"]
     else:
         cost = d.build_cost(b, level)
-        lines += ["", f"⬆️ {bold('هزینه‌ی سطح ' + fa(level + 1))}", _effect(b, level + 1)]
+        lines += ["", f"⬆️ {bold('هزینه‌ی سطح ' + fa(level + 1))}", _effect(b, level + 1), f"🕐 مدت ساخت: {duration(d.build_seconds(b, level))}"]
         ok = True
         for r in ("gold", "wood", "stone", "iron"):
             if cost[r]:
                 have = city.amount(r)
                 ok = ok and have >= cost[r]
                 lines.append(f"{d.RES_INFO[r][0]} {d.RES_INFO[r][1]}: {fa(cost[r])} (دارید {fa(have)})")
-        if ok:
+        if city.builds:
+            lines += ["", "🔨 سازندگان مشغول کار دیگری هستند؛ از «صف کارها» تسریعش کنید."]
+        elif ok:
             rows.append([c.btn(f"✅ {'ارتقا به سطح ' + fa(level + 1) if level else 'ساخت'}", "citybok", b.id, style="success")])
         else:
             lines += ["", "💸 منابع شهر کافی نیست."]
+            rows.append([c.btn("🛒 خرید بسته‌ی منابع", "prem", "city", style="success")])
     rows.append(c.back("citybuild"))
     return Screen("\n".join(lines), rows)
 
 
 @screen("citybok")
 async def city_build_do(c: Ctx) -> Screen:
-    _, level = await c.services.city.build(c.player, c.a)
+    _, level, seconds = await c.services.city.build(c.player, c.a)
     shown = await city_building(c)
-    shown.toast = f"🏗️ {d.get_building(c.a).name} به سطح {fa(level)} رسید"
+    shown.toast = f"🏗️ ساخت {d.get_building(c.a).name} (سطح {fa(level)}) شروع شد · {duration(seconds)}"
     return shown
 
 
@@ -412,6 +462,9 @@ async def city_troops(c: Ctx) -> Screen:
             lines.append(f"{t.emoji} {fa(batch.qty)} {t.name} · {duration(batch.ready_at - now)} دیگر")
     lines += ["", "برای تربیت، نوع نیرو را بزنید 👇"]
     rows = keyboards.grid([c.btn(f"{t.emoji} {t.name}", "citytr", t.id) for t in d.TROOPS], 2)
+    for batch in city.training:
+        t = d.get_troop(batch.kind)
+        rows.append([c.btn(f"💎 تکمیل فوری {t.name} · {fa(d.rush_crystals(batch.ready_at - now))} کریستال", "cityrushq", "train", batch.id)])
     rows.append(c.back("city"))
     return Screen("\n".join(lines), rows)
 
@@ -446,8 +499,21 @@ async def city_train(c: Ctx) -> Screen:
         lines += ["", f"🔒 {d.get_building(t.building).name} باید به سطح {fa(t.needs)} برسد (الان {fa(level)})."]
     else:
         rows = keyboards.grid([c.btn(f"➕ {fa(n)} نفر", "citytrq", t.id, n) for n in (10, 50, 100, 500)], 2)
+        best = _max_train(city, t)
+        if best:
+            rows.append([c.btn(f"🔝 بیشترین توان ({fa(best)} نفر)", "citytrq", t.id, best, style="primary")])
+        rows.append([c.btn("🛒 خرید بسته‌ی منابع", "prem", "city")])
     rows.append(c.back("citytroops"))
     return Screen("\n".join(lines), rows)
+
+
+def _max_train(city: City, t: d.Troop) -> int:
+    """The most soldiers of a kind the city can afford and house right now."""
+    g, f, w, i = t.cost
+    costs = {"gold": g, "food": f, "wood": w, "iron": i}
+    limits = [city.amount(r) // v for r, v in costs.items() if v]
+    limits += [city.recruitable, (city.capacity - city.space_used) // t.cap]
+    return max(0, min(limits))
 
 
 @screen("citytrq")
@@ -858,3 +924,106 @@ async def processor(bot, services: Services, interval: float = 120.0) -> None:  
         except Exception:
             log.exception("city alerts failed")
         await asyncio.sleep(interval)
+
+
+# --- the queue and crystals ---------------------------------------------------------------------------------------------------------
+@screen("cityqueue")
+async def city_queue(c: Ctx) -> Screen:
+    city, now = await _city(c), c.services.ctx.now()
+    lines = [f"⏱️ {bold('صف کارها')}", LINE, f"🏗️ {bold('ساخت‌وساز')}"]
+    rows = []
+    for w in city.builds:
+        b = d.get_building(w.kind)
+        lines.append(f"{b.emoji} {b.name} ← سطح {fa(w.level)} · {duration(w.ready_at - now)} مانده")
+        rows.append([c.btn(f"💎 تکمیل {b.name} · {fa(d.rush_crystals(w.ready_at - now))} کریستال", "cityrushq", "build", w.id)])
+    if not city.builds:
+        lines.append("سازندگان بیکارند؛ از «ساختمان‌ها» کاری بسپارید.")
+    lines += ["", f"⚔️ {bold('آموزش سربازان')}"]
+    for w in city.training:
+        t = d.get_troop(w.kind)
+        lines.append(f"{t.emoji} {fa(w.qty)} {t.name} · {duration(w.ready_at - now)} مانده")
+        rows.append([c.btn(f"💎 تکمیل {t.name} · {fa(d.rush_crystals(w.ready_at - now))} کریستال", "cityrushq", "train", w.id)])
+    if not city.training:
+        lines.append("آموزشگاه خالی است.")
+    total = c.services.city.rush_price(city, now)
+    lines += ["", f"💎 کریستال شما: {fa(c.player.crystal)}", "هر ۱۰ دقیقه کار، یک کریستال است."]
+    if total:
+        rows.insert(0, [c.btn(f"⚡ تکمیل همه‌ی کارها · {fa(total)} کریستال", "cityrushq", "all", 0, style="success")])
+    rows.append(c.back("city"))
+    return Screen("\n".join(lines), rows)
+
+
+@screen("cityrushq")
+async def city_rush_ask(c: Ctx) -> Screen:
+    city, now, p = await _city(c), c.services.ctx.now(), await c.refresh()
+    what, item = c.a, _int(c.b or "0")
+    price = c.services.city.rush_price(city, now, what, item)
+    if price == 0:
+        raise GameError("این کار همین حالا تمام شده یا در صف نیست.")
+    names = {"all": "همه‌ی کارهای صف", "build": "ساخت‌وساز", "train": "آموزش سربازان"}
+    lines = [
+        f"💎 {bold('تأیید تکمیل فوری')}", "",
+        f"کار: {names[what]}",
+        f"💎 بها: {bold(fa(price))} کریستال",
+        "",
+        f"کریستال شما: {fa(p.crystal)} ← {fa(max(0, p.crystal - price))}",
+    ]
+    if p.crystal < price:
+        return Screen("\n".join(lines + ["", f"💸 {fa(price - p.crystal)} کریستال کم دارید."]), [c.back("cityqueue")])
+    return Screen("\n".join(lines + ["", "همین لحظه تمام شود؟"]), [[c.btn("✅ بله، تمامش کن", "cityrushok", what, item, style="success"), c.btn("↩️ نه", "cityqueue")]])
+
+
+@screen("cityrushok")
+async def city_rush_do(c: Ctx) -> Screen:
+    _, price = await c.services.city.rush(c.player, c.a, _int(c.b or "0"))
+    await c.refresh()
+    shown = await city_queue(c)
+    shown.toast, shown.alert = f"⚡ با {fa(price)} کریستال همین لحظه تمام شد!", True
+    return shown
+
+
+# --- settings -----------------------------------------------------------------------------------------------------------------------------
+@screen("citycfg")
+async def city_settings(c: Ctx) -> Screen:
+    city = await _city(c)
+    text = "\n".join([
+        f"⚙️ {bold('تنظیمات شهر')}", LINE,
+        f"{city.flag} شهر {city.name}",
+        f"🔔 پیام‌های خودکار: {'روشن' if city.alerts else 'خاموش'}",
+        "گرسنگی، پر شدن انبار، پایان ساخت و آموزش و پایان سپر را خودم خبر می‌دهم.",
+        "هشدار حمله دشمن همیشه می‌آید.",
+    ])
+    rows = [
+        [c.btn("🔕 خاموش کردن پیام‌ها" if city.alerts else "🔔 روشن کردن پیام‌ها", "citycfgal", "0" if city.alerts else "1")],
+        [c.btn("🚩 تغییر پرچم شهر", "citycfgflag")],
+        [c.btn("🧭 خلاصه‌ی وضعیت", "citymine")],
+        c.back("city"),
+    ]
+    return Screen(text, rows)
+
+
+@screen("citycfgal")
+async def city_alerts_toggle(c: Ctx) -> Screen:
+    await c.services.city.set_alerts(c.player, c.a == "1")
+    shown = await city_settings(c)
+    shown.toast = "🔔 پیام‌های خودکار روشن شد" if c.a == "1" else "🔕 پیام‌های خودکار خاموش شد"
+    return shown
+
+
+@screen("citycfgflag")
+async def city_flag_menu(c: Ctx) -> Screen:
+    city = await _city(c)
+    rows = keyboards.grid([c.btn(f"{e} {n}", "citycfgflagset", i) for i, (e, n) in enumerate(d.FLAGS)], 3)
+    rows.append(c.back("citycfg"))
+    return Screen(f"🚩 {bold('پرچم شهر')}\n\nپرچم فعلی: {city.flag}\nیک پرچم تازه برگزینید (رایگان) 👇", rows)
+
+
+@screen("citycfgflagset")
+async def city_flag_set(c: Ctx) -> Screen:
+    index = _int(c.a)
+    if not 0 <= index < len(d.FLAGS):
+        raise GameError("این پرچم وجود ندارد.")
+    await c.services.city.set_flag(c.player, d.FLAGS[index][0])
+    shown = await city_settings(c)
+    shown.toast = f"{d.FLAGS[index][0]} پرچم شهر عوض شد"
+    return shown
