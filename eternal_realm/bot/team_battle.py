@@ -105,7 +105,7 @@ def result_text(update: TeamUpdate) -> str:
 
 # --- buttons ------------------------------------------------------------------------------------
 def lobby_buttons(lobby: Lobby) -> Rows:
-    rows: Rows = []
+    rows: Rows = [[Button.inline(f"{TEAM_MARKS[t]} {TEAM_NAMES[t]}", TeamCb(action="info", id=lobby.id)) for t in (0, 1)]]
     for seat in range(SEATS):
         row = []
         for team in (0, 1):
@@ -161,6 +161,9 @@ async def on_team_button(query: CallbackQuery, callback_data: TeamCb, services: 
     service, action, battle_id = services.teams, callback_data.action, callback_data.id
     turn_seconds = services.ctx.balance.duel_turn_seconds
 
+    if action == "info":
+        await query.answer()
+        return
     if action == "sit":
         lobby, note = await service.sit(battle_id, player, callback_data.arg // 10, callback_data.arg % 10)
         await message.edit_text(lobby_text(lobby, _seconds_left(services, lobby)), buttons=lobby_buttons(lobby))
