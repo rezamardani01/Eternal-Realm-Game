@@ -74,7 +74,7 @@ async def trip(c: Ctx) -> Screen:
         [c.btn("📖 داستان سرزمین فراموش‌شده", "story"), c.btn("🏚️ دخمه‌های روزانه", "dng")],
         [c.btn("🐉 باس‌های تک‌نفره", "sbosses"), c.btn("🥊 میدان بات‌ها", "arena")],
         [c.btn("♾️ هزارتوی ابدی", "maze", style="primary"), c.btn("🎲 گشت‌زنی", "wanderq")],
-        [c.btn("🏕️ اعزام قهرمان (در غیبتتان)", "expd"), c.btn("🌍 جهان زنده", "world", style="primary")],
+        [c.btn("🏕️ اعزام قهرمان", "expd"), c.btn("🌍 جهان زنده", "world", style="primary")],
         c.back("home"),
     ]
     return Screen("\n".join(lines), rows)
