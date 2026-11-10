@@ -57,7 +57,7 @@ async def trip(c: Ctx) -> Screen:
         "🏚️ دخمه‌ها: هر روز سه دخمه‌ی پنج‌طبقه؛ طبقه‌به‌طبقه پاداش",
         "🐉 باس‌ها: پنج باس با ترفند؛ کریستال و صندوقچه‌ی هر روز",
         "🥊 میدان بات‌ها: تمرین بی‌دغدغه در چهار سطح سختی",
-        "♾️ هزارتو: ۳۰ طبقه‌ی همیشه تازه؛ برکت، نفرین و پاداش ماندگار",
+        "♾️ هزارتو: ۳۰ طبقه؛ هر طبقه یک ماجرا و تصمیم، و غول‌هایی که راه را بسته‌اند",
         "🎲 گشت‌زنی: اتفاق‌های راه؛ گنج، راهزن و تاجر مرموز",
         "🏕️ اعزام: قهرمان را بفرستید و در غیبتتان پاداش بگیرید",
         "🌍 جهان زنده: رویداد جهانی و تاریکی مناطق",
@@ -510,12 +510,13 @@ async def maze(c: Ctx) -> Screen:
     if run is None:
         lines = [
             f"♾️ {bold('هزارتوی ابدی')}", LINE,
-            f"تا {fa(maze_data.FLOORS)} طبقه پایین بروید. در هر طبقه سه مسیر پیش‌رو دارید و هر بار ورود، دشمن‌ها و اتفاق‌ها فرق می‌کنند.",
-            "نیرویی که از برکت می‌گیرید فقط تا پایان همین هزارتو می‌ماند و جانتان بین طبقه‌ها بازنمی‌گردد، مگر کنار آتشگاه.",
+            f"{fa(maze_data.FLOORS)} طبقه رو به پایین. هر طبقه ماجرایی تازه دارد و شما تصمیم می‌گیرید چه کنید؛ هر تصمیم می‌تواند گنج، برکت، زخم یا کمین باشد.",
+            "👹 هر دو سه طبقه یک غول راه را بسته است. غول‌ها قدرت خودشان را دارند و هر چه پایین‌تر بروید سرسخت‌تر می‌شوند؛ اگر شکست خوردید، قوی‌تر برگردید.",
+            "جانتان بین طبقه‌ها برنمی‌گردد مگر با تصمیم درست، و برکت‌ها فقط تا پایان همین هزارتو می‌مانند.",
             "با بیرون آمدن، همه‌ی غنیمت می‌ماند؛ با شکست، نیمی از آن.",
             f"🏅 رکورد شما: طبقه‌ی {fa(best)}",
             "", f"🎁 {bold('پاداش ماندگار رسیدن به طبقه')}",
-            *[f"طبقه‌ی {fa(f)}: {fa(cr)} کریستال و صندوقچه" for f, (cr, _) in maze_data.MILESTONES.items()],
+            *[f"نگهبان طبقه‌ی {fa(f)}: {fa(cr)} کریستال و صندوقچه" for f, (cr, _) in maze_data.MILESTONES.items()],
             "", await _energy_line(c), f"⚡ ورود: {fa(maze_data.ENERGY)} انرژی",
         ]
         rows = [[c.btn("🚪 ورود به هزارتو", "mazego", style="success")], c.back("trip", "🧭 سفر قهرمان")]
@@ -529,12 +530,31 @@ async def maze(c: Ctx) -> Screen:
     for stat, amount in run.buffs.items():
         if amount:
             lines.append(f"{'✨' if amount > 0 else '🕸️'} {names[stat]}: {'+' if amount > 0 else '-'}{fa(round(abs(amount) * 100))}٪")
-    lines += [f"🪙 غنیمت تا اینجا: {fa(run.gold)} سکه و {fa(run.xp)} تجربه", "", "پیش‌رویتان چند مسیر است. کدام را انتخاب می‌کنید؟ 👇"]
+    lines += [f"🪙 غنیمت تا اینجا: {fa(run.gold)} سکه و {fa(run.xp)} تجربه", LINE]
     rows = []
-    for i, path in enumerate(run.options):
-        emoji, name, about = maze_data.PATHS[path]
-        lines.append(f"{emoji} {bold(name)}: {about}")
-        rows.append([c.btn(f"{emoji} {name}", "mazepick", i, style="danger" if path in ("war", "guardian") else None)])
+    if run.kind == "giant":
+        tier, foe = run.tier or "giant", data.get_foe(run.ref)
+        level = maze_data.foe_level(run.floor, c.player.level)
+        lines += [
+            f"{foe.emoji} {bold(maze_data.TIERS[tier][0] + ': ' + foe.name)}",
+            maze_data.giant_text(tier, run.floor, foe.name), "",
+            f"🎚️ قدرت او هم‌تراز سطح {fa(level)} است · سطح شما {fa(c.player.level)}",
+        ]
+        if level > c.player.level + 1:
+            lines.append("⚠️ این دشمن از شما قوی‌تر است؛ اگر شکست خوردید، سطحتان را بالا ببرید و برگردید.")
+        if foe.warn:
+            lines.append(f"💡 نشانه‌ی ضربه‌ی ویژه‌اش: {foe.warn}")
+        lines += ["", "چه می‌کنید؟ 👇"]
+        rows.append([c.btn("⚔️ تیغ می‌کشم و می‌جنگم", "mazepick", 0, style="danger")])
+        if tier == "giant":
+            rows.append([c.btn("🌫️ از سایه‌ها دزدکی رد می‌شوم", "mazepick", 1)])
+    else:
+        scene = maze_data.SCENES[run.ref]
+        lines += [
+            f"{scene.emoji} {bold(scene.title)}", scene.text, "",
+            f"👣 غول بعدی در طبقه‌ی {fa(maze_data.next_giant(run.floor))} منتظر است", "چه می‌کنید؟ 👇",
+        ]
+        rows += [[c.btn(choice.label, "mazepick", i)] for i, choice in enumerate(scene.choices)]
     rows.append([c.btn("🚪 بیرون آمدن با غنیمت", "mazeoutq")])
     return Screen("\n".join(lines), rows)
 
@@ -552,7 +572,9 @@ async def maze_pick(c: Ctx) -> Screen:
     _guard(c)
     step = await c.services.solo.maze_pick(c.player, _int(c.a))
     if step.fight is not None:
-        return _fight_screen(c, step.fight, step.lines)
+        await c.show(f"⚔️ {bold('نبرد در هزارتو!')}\n\n" + "\n".join(step.lines))
+        return _fight_screen(c, step.fight, step.lines[:1])
+    await c.show(f"🎲 {bold('سرنوشت رقم می‌خورد...')}\n\n{step.lines[0]}")
     shown = await maze(c)
     extra = [f"📜 {bold('در راه چه گذشت')}", *step.lines, ""]
     shown.text = "\n".join(extra) + (shown.text or "")
