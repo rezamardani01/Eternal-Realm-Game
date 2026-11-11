@@ -82,7 +82,7 @@ async def test_fishing_command_in_group(h, services):
     await reg(services)
     await h.say(10, "ماهیگیری", group=True)
     text = h.session.last_text()
-    assert "ماهیگیری" in text and "انرژی" in text and len(text.splitlines()) <= 6
+    assert "ماهیگیری" in text and "انرژی" in text and "غنیمت" in text and "\n\n" in text
     await h.say(10, "ماهی", group=True)  # alias, but still on cooldown
     assert "خسته" in h.session.last_text()
 

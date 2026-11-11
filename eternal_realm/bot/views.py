@@ -373,16 +373,17 @@ def activity_frames(name: str, activity) -> list[str]:  # noqa: ANN001 - Activit
     return [f"{_activity_head(name, activity)}\n{WORKING.get(activity.id, '⏳ در حال انجام... لطفاً صبر کنید')}"]
 
 
-def gains_line(gold: int = 0, xp: int = 0, crystal: int = 0, items=()) -> str:  # noqa: ANN001
-    parts = []
+def gains_list(gold: int = 0, xp: int = 0, crystal: int = 0, items=()) -> list[str]:  # noqa: ANN001
+    """What was collected, one thing to a line."""
+    lines = []
     if gold:
-        parts.append(f"🪙 {fa(gold)}")
+        lines.append(f"🪙 {fa(gold)} سکه")
     if xp:
-        parts.append(f"⭐ {fa(xp)}")
+        lines.append(f"⭐ {fa(xp)} تجربه")
     if crystal:
-        parts.append(f"💎 {fa(crystal)}")
-    parts += [f"{label} ×{fa(qty)}" for label, qty, _ in items]
-    return " · ".join(parts)
+        lines.append(f"💎 {fa(crystal)} کریستال")
+    lines += [f"{label} ×{fa(qty)}" for label, qty, _ in items]
+    return lines
 
 
 def _boost_note(double_xp: bool, boosted: bool) -> str:
@@ -391,19 +392,30 @@ def _boost_note(double_xp: bool, boosted: bool) -> str:
     return "✨ ستاره‌ی تجربه: تجربه دو برابر" if double_xp else ""
 
 
+def _wait_text(seconds: int) -> str:
+    return duration(seconds) if seconds > 0 else "همین حالا آماده است"
+
+
+def _card(head: str, intro: list[str], loot: list[str], status: list[str], tail: list[str]) -> str:
+    """One tidy card: the title and what happened, the loot as a list, then a few status lines, each block apart."""
+    blocks = [[head, *intro]]
+    if loot:
+        blocks.append([f"📦 {bold('غنیمت جمع‌آوری‌شده')}", *loot])
+    blocks.append([line for line in status if line])
+    blocks.append([line for line in tail if line])
+    return "\n\n".join("\n".join(block) for block in blocks if block)
+
+
 def activity_result(name: str, result) -> str:  # noqa: ANN001 - ActivityResult
-    """A short card: what happened, what it paid, how much energy is left and when to come back."""
     rolled = result.rolled
-    lines = [
+    loot = gains_list(rolled.gold, rolled.xp, rolled.crystal, result.items)
+    return _card(
         _activity_head(name, result.activity),
-        emphasize(rolled.outcome.text.format(name=name)),
-        gains_line(rolled.gold, rolled.xp, rolled.crystal, result.items) or "این بار دست خالی بودید",
-        _boost_note(result.double_xp, getattr(result, "boosted", False)),
-        f"⚡ انرژی {fa(result.player.energy)} · ⏰ بعدی: {duration(result.next_in)}",
-    ]
-    if result.level_up:
-        lines.append(level_up_text(result.level_up.new_level))
-    return "\n".join(line for line in lines if line)
+        [emphasize(rolled.outcome.text.format(name=name))],
+        loot or ["این بار دست خالی بودید"],
+        [f"⚡ انرژی: {fa(result.player.energy)}", _boost_note(result.double_xp, getattr(result, "boosted", False))],
+        [f"⏰ {result.activity.title} بعدی: {_wait_text(result.next_in)}", level_up_text(result.level_up.new_level) if result.level_up else ""],
+    )
 
 
 def hunt_frames(name: str, r) -> list[str]:  # noqa: ANN001 - HuntResult
@@ -412,19 +424,17 @@ def hunt_frames(name: str, r) -> list[str]:  # noqa: ANN001 - HuntResult
 
 def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
     verdict = "🏆 پیروز شدید" if r.won else "💔 هیولا قوی‌تر بود؛ عقب‌نشینی کردید"
-    lines = [
+    return _card(
         f"{r.monster.emoji} {bold('شکار ' + r.monster.name)} · {name}",
-        f"{verdict} ({fa(r.rounds)} دور)",
-        gains_line(r.gold, r.xp, 0, r.items) if r.won else "",
-        _boost_note(r.double_xp, getattr(r, "boosted", False)),
-        f"❤️ جان {fa(r.hero_hp)}/{fa(r.hero_max_hp)} · ⚡ انرژی {fa(r.player.energy)}",
-        f"⏰ شکار بعدی: {duration(r.next_in)}",
-    ]
-    if r.card is not None:
-        lines.append(f"🃏 کارت تازه: {r.card.emoji} {r.card.name}")
-    if r.level_up:
-        lines.append(level_up_text(r.level_up.new_level))
-    return "\n".join(line for line in lines if line)
+        [f"{verdict} ({fa(r.rounds)} دور)"],
+        gains_list(r.gold, r.xp, 0, r.items) if r.won else [],
+        [f"❤️ جان: {fa(r.hero_hp)} از {fa(r.hero_max_hp)}", f"⚡ انرژی: {fa(r.player.energy)}", _boost_note(r.double_xp, getattr(r, "boosted", False))],
+        [
+            f"🃏 {bold('کارت تازه:')} {r.card.emoji} {r.card.name}" if r.card is not None else "",
+            f"⏰ شکار بعدی: {_wait_text(r.next_in)}",
+            level_up_text(r.level_up.new_level) if r.level_up else "",
+        ],
+    )
 
 
 # --- upgrades ----------------------------------------------------------------------------------
