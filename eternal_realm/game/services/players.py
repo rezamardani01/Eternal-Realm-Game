@@ -196,6 +196,9 @@ class PlayerService:
         amount = round(amount * player.race.xp_multiplier)
         level, xp, gained = progression.apply_xp(player.level, player.xp, amount, self.ctx.balance)
         await repo.set_progress(tx, player_id, level, xp)
+        from .ladder import add_score
+
+        await add_score(tx, player_id, amount, self.ctx.now())
         if gained:
             from ..notify import achievement_check
 
@@ -231,6 +234,38 @@ class PlayerService:
                 "UPDATE players SET boost_until = MAX(boost_until, ?) + ? WHERE id = ?",
                 (now, NEWCOMER_BOOST_DAYS * DAY, player_id),
             )
+
+    #: crystals a hero pays to keep a streak alive after missing exactly one day (and how rarely)
+    RESCUE_COST = 5
+    RESCUE_EVERY = 14 * DAY
+
+    def streak_status(self, player: Player) -> tuple[int, bool]:
+        """(the streak to be saved, whether it can be saved now): only a streak of 3+ that broke after exactly one missed day."""
+        if not player.daily_at or player.daily_streak < 3:
+            return 0, False
+        elapsed = self.ctx.now() - player.daily_at
+        return player.daily_streak, 2 * DAY <= elapsed < 3 * DAY
+
+    async def rescue_streak(self, player_id: int) -> int:
+        """Pay crystals and the streak continues as if yesterday had been claimed. Returns the streak saved."""
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            fresh = await repo.get(tx, player_id)
+            if fresh is None:
+                raise NotRegistered
+            streak, can = self.streak_status(fresh)
+            if not can:
+                raise GameError("زنجیره‌ی شما الان نیاز به نجات ندارد یا دیگر نجات‌پذیر نیست.")
+            last = int(await tx.scalar("SELECT n FROM solo_progress WHERE player_id = ? AND key = 'rescue_at'", (player_id,), 0))
+            if last and now - last < self.RESCUE_EVERY:
+                raise GameError(f"نجات زنجیره هر {self.RESCUE_EVERY // DAY} روز یک بار ممکن است.")
+            await wallet.apply(tx, player_id, crystal=-self.RESCUE_COST, reason="streak_rescue", now=now)
+            await tx.execute(
+                "INSERT INTO solo_progress (player_id, key, n) VALUES (?, 'rescue_at', ?)"
+                " ON CONFLICT (player_id, key) DO UPDATE SET n = excluded.n", (player_id, now),
+            )
+            await repo.set_daily(tx, player_id, now - DAY, streak)
+            return streak
 
     async def claim_daily(self, player_id: int) -> DailyReward:
         balance, now = self.ctx.balance, self.ctx.now()

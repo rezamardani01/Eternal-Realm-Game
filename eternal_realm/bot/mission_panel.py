@@ -28,6 +28,11 @@ async def missions(c: Ctx) -> Screen:
             rows.append([c.btn(f"🎁 دریافت پاداش مأموریت {'ویژه' if m.kind_id == 'welcome' else fa(m.slot + 1)}", "msclaim", m.slot, style="success")])
     if not todays:
         lines.append("برای امروز مأموریتی پیدا نشد.")
+    from .habit_panel import week_lines
+
+    week, week_rows = await week_lines(c)
+    lines += week
+    rows += week_rows
     rows.append(c.back("profile"))
     return Screen("\n".join(lines).strip(), rows)
 

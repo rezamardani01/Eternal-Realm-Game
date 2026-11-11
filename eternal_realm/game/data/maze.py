@@ -614,3 +614,30 @@ def giant_text(tier: str, floor: int, name: str) -> str:
 def floor_reward(floor: int) -> tuple[int, int]:
     """Base gold and experience of one floor (scaled by the hero's level)."""
     return 40 + 8 * floor, 50 + 9 * floor
+
+
+# --- the endless tower (برج بی‌پایان): one fight per floor, no end, a world ranking -------------------------------------
+TOWER_ENERGY = 8
+#: climbs a day that pay in full; later ones pay a third (the tower never closes, but it must not be a farm)
+TOWER_FULL_CLIMBS = 12
+
+
+def tower_foe(floor: int) -> str:
+    """Who waits on a floor of the tower: a guardian on every tenth, else somebody from the maze's pool of that depth."""
+    deep = min(floor, FLOORS)
+    if floor % 10 == 0:
+        if floor <= FLOORS:
+            return BOSS_FLOORS[floor]
+        guardians = list(BOSS_FLOORS.values())  # above the maze's last floor the guardians come round again
+        return guardians[(floor // 10) % len(guardians)]
+    pool = pool_for(deep)
+    return pool[(floor * 7 + floor // 3) % len(pool)]
+
+
+def tower_mult(floor: int) -> float:
+    return (0.85 + 0.012 * floor) * (1.12 if floor % 10 == 0 else 1.0)
+
+
+def tower_reward(floor: int) -> tuple[int, int]:
+    gold, xp = floor_reward(min(floor, FLOORS))
+    return round(gold * 0.9), round(xp * 0.9)

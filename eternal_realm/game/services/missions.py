@@ -33,6 +33,25 @@ class MissionView:
 
 
 ALL_DONE_CRYSTALS = 2
+#: days of a week with every mission done -> the week's prize: (crystals, chest); the best one reached is paid
+WEEK_PRIZES: tuple[tuple[int, int, str], ...] = ((7, 6, "royal_chest"), (5, 3, "magic_chest"), (3, 1, "wooden_chest"))
+
+
+def week_of(now: int) -> int:
+    """Weeks start on Saturday (Tehran)."""
+    return (today(now) + 5) // 7
+
+
+@dataclass
+class WeekView:
+    days: int
+    week: int
+    claimed: bool
+    #: (days needed, crystals, chest id) of the prize the hero has earned so far, if any
+    earned: tuple[int, int, str] | None
+    #: the next prize still to win
+    next_prize: tuple[int, int, str] | None
+    seconds_left: int
 
 
 def today(now: int) -> int:
@@ -40,9 +59,10 @@ def today(now: int) -> int:
 
 
 class MissionService:
-    def __init__(self, ctx: AppContext, offers: OfferService) -> None:
+    def __init__(self, ctx: AppContext, offers: OfferService, inventory=None) -> None:  # noqa: ANN001 - InventoryService
         self.ctx = ctx
         self.offers = offers
+        self.inventory = inventory
 
     async def today(self, player: Player) -> list[MissionView]:
         now = self.ctx.now()
@@ -130,4 +150,35 @@ class MissionService:
                 await wallet.apply(
                     tx, player.id, crystal=bonus, reason="missions_all", now=now, ref=f"missall:{player.id}:{day}"
                 )
+                await tx.execute("INSERT OR IGNORE INTO mission_days (player_id, day) VALUES (?, ?)", (player.id, day))
         return MissionView(slot, kind.id, kind.emoji, kind.title, row["progress"], row["target"], gold, True, bonus)
+
+    # --- the week ---------------------------------------------------------------------------------
+    async def week(self, player: Player) -> WeekView:
+        now = self.ctx.now()
+        week = week_of(now)
+        first = week * 7 - 5  # the Saturday this week began on
+        async with self.ctx.db.read() as tx:
+            days = int(await tx.scalar(
+                "SELECT COUNT(*) FROM mission_days WHERE player_id = ? AND day >= ? AND day < ?", (player.id, first, first + 7), 0
+            ))
+            claimed = bool(await tx.scalar("SELECT 1 FROM mission_week_claims WHERE player_id = ? AND week = ?", (player.id, week), 0))
+        earned = next((p for p in WEEK_PRIZES if days >= p[0]), None)
+        higher = [p for p in WEEK_PRIZES if p[0] > days]
+        next_prize = min(higher, key=lambda p: p[0]) if higher else None
+        return WeekView(days, week, claimed, earned, next_prize, (first + 7) * 86400 - 12600 - now)
+
+    async def claim_week(self, player: Player) -> tuple[int, int, str]:
+        """Collect the prize of the week so far (once a week). Returns (days, crystals, chest id)."""
+        now = self.ctx.now()
+        view = await self.week(player)
+        if view.claimed:
+            raise GameError("جایزه‌ی این هفته را قبلاً گرفته‌اید.")
+        if view.earned is None:
+            raise GameError("برای جایزه‌ی هفته دست‌کم در ۳ روز باید همه‌ی مأموریت‌های روز را تمام کنید.")
+        _, crystal, chest = view.earned
+        async with self.ctx.db.transaction() as tx:
+            await tx.execute("INSERT INTO mission_week_claims (player_id, week) VALUES (?, ?)", (player.id, view.week))
+            await wallet.apply(tx, player.id, crystal=crystal, reason="mission_week", now=now, ref=f"missweek:{player.id}:{view.week}")
+            await self.inventory.grant(tx, player.id, chest, 1, origin="mission_week")
+        return view.days, crystal, chest

@@ -66,6 +66,7 @@ async def trip(c: Ctx) -> Screen:
         f"🥊 میدان بات‌ها{mark('arena')}: تمرین در چهار سطح سختی",
         f"♾️ هزارتو{mark('maze')}: {fa(len(maze_data.CHAPTERS))} فصل و {fa(maze_data.FLOORS)} طبقه؛ هر طبقه یک ماجرا و تصمیم، و غول‌هایی که راه را بسته‌اند",
         f"🎲 گشت‌زنی{mark('wander')}: اتفاق‌های راه؛ گنج، راهزن، معما و تاجر مرموز",
+        "🗼 برج بی‌پایان: هر طبقه یک نبرد، بی‌پایان و با رتبه‌ی جهانی",
         "🏕️ اعزام: قهرمان را بفرستید و در غیبتتان پاداش بگیرید",
         f"🌍 جهان زنده{mark('world')}: رویداد جهانی و تاریکی مناطق",
         LINE, await _energy_line(c),
@@ -84,7 +85,8 @@ async def trip(c: Ctx) -> Screen:
         [c.btn("📖 داستان سرزمین فراموش‌شده", "story"), c.btn("🏚️ دخمه‌های روزانه", "dng")],
         [c.btn("🐉 باس‌های تک‌نفره", "sbosses"), c.btn("🥊 میدان بات‌ها", "arena")],
         [c.btn("♾️ هزارتوی ابدی", "maze", style="primary"), c.btn("🎲 گشت‌زنی", "wanderq")],
-        [c.btn("🏕️ اعزام قهرمان", "expd"), c.btn("🌍 جهان زنده", "world", style="primary")],
+        [c.btn("🗼 برج بی‌پایان", "tower"), c.btn("🏕️ اعزام قهرمان", "expd")],
+        [c.btn("🌍 جهان زنده", "world", style="primary")],
         c.back("home"),
     ]
     return Screen("\n".join(lines), rows)
@@ -212,6 +214,10 @@ def _next_rows(c: Ctx, kind: str, info: dict, won: bool) -> list:
         rows.append([c.btn("🐉 باس‌ها", "sbosses")])
     elif kind == "world":
         rows.append([c.btn("🌍 جهان", "world")])
+    elif kind == "tower":
+        if won:
+            rows.append([c.btn("⬆️ طبقه‌ی بعد", "towergo", style="success")])
+        rows.append([c.btn("🗼 برج بی‌پایان", "tower")])
     elif kind == "maze":
         if won and info["floor"] < maze_data.chapter_end(info["floor"]):
             rows.append([c.btn("➡️ ادامه‌ی هزارتو", "maze", style="success")])
@@ -635,6 +641,38 @@ async def maze_out(c: Ctx) -> Screen:
     if pay.level_up:
         text.append(f"🎉 به سطح {fa(pay.level_up.new)} رسیدید!")
     return Screen("\n".join(text), [[c.btn("♾️ هزارتو", "maze")], c.back("trip", "🧭 سفر قهرمان")])
+
+
+# --- the endless tower ----------------------------------------------------------------------------------------------------------------------
+@screen("tower")
+async def tower(c: Ctx) -> Screen:
+    _guard(c)
+    p = await c.refresh()
+    cleared, best, today = await c.services.solo.tower_state(p.id)
+    board = await c.services.solo.tower_board(5)
+    nxt = cleared + 1
+    lines = [
+        f"🗼 {bold('برج بی‌پایان')}", LINE,
+        "هر طبقه یک نبرد است و هر طبقه از قبلی سخت‌تر؛ برج پایان ندارد. اگر ببازید، طبقه‌ای از دست نمی‌دهید و دوباره امتحان می‌کنید.",
+        f"👹 در هر دهمین طبقه یک نگهبان بزرگ ایستاده و بار نخست شکستنش جایزه‌ی ماندگار دارد.",
+        "",
+        f"🏅 رکورد شما: طبقه‌ی {fa(best)}",
+        f"⬆️ طبقه‌ی بعدی: {fa(nxt)}" + (" · نگهبان" if nxt % 10 == 0 else ""),
+        f"📅 صعودهای امروز: {fa(today)} (تا {fa(maze_data.TOWER_FULL_CLIMBS)} صعود پاداش کامل است)",
+    ]
+    if board:
+        lines += ["", f"🌍 {bold('بلندترین صعودکنندگان')}"]
+        medals = ("🥇", "🥈", "🥉", "🔹", "🔹")
+        lines += [f"{medals[i - 1]} {name} — طبقه‌ی {fa(top)}" for i, name, top in board]
+    lines += ["", await _energy_line(c), f"⚡ هر صعود: {fa(maze_data.TOWER_ENERGY)} انرژی"]
+    rows = [[c.btn(f"⬆️ صعود به طبقه‌ی {fa(nxt)}", "towergo", style="danger")], c.back("trip", "🧭 سفر قهرمان")]
+    return Screen("\n".join(lines), rows)
+
+
+@screen("towergo")
+async def tower_go(c: Ctx) -> Screen:
+    _guard(c)
+    return _start(c, await c.services.solo.start_tower(c.player))
 
 
 # --- offline expeditions --------------------------------------------------------------------------------------------------------------------

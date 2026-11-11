@@ -16,7 +16,10 @@ log = logging.getLogger("eternal_realm.notifier")
 BUTTON_LABELS = {
     "sfight": "⚔️ ادامه‌ی نبرد", "ach": "🏅 دستاوردها", "wheel": "🎡 گردونه شانس", "missions": "📅 مأموریت‌ها", "daily": "🎁 جایزه روزانه",
     "arenago": "🥊 میدان بات‌ها", "stage": "📖 داستان", "adv": "🗺️ ماجراجویی", "sbossv": "🐉 باس امروز", "citybuild": "🏗️ ساختمان‌ها",
-    "clanwar": "🏅 لیگ خاندان‌ها", "cwar": "⚔️ جنگ خاندان‌ها", "cwarclaim": "🎁 دریافت جایزه‌ی جنگ", "achf": "🎁 دریافت پاداش", "premium": "💎 خزانه قلمرو", "citytroops": "⚔️ ارتش", "city": "🏰 فرمانروایی", "expd": "📜 گزارش اعزام", "world": "🌍 جهان زنده"}
+    "clanwar": "🏅 لیگ خاندان‌ها", "cwar": "⚔️ جنگ خاندان‌ها", "cwarclaim": "🎁 دریافت جایزه‌ی جنگ", "achf": "🎁 دریافت پاداش", "premium": "💎 خزانه قلمرو", "citytroops": "⚔️ ارتش", "city": "🏰 فرمانروایی", "expd": "📜 گزارش اعزام", "world": "🌍 جهان زنده", "popup": "👀 ببینم چیست", "friends": "👥 دوستان", "rseason": "🏆 فصل رتبه‌بندی"}
+
+
+_last = {"popups": 0}
 
 
 async def deliver(bot, services: Services) -> int:  # noqa: ANN001
@@ -25,6 +28,12 @@ async def deliver(bot, services: Services) -> int:  # noqa: ANN001
     await services.alerts.sweep()
     await services.clan_wars.sweep()
     await services.alerts.tips(services.advisor)
+    await services.alerts.waiting()
+    await services.ladder.close_due()
+    await services.market.weekly_sellers()
+    if services.ctx.now() - _last["popups"] >= 600:
+        _last["popups"] = services.ctx.now()
+        await services.popups.spawn_due()
     sent = 0
     for alert in await services.alerts.pending():
         buttons = None

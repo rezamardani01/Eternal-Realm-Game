@@ -52,7 +52,7 @@ async def test_no_line_or_button_starts_with_two_emojis(services, db):
              ("say", "کیف من"), ("say", "فروشگاه ویژه"), ("say", "باس")]
     screens = ["home", "profile", "inv", "gear", "items", "chests", "chestshop", "shop", "shopcat:gear",
                "shopcat:pot", "market", "mine", "top:level", "premium", "prem:coins", "prem:crystals",
-               "prem:bundles", "prem:chests", "prem:materials", "luckyodds", "helpsec:boss", "helpsec:all", "boss", "adv", "help", "daily", "rest", "open:wooden_chest", "odds:magic_chest"]
+               "prem:bundles", "prem:chests", "prem:materials", "luckyodds", "helpsec:boss", "helpsec:all", "boss", "adv", "help", "daily", "rest", "rseason", "friends", "tower", "missions", "trip", "maze", "open:wooden_chest", "odds:magic_chest"]
     problems: list[tuple[str, str]] = []
 
     def scan(label: str) -> None:

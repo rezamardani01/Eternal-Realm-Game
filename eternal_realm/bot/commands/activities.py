@@ -55,3 +55,10 @@ async def hunt(ctx: CommandContext) -> None:
         energy=result.player.energy, again="hunt", hp=(result.hero_hp, result.hero_max_hp), wait=result.next_in,
     )
     await ctx.play(views.hunt_frames(ctx.who(ctx.me), result), views.hunt_result(ctx.who(ctx.me), result), rows)
+    if ctx.is_group:  # every hunt in a group counts toward the group's weekly goal
+        goal = await ctx.services.social.hit(ctx.chat_id, ctx.me)
+        if goal.completed_now:
+            await ctx.say(
+                f"🎯 {bold('هدف هفتگی گروه کامل شد!')}\n\n{fa(goal.target)} شکار با هم انجام دادید 🏆\n"
+                f"🎁 جایزه‌ی هر کس که دست‌کم ۳ شکار کرده در پیوی‌اش رسید ({fa(len(goal.rewarded or []))} قهرمان)."
+            )

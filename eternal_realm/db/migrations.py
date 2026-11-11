@@ -877,6 +877,76 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (raid_id, chat_id)
     );
     """,
+    # 56: habits that bring heroes back: weeks of missions, ranked seasons, titles, group goals, friends, sellers, pop-ups
+    """
+    CREATE TABLE mission_days (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        day       INTEGER NOT NULL,
+        PRIMARY KEY (player_id, day)
+    );
+    CREATE TABLE mission_week_claims (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        week      INTEGER NOT NULL,
+        PRIMARY KEY (player_id, week)
+    );
+    CREATE TABLE rank_scores (
+        season    INTEGER NOT NULL,
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        score     INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (season, player_id)
+    );
+    CREATE INDEX idx_rank_scores_top ON rank_scores (season, score DESC);
+    CREATE TABLE player_titles (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        key       TEXT    NOT NULL,
+        text      TEXT    NOT NULL,
+        at        INTEGER NOT NULL,
+        PRIMARY KEY (player_id, key)
+    );
+    CREATE TABLE group_goal_hits (
+        chat_id   INTEGER NOT NULL,
+        week      INTEGER NOT NULL,
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        n         INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (chat_id, week, player_id)
+    );
+    CREATE TABLE group_goals (
+        chat_id INTEGER NOT NULL,
+        week    INTEGER NOT NULL,
+        target  INTEGER NOT NULL,
+        done    INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (chat_id, week)
+    );
+    CREATE TABLE friends (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        friend_id INTEGER NOT NULL REFERENCES players (id),
+        status    TEXT    NOT NULL,
+        at        INTEGER NOT NULL,
+        PRIMARY KEY (player_id, friend_id)
+    );
+    CREATE TABLE friend_gifts (
+        sender_id INTEGER NOT NULL,
+        friend_id INTEGER NOT NULL,
+        day       INTEGER NOT NULL,
+        PRIMARY KEY (sender_id, friend_id, day)
+    );
+    CREATE TABLE market_sales (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        seller_id INTEGER NOT NULL,
+        amount    INTEGER NOT NULL,
+        at        INTEGER NOT NULL
+    );
+    CREATE INDEX idx_market_sales_at ON market_sales (at, seller_id);
+    CREATE TABLE popups (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id  INTEGER NOT NULL REFERENCES players (id),
+        kind       TEXT    NOT NULL,
+        status     TEXT    NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+    );
+    CREATE INDEX idx_popups_player ON popups (player_id, status, created_at);
+    """,
 ]
 
 

@@ -142,6 +142,7 @@ async def fight_menu(c: Ctx) -> Screen:
     rows = [
         [c.btn("🕳️ سیاه‌چال", "dungeon"), c.btn("📜 داستان‌ها", "quests")],
         [c.btn("🏆 تالار بزرگان", "top"), c.btn("🏁 مسابقات", "contests")],
+        [c.btn("🥇 فصل رتبه‌بندی", "rseason")],
         [c.btn("⚔️ راهنمای مبارزه در گروه", "fighthelp")],
         c.back("home"),
     ]
@@ -231,6 +232,9 @@ async def home(c: Ctx) -> Screen:
         [c.btn("🎁 جایزه روزانه", "daily"), c.btn("😴 استراحت", "rest")],
         [c.btn("❓ راهنمایی", "help"), c.btn("🤝 دعوت از دوستان", "invite", style="success")],
     ]
+    streak, savable = c.services.players.streak_status(p)
+    if savable:
+        rows.insert(0, [c.btn(f"🛟 نجات زنجیره‌ی {fa(streak)} روزه", "rescue", style="danger")])
     shown = await c.services.admin.links()
     links = [Button.url(shown[key]["text"], shown[key]["url"]) for key in ("group", "channel") if shown[key]["url"]]
     if links:
@@ -345,7 +349,7 @@ async def profile(c: Ctx) -> Screen:
             [c.btn("🐾 یار همراه", "pets"), c.btn("🃏 آلبوم کارت", "album")],
             [c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")],
             [c.btn("📅 مأموریت‌ها", "missions"), c.btn("🏅 دستاوردها", "ach")],
-            [c.btn("🕯️ محراب", "altar")],
+            [c.btn("🕯️ محراب", "altar"), c.btn("👥 دوستان", "friends")],
             c.back("home"),
         ]
     elif c.b == "cm":
@@ -353,7 +357,9 @@ async def profile(c: Ctx) -> Screen:
     else:
         rows.append([c.btn("🏰 قلمرو من", "home")])
     header = views.profile_header(target, c.services.characters.xp_needed(target), c.services.ctx.now())
-    return Screen(f"{header}\n{views.LINE}\n{sheet}", rows)
+    badges = await c.services.social.titles(target.id)
+    badge_line = ("\n🎖️ نشان‌ها: " + " · ".join(badges)) if badges else ""
+    return Screen(f"{header}{badge_line}\n{views.LINE}\n{sheet}", rows)
 
 
 @screen("stat")

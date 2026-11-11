@@ -178,4 +178,4 @@ async def test_profile_shows_the_stats_in_the_text_and_only_hero_buttons(h, serv
     text = h.session.last_text()
     assert all(word in text for word in ("جان", "حمله", "دفاع", "جادو", "سرعت", "شانس", "انرژی"))
     labels = [b["text"] for row in h.session.last_markup_rows() for b in row]
-    assert not any(word in t for t in labels for word in ("حمله", "دفاع", "جادو", "سرعت", "شانس")) and len(labels) <= 10
+    assert not any(word in t for t in labels for word in ("حمله", "دفاع", "جادو", "سرعت", "شانس")) and len(labels) <= 12

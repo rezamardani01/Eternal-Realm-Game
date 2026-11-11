@@ -46,8 +46,58 @@ class MarketService:
         self.ctx = ctx
         self.inventory = inventory
 
-    def fee_for(self, price: int) -> int:
-        return max(1, price * self.ctx.balance.market_fee_percent // 100)
+    #: the week's best seller pays this share instead of the usual fee for the whole next week
+    TOP_SELLER_FEE_PERCENT = 2
+
+    def fee_for(self, price: int, top_seller: bool = False) -> int:
+        percent = min(self.TOP_SELLER_FEE_PERCENT, self.ctx.balance.market_fee_percent) if top_seller else self.ctx.balance.market_fee_percent
+        return max(1, price * percent // 100)
+
+    @staticmethod
+    def _week(now: int) -> int:
+        return ((now + 12600) // 86400 + 5) // 7
+
+    async def _best_last_week(self, tx, now: int) -> int | None:  # noqa: ANN001
+        """The hero who sold the most coins' worth last week (at least MIN_WEEKLY_SALES), else ``None``."""
+        week = self._week(now)
+        start = (week - 1) * 7 * 86400 - 5 * 86400 - 12600
+        row = await tx.fetchone(
+            "SELECT seller_id, SUM(amount) AS total FROM market_sales WHERE at >= ? AND at < ? GROUP BY seller_id"
+            " ORDER BY total DESC, seller_id LIMIT 1", (start, start + 7 * 86400),
+        )
+        return row["seller_id"] if row is not None and row["total"] >= self.MIN_WEEKLY_SALES else None
+
+    MIN_WEEKLY_SALES = 1_000
+
+    async def is_top_seller(self, player_id: int) -> bool:
+        async with self.ctx.db.read() as tx:
+            return await self._best_last_week(tx, self.ctx.now()) == player_id
+
+    async def weekly_sellers(self) -> int | None:
+        """Once a week: crown the best seller of the week that just ended (a badge and a message). Returns who."""
+        from ...db.repos import titles
+        from ..notify import queue
+
+        now = self.ctx.now()
+        week = self._week(now)
+        async with self.ctx.db.transaction() as tx:
+            done = int(await tx.scalar("SELECT value FROM app_settings WHERE key = 'seller_week'", (), 0))
+            if done >= week:
+                return None
+            await tx.execute(
+                "INSERT INTO app_settings (key, value) VALUES ('seller_week', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                (str(week),),
+            )
+            best = await self._best_last_week(tx, now)
+            if best is None:
+                return None
+            await titles.award(tx, best, f"seller:{week - 1}", "🛒 فروشنده‌ی برتر بازار", now)
+            await queue(
+                tx, best, f"seller:{week - 1}",
+                "🛒 *فروشنده‌ی برتر هفته شدید!*\n\nنشان «فروشنده‌ی برتر بازار» برای همیشه در پروفایلتان است "
+                f"و این هفته کارمزد آگهی‌هایتان فقط {self.TOP_SELLER_FEE_PERCENT}٪ است.", now, "market",
+            )
+            return best
 
     def price_range(self, item: Item, qty: int = 1, upgrade: int = 0) -> tuple[int, int]:
         """The cheapest and dearest price a listing of this may ask: half to one and a fifth of its real worth."""
@@ -147,7 +197,8 @@ class MarketService:
                 raise GameError("این آگهی دیگر روی تخته نیست؛ یا فروخته شده یا برداشته شده. «بازار» را بنویسید تا آگهی‌های تازه را ببینید.")
             if row["seller_id"] == buyer.id:
                 raise GameError("این آگهی خود شماست، فرمانده! اگر پشیمان شدید «لغو شماره» را بنویسید.")
-            price, fee = row["price"], self.fee_for(row["price"])
+            price = row["price"]
+            fee = self.fee_for(price, await self._best_last_week(tx, now) == row["seller_id"])
             # the status flip is the single gate: only one buyer can ever pass it
             if not await repo.close(tx, listing_id, "sold", buyer.id, now):
                 raise GameError("افسوس! یک نفر لحظه‌ای زودتر آن را خرید.")
@@ -164,6 +215,7 @@ class MarketService:
                 await self.inventory.grant(tx, buyer.id, row["item_id"], row["qty"])
             from ..notify import queue
 
+            await tx.execute("INSERT INTO market_sales (seller_id, amount, at) VALUES (?, ?, ?)", (row["seller_id"], price, now))
             sold = get_item(row["item_id"])
             await queue(
                 tx, row["seller_id"], f"sold:{listing_id}",

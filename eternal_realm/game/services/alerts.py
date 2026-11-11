@@ -10,6 +10,18 @@ from ..data.expedition import get_kind
 from ..notify import queue
 
 
+async def queue_once(tx, player_id: int, key: str, now: int) -> bool:  # noqa: ANN001 - Tx
+    """The daily gift is ready: one message per gift."""
+    if await tx.scalar("SELECT 1 FROM player_alerts WHERE player_id = ? AND key = ?", (player_id, key), 0):
+        return False
+    await queue(
+        tx, player_id, key,
+        "🎁 *گنجینه‌ی روزانه‌تان آماده است!*\n\nامروز هم سر بزنید و جایزه‌تان را بردارید؛ پشت‌سرهم گرفتنش جایزه را بزرگ‌تر می‌کند.",
+        now, "daily",
+    )
+    return True
+
+
 @dataclass
 class Alert:
     uid: int
@@ -23,6 +35,7 @@ class AlertService:
         self.ctx = ctx
         self.players = players
         self._tips_at = 0
+        self._waiting_at = 0
 
     async def sweep(self) -> None:
         """Queue the news that no action causes: a boost or a VIP subscription that has just run out, a hero back from away."""
@@ -51,6 +64,41 @@ class AlertService:
                         tx, r["id"], f"{column}:{r['until']}", f"{emoji} *{name} شما تمام شد.*\n\n"
                         "هر وقت خواستید از «خزانه قلمرو» دوباره فعالش کنید.", now, "premium",
                     )
+
+    async def waiting(self) -> int:
+        """«Your hero is waiting»: the energy bar is full again, the daily gift can be taken. Returns how many were queued."""
+        from ..engine import progression
+
+        now = self.ctx.now()
+        hour = ((now + 12600) % 86400) // 3600
+        if hour >= 23 or hour < 8 or now - self._waiting_at < 240:
+            return 0
+        self._waiting_at = now
+        balance = self.ctx.balance
+        queued = 0
+        async with self.ctx.db.transaction() as tx:
+            rows = await tx.fetchall(
+                "SELECT id, level, energy, energy_at, daily_at FROM players WHERE banned = 0 AND offers_off = 0 AND energy_at >= ?"
+                " ORDER BY id LIMIT 500", (now - 3 * 86400,),
+            )
+            for r in rows:
+                cap = progression.max_energy(r["level"], balance)
+                if r["energy"] < cap and progression.regen_energy(r["energy"], r["energy_at"], now, r["level"], balance)[0] >= cap:
+                    recent = await tx.scalar(
+                        "SELECT 1 FROM player_alerts WHERE player_id = ? AND key LIKE 'energyfull:%' AND created_at > ?",
+                        (r["id"], now - 8 * 3600), 0,
+                    )
+                    if not recent:
+                        await queue(
+                            tx, r["id"], f"energyfull:{r['energy_at']}",
+                            f"⚡ *انرژی‌تان پر شد!*\n\nنوار انرژی {fa(cap)} تایی کامل است؛ قهرمانتان آماده‌ی ماجراجویی است.", now, "adv",
+                        )
+                        queued += 1
+                since = now - r["daily_at"]
+                if r["daily_at"] and 86400 <= since < 4 * 86400:
+                    ready = await queue_once(tx, r["id"], f"dailyready:{r['daily_at']}", now)
+                    queued += 1 if ready else 0
+        return queued
 
     async def tips(self, advisor) -> int:  # noqa: ANN001 - AdvisorService
         """One friendly suggestion a day for every recently active hero (never at night). Returns how many were queued."""

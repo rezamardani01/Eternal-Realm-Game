@@ -431,6 +431,8 @@ class SoloService:
             if info.get("chest"):
                 items[info["chest"]] = 1
             await self._set_progress(tx, pid, "run", 0 if floor >= data.FLOORS else self._run_code(dungeon, floor + 1))
+        elif kind == "tower":
+            gold, xp, crystal, items, notes = await self._tower_won(tx, pid, info)
         elif kind == "boss":
             first = await self._bump_daily(tx, pid, f"boss:{info['boss']}") == 1
             if first:
@@ -716,6 +718,55 @@ class SoloService:
             if await tx.scalar("SELECT 1 FROM solo_fights WHERE player_id = ? AND status = 'active'", (player.id,), 0):
                 raise GameError("اول نبرد نیمه‌کاره را تمام کنید.")
             return await self._finish_run(tx, player.id, run, 1.0)
+
+    # --- the endless tower ------------------------------------------------------------------------
+    async def tower_state(self, player_id: int) -> tuple[int, int, int]:
+        """(floors cleared, best floor, climbs today)."""
+        async with self.ctx.db.read() as tx:
+            cleared = await self._progress(tx, player_id, "tower:floor")
+            best = await self._progress(tx, player_id, "tower:best")
+            today = await self._daily(tx, player_id, "tower")
+        return cleared, best, today
+
+    async def tower_board(self, limit: int = 10) -> list[tuple[int, str, int]]:
+        """The tallest climbers of all time: (rank, name, best floor)."""
+        async with self.ctx.db.read() as tx:
+            rows = await tx.fetchall(
+                "SELECT p.display_name AS name, s.n AS best FROM solo_progress s JOIN players p ON p.id = s.player_id"
+                " WHERE s.key = 'tower:best' AND p.banned = 0 ORDER BY s.n DESC, p.id LIMIT ?", (limit,),
+            )
+        return [(i, r["name"], r["best"]) for i, r in enumerate(rows, 1)]
+
+    async def start_tower(self, player: Player) -> SoloFight:
+        async with self.ctx.db.transaction() as tx:
+            floor = await self._progress(tx, player.id, "tower:floor") + 1
+            foe_id = maze_data.tower_foe(floor)
+            level = maze_data.foe_level(min(floor, maze_data.FLOORS), player.level)
+            foe = data.get_foe(foe_id).fighter(level, maze_data.tower_mult(floor))
+            gold, xp = self._scale(player.level, *maze_data.tower_reward(floor))
+            info = {
+                "title": f"برج بی‌پایان · طبقه‌ی {fa(floor)}", "floor": floor, "gold": gold, "xp": xp, "foe": foe_id, "level": level,
+                "guardian": floor % 10 == 0,
+            }
+            return await self._begin(tx, player, "tower", foe, info, maze_data.TOWER_ENERGY)
+
+    async def _tower_won(self, tx: Tx, pid: int, info: dict) -> tuple[int, int, int, dict[str, int], list[str]]:
+        floor = info["floor"]
+        gold, xp, crystal, items, notes = info["gold"], info["xp"], 0, {}, []
+        climbs = await self._bump_daily(tx, pid, "tower")
+        if climbs > maze_data.TOWER_FULL_CLIMBS:
+            gold, xp = round(gold / 3), round(xp / 3)
+            notes.append(f"پاداش برج بعد از {fa(maze_data.TOWER_FULL_CLIMBS)} صعود امروز یک‌سوم است.")
+        if floor > await self._progress(tx, pid, "tower:floor"):
+            await self._set_progress(tx, pid, "tower:floor", floor)
+        if floor > await self._progress(tx, pid, "tower:best"):
+            await self._set_progress(tx, pid, "tower:best", floor)
+            notes.append(f"رکورد تازه‌ی برج: طبقه‌ی {fa(floor)}!")
+            if floor % 10 == 0:  # the first time only a guardian floor pays a lasting prize
+                crystal = 1 + floor // 20
+                items["wooden_chest" if floor < 50 else "magic_chest"] = 1
+                notes.append(f"نگهبان طبقه‌ی {fa(floor)} شکست خورد: جایزه‌ی ماندگار!")
+        return gold, xp, crystal, items, notes
 
     # --- events on the road ---------------------------------------------------------------------------------------
     async def wander(self, player: Player) -> data.RoadEvent:

@@ -32,7 +32,10 @@ from ..game.services.advisor import AdvisorService
 from ..game.services.alerts import AlertService
 from ..game.services.city import CityService
 from ..game.services.expedition import ExpeditionService
+from ..game.services.ladder import LadderService
+from ..game.services.popups import PopupService
 from ..game.services.raids import RaidService
+from ..game.services.social import SocialService
 from ..game.services.solo import SoloService
 from ..game.services.world import WorldService
 from ..game.services.exchange import ExchangeService
@@ -84,6 +87,9 @@ class Services:
     alerts: AlertService
     solo: SoloService
     raids: RaidService
+    ladder: LadderService
+    social: SocialService
+    popups: PopupService
     advisor: AdvisorService
     expeditions: ExpeditionService
     world: WorldService
@@ -116,7 +122,7 @@ class Services:
         wheel = WheelService(ctx, inventory)
         city = CityService(ctx)
         achievements = AchievementService(ctx, inventory)
-        missions = MissionService(ctx, offers)
+        missions = MissionService(ctx, offers, inventory)
         advisor = AdvisorService(ctx, solo, achievements, missions, wheel, city, inventory)
         return cls(
             ctx=ctx,
@@ -150,6 +156,9 @@ class Services:
             alerts=AlertService(ctx, players),
             solo=solo,
             raids=RaidService(ctx, players, solo, inventory),
+            ladder=LadderService(ctx, inventory),
+            social=SocialService(ctx, players, inventory),
+            popups=PopupService(ctx, players, inventory),
             advisor=advisor,
             expeditions=ExpeditionService(ctx, players, inventory),
             world=world,

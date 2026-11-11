@@ -1,6 +1,6 @@
 """Importing this package registers every command with the registry."""
 
-from . import activities, admin, basic, boss, clans, duel, economy, events, gdungeon, gifts, adminpanel, group_admin, giftshop, owner, panels, realm, teambattle  # noqa: F401
+from . import activities, admin, basic, boss, clans, duel, economy, events, gdungeon, gifts, adminpanel, group_admin, giftshop, owner, panels, realm, teambattle, habits  # noqa: F401
 from .registry import PRIVATE_ONLY, REGISTRY
 from .router import router
 

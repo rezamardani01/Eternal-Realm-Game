@@ -111,6 +111,52 @@ class RaidService:
                 ("1" if enabled else "0",),
             )
 
+    async def _flag(self, key: str, default: str = "1") -> bool:
+        async with self.ctx.db.read() as tx:
+            return (await tx.scalar("SELECT value FROM app_settings WHERE key = ?", (key,), default)) != "0"
+
+    async def set_flag(self, key: str, enabled: bool) -> None:
+        async with self.ctx.db.transaction() as tx:
+            await tx.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                (key, "1" if enabled else "0"),
+            )
+
+    async def scheduled(self) -> tuple[str, int] | None:
+        """The event the calendar asks for right now, as (kind id, minutes of waiting): a festival on its day at noon, the
+        weekly cup on Friday evening, or (when the owner has switched it on) a random one every few hours."""
+        import datetime
+
+        from ...shared.jalali import gregorian_to_jalali
+
+        now = self.ctx.now()
+        moment = datetime.datetime.fromtimestamp(now + 12600, tz=datetime.timezone.utc)
+        day = (now + 12600) // 86400
+        async with self.ctx.db.read() as tx:
+            if await tx.scalar("SELECT 1 FROM raids WHERE status = 'lobby'", (), 0):
+                return None
+        month_day = gregorian_to_jalali(moment.year, moment.month, moment.day)[1:]
+        if 12 <= moment.hour < 20 and await self._flag("seasonal_events"):
+            for kind in data.SEASONAL:
+                if kind.date == tuple(month_day):
+                    async with self.ctx.db.read() as tx:
+                        seen = await tx.scalar("SELECT 1 FROM raids WHERE kind = ? AND created_at > ?", (kind.id, now - 200 * 86400), 0)
+                    if not seen:
+                        return kind.id, 30
+        week = (day + 5) // 7
+        if day % 7 == 1 and moment.hour >= 20 and await self._flag("weekly_cup"):  # Friday evening
+            async with self.ctx.db.read() as tx:
+                last = int(await tx.scalar("SELECT value FROM app_settings WHERE key = 'weekly_cup_week'", (), -1))
+            if last < week:
+                async with self.ctx.db.transaction() as tx:
+                    await tx.execute(
+                        "INSERT INTO app_settings (key, value) VALUES ('weekly_cup_week', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                        (str(week),),
+                    )
+                return "cup", 15
+        kind_id = await self.auto_due()
+        return (kind_id, data.LOBBY_MINUTES) if kind_id else None
+
     async def auto_due(self) -> str | None:
         """The kind to announce now when the automatic mode is on and the last event is long enough ago, else ``None``."""
         if not await self.auto_enabled():
@@ -125,7 +171,7 @@ class RaidService:
             last = int(await tx.scalar("SELECT COALESCE(MAX(created_at), 0) FROM raids", (), 0))
         if now - last < data.AUTO_GAP_HOURS * 3600:
             return None
-        return self.ctx.rng.choice(data.KINDS).id
+        return self.ctx.rng.choice([k for k in data.KINDS if not k.date]).id
 
     # --- starting and joining -------------------------------------------------------------------
     async def create(self, kind_id: str, minutes: int = data.LOBBY_MINUTES) -> RaidView:
@@ -249,6 +295,19 @@ class RaidService:
                 o.removed, o.won = removed, won
                 o.score = round(100 * removed + (60 if won else 0) + (40 * kept if won else 0))
             summary = self._raid(outcomes, kind) if kind.mode == "raid" else self._cup(outcomes)
+        if kind.bonus != 1.0:  # a festival pays more
+            for o in outcomes:
+                o.gold, o.xp = round(o.gold * kind.bonus), round(o.xp * kind.bonus)
+                o.crystal += 2
+        if kind.badge:
+            from ...db.repos import titles
+            from ...shared.jalali import gregorian_to_jalali
+            import datetime
+
+            moment = datetime.datetime.fromtimestamp(now + 12600, tz=datetime.timezone.utc)
+            year = gregorian_to_jalali(moment.year, moment.month, moment.day)[0]
+            for o in outcomes:
+                await titles.award(tx, o.player.id, f"{kind.id}:{year}", f"{kind.badge} {fa(year)}", now)
         for o in outcomes:
             await self._pay(tx, row["id"], o, now)
         summary.update(

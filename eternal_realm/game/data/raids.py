@@ -30,6 +30,12 @@ class GlobalKind:
     mode: str
     foe: str = ""
     mult: float = 1.0
+    #: a day of the Jalali calendar (month, day) on which the bot announces it by itself every year
+    date: tuple[int, int] | None = None
+    #: a lasting badge for everybody who took part (followed by the year)
+    badge: str = ""
+    #: the prizes of a festival are bigger than an ordinary event's
+    bonus: float = 1.0
 
 
 KINDS: tuple[GlobalKind, ...] = (
@@ -64,6 +70,30 @@ KINDS: tuple[GlobalKind, ...] = (
         "lottery",
     ),
 )
+#: the festivals of the calendar: announced by themselves at noon of their day when the owner has not switched them off
+SEASONAL: tuple[GlobalKind, ...] = (
+    GlobalKind(
+        "nowruz", "🌱", "جشن نوروز", ("نوروز",),
+        "بهار آمد! هفت‌سین قلمرو چیده شده و شاه سفره‌ی نوروزی را باز کرده؛ همه‌ی قهرمانان مهمان‌اند و قرعه‌ی عیدی در راه است.",
+        "lottery", date=(1, 1), badge="🌱 مهمان نوروز", bonus=1.5,
+    ),
+    GlobalKind(
+        "yalda", "🍉", "شب یلدا", ("یلدا",),
+        "بلندترین شب سال است و تاریکی بر قلمرو سنگینی می‌کند! اگر همه تا سپیده‌دم کنار هم بمانند و بجنگند، خورشید برمی‌گردد.",
+        "raid", "lord_of_darkness", 1.0, date=(9, 30), badge="🍉 نگهبان شب یلدا", bonus=1.5,
+    ),
+    GlobalKind(
+        "tirgan", "🏹", "جشن تیرگان", ("تیرگان",),
+        "به یاد آرش کمانگیر، شاه همه‌ی کماندارها و شمشیرزن‌ها را به میدان تیرگان خوانده؛ برترین‌ها نشان آرش می‌گیرند.",
+        "cup", "bot_archer", 1.1, date=(4, 13), badge="🏹 تیرانداز تیرگان", bonus=1.5,
+    ),
+    GlobalKind(
+        "mehregan", "🍂", "جشن مهرگان", ("مهرگان",),
+        "پاییز آمد و خرمن برداشته شد! شاه از نعمت سال، قرعه‌ی مهرگان را برای همه‌ی قهرمانان می‌اندازد.",
+        "lottery", date=(7, 16), badge="🍂 مهمان مهرگان", bonus=1.5,
+    ),
+)
+KINDS = (*KINDS, *SEASONAL)
 _BY_ID = {k.id: k for k in KINDS}
 
 
@@ -89,6 +119,8 @@ DEFEAT: dict[str, str] = {
     "undead": "پادشاه مردگان عقب نشست، اما نه شکست‌خورده. قلمرو هنوز نفس می‌کشد و قهرمانانش آماده‌ترند.",
     "titan": "تایتان با چند قدم خانه‌ها را خراب کرد و دور شد. قهرمانان تا آخرین دم جنگیدند.",
 }
+VICTORY["yalda"] = "سپیده زد! خورشید از پشت کوه‌ها بالا آمد و سایه‌های بلندترین شب سال پراکنده شد. قهرمانان تا صبح کنار هم ماندند و تاریکی شکست."
+DEFEAT["yalda"] = "شب هنوز بلند بود و تاریکی کمی بیشتر ماند... اما قهرمانان شمع‌ها را روشن نگه داشتند و سپیده نزدیک است."
 CUP_STORY = "میدان بزرگ پر از فریاد بود؛ شمشیرها بالا رفت و جام به شایسته‌ترین‌ها رسید."
 LOTTERY_STORY = "خزانه‌دار شاه کیسه‌ی قرعه را تکان داد و اسم‌ها از میان انبوه بیرون افتاد."
 

@@ -168,9 +168,9 @@ async def processor(bot: Bot, services: Services, interval: float = 10.0) -> Non
         try:
             for event in await services.raids.tick():
                 await conclude(bot, services, event)
-            auto = await services.raids.auto_due()
-            if auto is not None:
-                await start_event(bot, services, auto)
+            due = await services.raids.scheduled()
+            if due is not None:
+                await start_event(bot, services, *due)
             view = await services.raids.current()
             if view is not None:
                 now = loop.time()

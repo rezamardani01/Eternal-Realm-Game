@@ -50,7 +50,8 @@ OWNER_COMMANDS = """\
 • احضار معما · احضار کاشی · احضار قرعه کشی
 • احضار باس — بدون هزینه، سطح و فاصله‌ی زمانی
 • رویداد سراسری لشکر|اژدها|مردگان|تایتان|جام|گنج [دقیقه] — اعلام در همه‌ی گروه‌ها
-• رویداد سراسری خودکار روشن|خاموش
+• رویداد سراسری خودکار روشن|خاموش · رویداد سراسری جام هفتگی روشن|خاموش · رویداد سراسری فصلی روشن|خاموش
+• رویداد سراسری نوروز|یلدا|تیرگان|مهرگان — اعلام دستی جشن‌ها
 
 ⚔️ مبارزه و ماجراجویی
 • دوئل: سقف روزانه‌ی هر جفت و سقف پاداش برای مالک برداشته شده است
@@ -216,6 +217,13 @@ async def global_event(ctx: CommandContext) -> None:
     from ...game.data import raids as raid_data
     from .. import raid_ui
 
+    if ctx.args and ctx.args[-1] in ("روشن", "خاموش") and any(w in ctx.args for w in ("هفتگی", "فصلی")):
+        key = "weekly_cup" if "هفتگی" in ctx.args else "seasonal_events"
+        on = ctx.args[-1] == "روشن"
+        await ctx.services.raids.set_flag(key, on)
+        what = "جام هفتگی" if key == "weekly_cup" else "جشن‌های تقویم (نوروز، یلدا، تیرگان، مهرگان)"
+        await ctx.reply(f"🗓️ {what} {'روشن شد' if on else 'خاموش شد'}.")
+        return
     if ctx.args and ctx.args[0] == "خودکار":
         on = len(ctx.args) > 1 and ctx.args[1] in ("روشن", "فعال")
         await ctx.services.raids.set_auto(on)
