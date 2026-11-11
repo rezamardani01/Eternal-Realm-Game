@@ -685,8 +685,12 @@ class SoloService:
             await self._set_progress(tx, pid, "maze:chapters", max(chapter, await self._progress(tx, pid, "maze:chapters")))
             pay = await self._finish_run(tx, pid, run, 1.0)
             title = maze_data.CHAPTERS[chapter - 1][0]
+            from ...db.repos import titles
+
+            await titles.award(tx, pid, f"maze:{chapter}", f"{maze_data.CHAPTERS[chapter - 1][1]} فاتح فصل {fa(chapter)} هزارتو", self.ctx.now())
             if chapter >= len(maze_data.CHAPTERS):
-                notes.append("هر چهار فصل هزارتو را فتح کردید؛ این افسانه برای همیشه به نام شماست! 🏆")
+                await titles.award(tx, pid, "maze:master", "👑 فاتح هزارتوی ابدی", self.ctx.now())
+                notes.append("هر چهار فصل هزارتو را فتح کردید؛ نشان «فاتح هزارتوی ابدی» برای همیشه به نام شماست! 🏆")
             else:
                 notes.append(f"فصل «{title}» به پایان رسید؛ فصل بعد باز شد. همه‌ی غنیمت‌تان با شماست.")
             pay.notes = notes

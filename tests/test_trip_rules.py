@@ -291,6 +291,8 @@ async def test_the_maze_is_four_chapters_each_opened_by_the_last_and_walked_once
         clock.advance(86400)
     with pytest.raises(GameError, match="فقط یک بار"):
         await services.solo.maze_start(p)  # all four are won: the maze is closed for this hero
+    badges = await services.social.titles(p.id, 10)
+    assert "👑 فاتح هزارتوی ابدی" in badges and len(badges) == 5  # one badge per chapter and the master's
 
 
 async def test_a_lost_chapter_is_tried_again_not_skipped(services, db, clock):
