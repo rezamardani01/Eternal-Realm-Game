@@ -947,6 +947,20 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_popups_player ON popups (player_id, status, created_at);
     """,
+    # 57: the small thank-you boxes a clan finds when one of its members buys something with real money
+    """
+    CREATE TABLE clan_gift_boxes (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id  INTEGER NOT NULL REFERENCES players (id),
+        from_id    INTEGER NOT NULL,
+        from_name  TEXT    NOT NULL,
+        clan_name  TEXT    NOT NULL,
+        tier       INTEGER NOT NULL,
+        status     TEXT    NOT NULL,
+        created_at INTEGER NOT NULL
+    );
+    CREATE INDEX idx_clan_gift_boxes_player ON clan_gift_boxes (player_id, created_at);
+    """,
 ]
 
 

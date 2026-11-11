@@ -14,6 +14,26 @@ LINE = "━━━━━━━━━━━━"
 MEDALS = ("🥇", "🥈", "🥉")
 
 
+# --- thank-you boxes from the clan ------------------------------------------------------------------------------------
+@screen("cgopen")
+async def clan_gift_open(c: Ctx) -> Screen:
+    from ..game.services.clan_gifts import TIERS
+
+    opened = await c.services.clan_gifts.open(c.player, _int(c.a))
+    await c.refresh()
+    _, name, icon = TIERS[opened.tier]
+    lines = [
+        f"🎉 {bold('هدیه‌ی خاندان باز شد!')}", LINE,
+        f"{icon} هدیه‌ی {name} · به پاس خرید {opened.buyer}",
+        "",
+        f"🎁 {bold('داخلش بود')}",
+        *c.services.clan_gifts.describe(opened),
+        "",
+        "خاندان یعنی همین؛ کنار هم 💛",
+    ]
+    return Screen("\n".join(lines), [[c.btn("🏰 قلمرو من", "home")]], toast="🎁 هدیه‌ی خاندان باز شد")
+
+
 # --- the ranked season ----------------------------------------------------------------------------------------------
 @screen("rseason")
 async def rseason(c: Ctx) -> Screen:

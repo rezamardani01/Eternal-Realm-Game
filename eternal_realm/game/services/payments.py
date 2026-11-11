@@ -23,6 +23,7 @@ from ..data.packs import ORDER_TTL_SECONDS, PACKS, Pack
 from ..engine import progression
 from ...shared.text import fa
 from ..models import Player
+from .clan_gifts import ClanGiftService
 from .inventory import InventoryService
 
 log = logging.getLogger("eternal_realm.payments")
@@ -196,6 +197,9 @@ class PaymentService:
                 granted = "\n".join(parts)
             await repo.mark_delivered(tx, order.id, now)
             order.status = "delivered"
+            buyer = await player_repo.get(tx, row["player_id"])
+            if buyer is not None:  # whatever was bought, the buyer's clan-mates find a small thank-you box
+                await ClanGiftService(self.ctx, self.inventory).thank_clan(tx, buyer, order.amount, now)
             return Delivery(order, row["player_id"], granted=granted, recipient_id=order.gift_to)
 
     async def gift(self, admin_id: int, player_id: int, pack_id: str, qty: int) -> tuple[Order, str]:

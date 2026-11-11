@@ -32,6 +32,7 @@ from ..game.services.advisor import AdvisorService
 from ..game.services.alerts import AlertService
 from ..game.services.city import CityService
 from ..game.services.expedition import ExpeditionService
+from ..game.services.clan_gifts import ClanGiftService
 from ..game.services.ladder import LadderService
 from ..game.services.popups import PopupService
 from ..game.services.raids import RaidService
@@ -88,6 +89,7 @@ class Services:
     solo: SoloService
     raids: RaidService
     ladder: LadderService
+    clan_gifts: ClanGiftService
     social: SocialService
     popups: PopupService
     advisor: AdvisorService
@@ -157,6 +159,7 @@ class Services:
             solo=solo,
             raids=RaidService(ctx, players, solo, inventory),
             ladder=LadderService(ctx, inventory),
+            clan_gifts=ClanGiftService(ctx, inventory),
             social=SocialService(ctx, players, inventory),
             popups=PopupService(ctx, players, inventory),
             advisor=advisor,

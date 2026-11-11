@@ -84,7 +84,8 @@ async def clan(c: Ctx) -> Screen:
         shop_row.append(c.btn("⚙️ تنظیمات خاندان", "clanset"))
     rows.append(shop_row)
     rows.append([c.btn("🚪 خروج از خاندان", "clanleaveq", style="danger")])
-    rows.append(c.back("home"))
+    if not c.is_group:  # in a group the clan card ends with the exit button; there is nothing to go «back» to
+        rows.append(c.back("home"))
     role = _role_label(mine.my_role or "member")
     khan = await c.services.clans.khan_points(c.player.id)
     text = clan_text(mine, c.is_group) + f"\n\n{role}: مقام شما\n🎖️ خان‌پوینت شما: {fa(khan)}"
