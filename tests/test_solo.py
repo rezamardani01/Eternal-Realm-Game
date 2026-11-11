@@ -10,7 +10,7 @@ from eternal_realm.db.repos import wallet
 from eternal_realm.game.data import solo as data
 from eternal_realm.game.engine.combat import Action
 from eternal_realm.shared.errors import GameError
-from eternal_realm.shared.text import EMOJI
+from eternal_realm.shared.text import EMOJI, fa
 
 from .harness import Harness
 
@@ -239,7 +239,7 @@ async def test_the_hub_and_a_whole_session_through_buttons(h, services, db):
         if "پیروزی" in h.session.last_text() or "شکست" in h.session.last_text():
             break
     assert "پیروزی!" in h.session.last_text() and "پاداش" in h.session.last_text()
-    assert any("دوباره" in x for x in h.labels())
+    assert any("میدان" in x for x in h.labels())  # the arena opens once a day, so no "again" here
     await h.panel(1, "stagego", "1", "fight")
     assert "داستان" in h.session.last_text()
     await h.panel(1, "sfleeq")
@@ -495,13 +495,13 @@ async def test_the_maze_screens(h, services, db):
     await h.panel(1, "mazego")
     scene = md.SCENES[(await services.solo.maze_run(p.id)).ref]
     text = h.session.last_text()
-    assert "طبقه‌ی ۱ از ۳۰" in text and scene.title in text and scene.text in text and "غول بعدی در طبقه‌ی ۳" in text
+    assert f"طبقه‌ی ۱ از {fa(md.FLOORS)}" in text and scene.title in text and scene.text in text and "غول بعدی در طبقه‌ی ۳" in text
     assert {choice.label for choice in scene.choices} <= set(h.labels())
     for line in text.splitlines():
         assert len(re.findall(EMOJI, line)) <= 1, line
     await put_on_floor(db, p, 1, "scene", "forge")
     await h.panel(1, "mazepick", "2")  # rummaging the forge never starts a fight
-    assert "در راه چه گذشت" in h.session.last_text() and "طبقه‌ی ۲ از ۳۰" in h.session.last_text()
+    assert "در راه چه گذشت" in h.session.last_text() and f"طبقه‌ی ۲ از {fa(md.FLOORS)}" in h.session.last_text()
     for line in h.session.last_text().splitlines():
         assert len(re.findall(EMOJI, line)) <= 1, line
     await put_on_floor(db, p, 3, "giant", md.pool_for(3)[0])
@@ -520,7 +520,7 @@ async def test_the_maze_screens(h, services, db):
             break
     assert any("ادامه‌ی هزارتو" in x for x in h.labels())
     await h.panel(1, "maze")
-    assert "غنیمت تا اینجا" in h.session.last_text() and "طبقه‌ی ۴ از ۳۰" in h.session.last_text()
+    assert "غنیمت تا اینجا" in h.session.last_text() and f"طبقه‌ی ۴ از {fa(md.FLOORS)}" in h.session.last_text()
     await put_on_floor(db, p, 5, "giant", md.pool_for(5)[0])
     await h.panel(1, "maze")
     assert "غول سرسخت" in h.session.last_text() and not any("دزدکی" in x for x in h.labels())
@@ -546,6 +546,7 @@ async def test_expeditions_take_time_pay_modestly_and_are_limited(services, db, 
         await services.expeditions.claim(p)
     clock.advance(4 * 3600 + 1)
     report = await services.expeditions.claim(p)
+    clock.advance(86400)  # one expedition a day
     assert report.hours == 4 and report.lines and report.items.get("iron_ore", 0) >= 6
     async with db.read() as tx:
         assert await tx.scalar("SELECT qty FROM inventory WHERE player_id = ? AND item_id = 'iron_ore'", (p.id,), 0) >= 6
@@ -556,7 +557,7 @@ async def test_expeditions_take_time_pay_modestly_and_are_limited(services, db, 
     trained = await services.expeditions.claim(p)
     assert trained.xp > 0 and trained.gold == 0
     with pytest.raises(GameError, match=f"{ed.DAILY_LIMIT}".translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))):
-        await services.expeditions.start(p, "treasure", 1)  # two a day is the limit
+        await services.expeditions.start(p, "treasure", 1)  # one a day is the limit
     clock.advance(86400)
     await services.expeditions.start(p, "treasure", 1)
 
@@ -704,7 +705,7 @@ async def test_the_world_screen(h, services, db):
         await h.panel(1, "sact", "attack")
         if "پیروزی!" in h.session.last_text():
             break
-    assert any("دوباره با نگهبان" in x for x in h.labels()) and "سهم شما در رویداد جهانی" in h.session.last_text()
+    assert any("جهان" in x for x in h.labels()) and "سهم شما در رویداد جهانی" in h.session.last_text()
 
 
 async def test_the_hub_has_no_suggestion_buttons_and_every_section_explains_itself(h, services, db):

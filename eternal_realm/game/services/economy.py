@@ -14,7 +14,7 @@ from ..models import Player
 from .inventory import InventoryService
 
 DAY = 24 * 3600
-CRYSTAL_DAILY_LIMIT = 200
+CRYSTAL_DAILY_LIMIT = 5_000
 
 
 @dataclass

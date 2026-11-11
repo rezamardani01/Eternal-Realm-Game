@@ -118,6 +118,18 @@ async def on_event_button(query: CallbackQuery, callback_data: EventCb, services
         view, hatched = await services.events.warm(callback_data.id, player)
         await _show(query, view)
         await query.answer("🐲 تخم شکست!" if hatched else "🔥 تخم گرم‌تر شد")
+    elif callback_data.action == "answer":
+        view, right = await services.events.answer(callback_data.id, player, callback_data.arg)
+        await _show(query, view)
+        await query.answer("🎉 درست گفتید! جایزه مال شماست." if right else "❌ نه، این نبود؛ کمی بعد دوباره حدس بزنید.", show_alert=right)
+    elif callback_data.action == "tile":
+        view, prize = await services.events.pick_tile(callback_data.id, player, callback_data.arg)
+        await _show(query, view)
+        await query.answer(prize, show_alert=True)
+    elif callback_data.action == "enter":
+        view = await services.events.enter_raffle(callback_data.id, player)
+        await _show(query, view)
+        await query.answer("🎟️ نام شما در قرعه‌کشی ثبت شد!")
     elif callback_data.action == "collect":
         view, item = await services.events.collect(callback_data.id, player)
         await _show(query, view)

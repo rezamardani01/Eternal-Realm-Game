@@ -217,7 +217,16 @@ class SoloService:
         )
 
     def _scale(self, level: int, gold: float, xp: float) -> tuple[int, int]:
-        return round(gold * loot.level_scale(level)), round(xp * loot.xp_scale(level))
+        return round(gold * data.REWARD_SHARE * loot.level_scale(level)), round(xp * data.REWARD_SHARE * loot.xp_scale(level))
+
+    async def _use_today(self, tx: Tx, player: Player, section: str) -> None:
+        """One use of a section of the trip; a hero gets ``DAILY_USES`` of each a day (the owner is exempt)."""
+        if self.players.is_owner(player):
+            return
+        used = await self._daily(tx, player.id, f"use:{section}")
+        if used >= data.DAILY_USES:
+            raise GameError(f"امروز از «{data.SECTION_NAMES[section]}» استفاده کرده‌اید؛ هر بخش سفر قهرمان روزی {fa(data.DAILY_USES)} بار باز است. فردا برگردید!")
+        await self._bump_daily(tx, player.id, f"use:{section}")
 
     async def start_arena(self, player: Player, tier_id: str, bot_id: str | None = None) -> SoloFight:
         try:
@@ -228,6 +237,7 @@ class SoloService:
             raise GameError(f"این سطح از میدان از سطح {fa(need)} باز می‌شود.")
         bot_id = bot_id if bot_id in data.ARENA_BOTS else self.ctx.rng.choice(data.ARENA_BOTS)
         async with self.ctx.db.transaction() as tx:
+            await self._use_today(tx, player, "arena")
             fm, rm = await self.world.effect(tx, world_data.ARENA_REGION)  # a darker region fights harder and pays more
             foe = data.get_foe(bot_id).fighter(player.level, mult * fm)
             gold, xp = self._scale(player.level, 60 * reward * rm, 55 * reward * rm)
@@ -257,6 +267,8 @@ class SoloService:
             base_gold, base_xp = data.stage_reward(stage)
             gold, xp = self._scale(player.level, base_gold * effect["gold"] * rm, base_xp * effect["xp"] * rm)
             replay = number <= cleared
+            if not replay:
+                await self._use_today(tx, player, "story")
             if replay:  # a stage already told pays a third
                 gold, xp = round(gold / 3), round(xp / 3)
             info = {
@@ -274,6 +286,7 @@ class SoloService:
         if dungeon not in data.todays_dungeons(_day(self.ctx.now())):
             raise GameError("این دخمه امروز بسته است؛ دخمه‌های امروز را ببینید.")
         async with self.ctx.db.transaction() as tx:
+            await self._use_today(tx, player, "dungeon")
             fight = await self._floor(tx, player, dungeon, 1, data.ENERGY["dungeon"])
             await self._set_progress(tx, player.id, "run", self._run_code(dungeon, 1))
             return fight
@@ -325,6 +338,7 @@ class SoloService:
             "item": list(boss.item), "foe": foe_id,
         }
         async with self.ctx.db.transaction() as tx:
+            await self._use_today(tx, player, "boss")
             return await self._begin(tx, player, "boss", foe, info, data.ENERGY["boss"])
 
     # --- playing -------------------------------------------------------------------------------------------------
@@ -456,6 +470,7 @@ class SoloService:
         gold, xp = self._scale(player.level, 80, 90)
         info = {"title": f"رویداد جهانی · {event.kind.title}", "event": event.id, "gold": gold, "xp": xp, "foe": event.kind.foe}
         async with self.ctx.db.transaction() as tx:
+            await self._use_today(tx, player, "world")
             return await self._begin(tx, player, "world", foe, info, world_data.ENERGY)
 
     async def _world_fought(self, tx: Tx, player: Player, fight: SoloFight, won: bool) -> Payout:
@@ -518,6 +533,7 @@ class SoloService:
         async with self.ctx.db.transaction() as tx:
             if await self._run(tx, player.id) is not None:
                 raise GameError("یک هزارتوی نیمه‌کاره دارید؛ ادامه‌اش بدهید یا با غنیمت بیرون بیایید.")
+            await self._use_today(tx, player, "maze")
             await self.players.spend_energy(tx, player.id, maze_data.ENERGY)
             run = MazeRun(1, 1.0, {}, 0, 0, "scene", "")
             self._enter(run, 1)
@@ -691,6 +707,7 @@ class SoloService:
         async with self.ctx.db.transaction() as tx:
             if await self._progress(tx, player.id, "event"):
                 raise GameError("یک اتفاق در راه منتظر تصمیم شماست.")
+            await self._use_today(tx, player, "wander")
             await self.players.spend_energy(tx, player.id, data.ENERGY["wander"])
             index = self.ctx.rng.randrange(len(data.EVENTS))
             await self._set_progress(tx, player.id, "event", index + 1)
@@ -722,12 +739,12 @@ class SoloService:
                 gold, xp = self._scale(player.level, 70, 60)
                 foe = data.get_foe(result["fight"]).fighter(player.level, 0.9)
                 await self._set_progress(tx, player.id, "event", 0)
-                fight = await self._begin(tx, player, "event", foe, {"title": "راهزن جاده", "gold": gold, "xp": xp, "foe": result["fight"]}, 0)
-                return EventResult(["راهزن شمشیر کشید!"], fight=fight)
+                fight = await self._begin(tx, player, "event", foe, {"title": f"گشت‌زنی · {foe.name}", "gold": gold, "xp": xp, "foe": result["fight"]}, 0)
+                return EventResult([f"{foe.name} راهتان را بست و شمشیر کشید!"], fight=fight)
             gold = rng.randint(*result["gold"]) if "gold" in result else 0
             xp = rng.randint(*result["xp"]) if "xp" in result else 0
             items = {result["item"][0]: result["item"][1]} if "item" in result else {}
-            pay = await self._pay(tx, player.id, round(gold * loot.level_scale(player.level)), round(xp * loot.xp_scale(player.level)), result.get("crystal", 0), items)
+            pay = await self._pay(tx, player.id, round(gold * data.REWARD_SHARE * loot.level_scale(player.level)), round(xp * data.REWARD_SHARE * loot.xp_scale(player.level)), result.get("crystal", 0), items)
             lines.insert(0, result.get("text", "ماجرا گذشت."))
             await self._set_progress(tx, player.id, "event", 0)
             return EventResult(lines, pay)

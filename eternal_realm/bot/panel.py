@@ -7,13 +7,14 @@ Screens double as actions: tapping «پوشیدن» runs the action and re-rende
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
 
 from baleropy import Button, F, Router
-from baleropy.exceptions import BaleAPIError, SkipHandler
+from baleropy.exceptions import BaleAPIError, BaleForbidden, BaleNetworkError, SkipHandler
 from baleropy.fsm import FSMContext, State, StatesGroup
 from baleropy.types import CallbackQuery, InlineKeyboardButton, Message
 from baleropy.types.markup import _build_inline_markup
@@ -63,6 +64,10 @@ class Ctx:
     chat_id: int = 0
     state: FSMContext | None = None
     message: Message | None = None
+    #: a progress frame has taken the buttons off the message (so a failure must give them back)
+    dimmed: bool = False
+    #: where the way back leads when a screen fails halfway
+    recover_to: str = "home"
 
     def btn(self, label: str, screen: str, a: object = "", b: object = "", style: str | None = None):
         data = PanelCb(s=screen, a=str(a) or None, b=str(b) or None, o=self.owner)
@@ -77,7 +82,8 @@ class Ctx:
     async def show(self, text: str) -> None:
         """A progress frame: replaces the panel text and removes the buttons (no double taps)."""
         if self.message is not None:
-            with contextlib.suppress(BaleAPIError):
+            self.dimmed = True
+            with contextlib.suppress(BaleAPIError, BaleNetworkError):
                 await self.message.edit_text(headline(text))
             await self.services.ctx.pause()
 
@@ -1342,7 +1348,7 @@ async def send(
     return await message.answer(text, buttons=shown.rows or None)
 
 
-async def _show(message: Message, shown: Screen) -> None:
+async def _show(message: Message, shown: Screen, *, retry: bool = True) -> None:
     """Put a screen on the tapped message: edit in place, or swap the message when text and picture trade places."""
     text, was_photo = headline(shown.text or ""), bool(message.photo)
     try:
@@ -1358,12 +1364,15 @@ async def _show(message: Message, shown: Screen) -> None:
                 await message.answer(text, buttons=shown.rows or None)
         else:
             await message.edit_text(text, buttons=shown.rows or None)
-    except BaleAPIError as error:
+    except (BaleAPIError, BaleNetworkError) as error:
         if "not modified" in str(error).lower():
             return
+        if retry and not isinstance(error, BaleForbidden):
+            await asyncio.sleep(0.5)  # a hiccup (a network blip, a rate limit): one more try before swapping the message
+            return await _show(message, shown, retry=False)
         # the edit failed for a real reason: never leave the player staring at a dead screen, send it as a new message
         log.warning("could not edit a panel message, sending a new one: %s", error)
-        with contextlib.suppress(BaleAPIError):
+        with contextlib.suppress(BaleAPIError, BaleNetworkError):
             if shown.photo:
                 await message.bot.send_photo(
                     message.chat.id, shown.photo, text, None, _build_inline_markup(shown.rows) if shown.rows else None
@@ -1398,7 +1407,14 @@ async def on_panel(
     )
     try:
         shown = await handler(ctx)
-    except KeyError:
+    except Exception as error:
+        if ctx.dimmed:  # a progress frame took the buttons away: never leave the player on a dead message
+            rescue = Screen("⚠️ لحظه‌ای مشکلی پیش آمد، ولی چیزی از دست نرفت. از دکمه‌ی زیر ادامه بدهید 👇", [ctx.back(ctx.recover_to, "↩️ ادامه")])
+            await _show(message, rescue)
+        if not isinstance(error, KeyError):
+            raise
+        shown = None
+    if shown is None:
         # a button that names something the game no longer has (an old message, a removed item)
         log.warning("stale panel button %s a=%r b=%r", callback_data.s, callback_data.a, callback_data.b, exc_info=True)
         await query.answer("این دکمه قدیمی است؛ منو را دوباره باز کنید.", show_alert=True)

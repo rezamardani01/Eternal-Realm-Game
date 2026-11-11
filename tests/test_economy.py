@@ -4,6 +4,7 @@ from eternal_realm.bot.services import Services
 from eternal_realm.config import Settings
 from eternal_realm.context import AppContext
 from eternal_realm.db.repos import wallet
+from eternal_realm.game.services.economy import CRYSTAL_DAILY_LIMIT
 from eternal_realm.shared.errors import GameError
 
 from .harness import Harness
@@ -58,8 +59,8 @@ async def test_transfer_rules(services, db):
 
 
 async def test_daily_limit_resets_next_day(services, db, clock):
-    a, b = await pair(services, db, rich=200_000)
     limit = services.ctx.balance.transfer_daily_limit
+    a, b = await pair(services, db, rich=limit + 100_000)
     await services.economy.transfer(a, b, limit)
     clock.advance(24 * 3600 + 1)
     await services.economy.transfer(await services.players.require(10), b, 100)
@@ -106,7 +107,7 @@ async def test_transfer_crystals_items_and_gear(services, db):
         gid = (await services.inventory.grant(tx, a.id, "leather_cap", 1))[0]
     me = await services.players.require(10)
     receipt = await services.economy.send(me, b, "crystal", 12)
-    assert receipt.left == 200 - 12 and (await services.players.require(11)).crystal == 12
+    assert receipt.left == CRYSTAL_DAILY_LIMIT - 12 and (await services.players.require(11)).crystal == 12
     await services.economy.send(me, b, "iron_ore", 3)
     stacks = {i.id: q for i, q in (await services.inventory.view(b.id)).stacks}
     assert stacks["iron_ore"] == 3

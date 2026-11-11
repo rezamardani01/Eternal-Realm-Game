@@ -37,7 +37,7 @@ class Balance:
     duel_lose_xp: int = 12
     duel_win_gold: int = 60
     duel_daily_reward_cap: int = 10
-    transfer_daily_limit: int = 50_000
+    transfer_daily_limit: int = 5_000_000
     transfer_min: int = 10
     market_fee_percent: int = 5
     market_max_listings: int = 10

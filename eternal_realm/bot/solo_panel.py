@@ -49,24 +49,34 @@ async def trip(c: Ctx) -> Screen:
     _guard(c)
     fight = await c.services.solo.active(c.player.id)
     event = await c.services.solo.pending_event(c.player.id)
+    run = await c.services.solo.maze_run(c.player.id)
+    today = await c.services.solo.overview(c.player.id)
+
+    def mark(section: str) -> str:
+        return " (امروز انجام شد)" if today.get(f"today:use:{section}", 0) >= data.DAILY_USES else ""
+
     lines = [
         f"🧭 {bold('سفر قهرمان')}", LINE,
         "تنها هم می‌شود قهرمان بود؛ همه‌ی این بخش‌ها با قدرت و تجهیزات خودتان است و به هیچ بازیکن دیگری نیاز ندارد.",
+        f"📅 هر بخش در روز {fa(data.DAILY_USES)} بار باز است.",
         "",
-        "📖 داستان: ۲۰ مرحله با انتخاب راه؛ سکه، تجربه، صندوقچه و کریستال",
-        "🏚️ دخمه‌ها: هر روز سه دخمه‌ی پنج‌طبقه؛ طبقه‌به‌طبقه پاداش",
-        "🐉 باس‌ها: پنج باس با ترفند؛ کریستال و صندوقچه‌ی هر روز",
-        "🥊 میدان بات‌ها: تمرین بی‌دغدغه در چهار سطح سختی",
-        "♾️ هزارتو: ۳۰ طبقه؛ هر طبقه یک ماجرا و تصمیم، و غول‌هایی که راه را بسته‌اند",
-        "🎲 گشت‌زنی: اتفاق‌های راه؛ گنج، راهزن و تاجر مرموز",
+        f"📖 داستان{mark('story')}: ۲۰ مرحله با انتخاب راه؛ سکه، تجربه، صندوقچه و کریستال",
+        f"🏚️ دخمه‌ها{mark('dungeon')}: هر روز سه دخمه‌ی پنج‌طبقه؛ طبقه‌به‌طبقه پاداش",
+        f"🐉 باس‌ها{mark('boss')}: پنج باس با ترفند؛ کریستال و صندوقچه",
+        f"🥊 میدان بات‌ها{mark('arena')}: تمرین در چهار سطح سختی",
+        f"♾️ هزارتو{mark('maze')}: {fa(maze_data.FLOORS)} طبقه؛ هر طبقه یک ماجرا و تصمیم، و غول‌هایی که راه را بسته‌اند",
+        f"🎲 گشت‌زنی{mark('wander')}: اتفاق‌های راه؛ گنج، راهزن، معما و تاجر مرموز",
         "🏕️ اعزام: قهرمان را بفرستید و در غیبتتان پاداش بگیرید",
-        "🌍 جهان زنده: رویداد جهانی و تاریکی مناطق",
+        f"🌍 جهان زنده{mark('world')}: رویداد جهانی و تاریکی مناطق",
         LINE, await _energy_line(c),
     ]
     rows = []
     if fight is not None:
         lines += ["", f"⚔️ نبرد نیمه‌کاره: {fight.info.get('title', '')}"]
         rows.append([c.btn("⚔️ ادامه‌ی نبرد", "sfight", style="danger")])
+    elif run is not None:
+        lines += ["", f"♾️ هزارتوی نیمه‌کاره: طبقه‌ی {fa(run.floor)}"]
+        rows.append([c.btn("♾️ ادامه‌ی هزارتو", "maze", style="success")])
     if event is not None:
         lines += ["", f"{event.emoji} اتفاقی در راه منتظر تصمیم شماست: {event.title}"]
         rows.append([c.btn(f"{event.emoji} تصمیم بگیرید", "wander", style="primary")])
@@ -136,6 +146,7 @@ ACTIONS = {"attack": Action.ATTACK, "skill": Action.SKILL, "defend": Action.DEFE
 @screen("sact")
 async def fight_act(c: Ctx) -> Screen:
     _guard(c)
+    c.recover_to = "sfight"
     action = ACTIONS.get(c.a)
     if action is None:
         raise GameError("این حرکت وجود ندارد.")
@@ -186,7 +197,7 @@ def _next_rows(c: Ctx, kind: str, info: dict, won: bool) -> list:
     """The buttons under a finished fight: go on, repeat, or back to the hub."""
     rows: list = []
     if kind == "arena":
-        rows.append([c.btn("🔁 دوباره همین سطح", "arenago", info["tier"], style="success"), c.btn("🥊 میدان", "arena")])
+        rows.append([c.btn("🥊 میدان", "arena")])
     elif kind == "story":
         nxt = info["stage"] + 1
         if won and nxt <= len(data.STAGES):
@@ -200,7 +211,7 @@ def _next_rows(c: Ctx, kind: str, info: dict, won: bool) -> list:
     elif kind == "boss":
         rows.append([c.btn("🐉 باس‌ها", "sbosses")])
     elif kind == "world":
-        rows.append([c.btn("⚔️ دوباره با نگهبان", "worldgo", style="danger"), c.btn("🌍 جهان", "world")])
+        rows.append([c.btn("🌍 جهان", "world")])
     elif kind == "maze":
         if won and info["floor"] < maze_data.FLOORS:
             rows.append([c.btn("➡️ ادامه‌ی هزارتو", "maze", style="success")])
@@ -223,7 +234,7 @@ async def arena(c: Ctx) -> Screen:
     lines = [
         f"🥊 {bold('میدان بات‌ها')}", LINE,
         "حریفان ساخته‌ی ربات با مهارت‌های گوناگون؛ هر وقت خواستید می‌جنگید و سکه و تجربه می‌گیرید.",
-        f"🏅 {fa(data.ARENA_FULL_WINS)} برد اول هر روز پاداش کامل دارد و بعدش یک‌سوم.",
+        f"🏅 روزی یک نبرد در میدان باز است؛ سطح حریف را با دقت انتخاب کنید.",
         "",
         "🌱 تازه‌کار: حریفی ملایم برای گرم شدن",
         "⚔️ جنگجو: نبردی هم‌شأن",
@@ -532,6 +543,11 @@ async def maze(c: Ctx) -> Screen:
             lines.append(f"{'✨' if amount > 0 else '🕸️'} {names[stat]}: {'+' if amount > 0 else '-'}{fa(round(abs(amount) * 100))}٪")
     lines += [f"🪙 غنیمت تا اینجا: {fa(run.gold)} سکه و {fa(run.xp)} تجربه", LINE]
     rows = []
+    active = await c.services.solo.active(c.player.id)
+    if active is not None:  # a fight of this run is still going: the way on is the fight, never a dead choice
+        lines += [f"⚔️ {bold('نبردی نیمه‌کاره دارید')}", active.info.get("title", ""), "", "اول نبرد را تمام کنید 👇"]
+        rows.append([c.btn("⚔️ ادامه‌ی نبرد", "sfight", style="danger")])
+        return Screen("\n".join(lines), rows)
     if run.kind == "giant":
         tier, foe = run.tier or "giant", data.get_foe(run.ref)
         level = maze_data.foe_level(run.floor, c.player.level)
@@ -552,7 +568,8 @@ async def maze(c: Ctx) -> Screen:
         scene = maze_data.SCENES[run.ref]
         lines += [
             f"{scene.emoji} {bold(scene.title)}", scene.text, "",
-            f"👣 غول بعدی در طبقه‌ی {fa(maze_data.next_giant(run.floor))} منتظر است", "چه می‌کنید؟ 👇",
+            f"👣 غول بعدی در طبقه‌ی {fa(maze_data.next_giant(run.floor))} منتظر است" if run.floor < maze_data.FLOORS else "",
+            "چه می‌کنید؟ 👇",
         ]
         rows += [[c.btn(choice.label, "mazepick", i)] for i, choice in enumerate(scene.choices)]
     rows.append([c.btn("🚪 بیرون آمدن با غنیمت", "mazeoutq")])
@@ -570,6 +587,7 @@ async def maze_go(c: Ctx) -> Screen:
 @screen("mazepick")
 async def maze_pick(c: Ctx) -> Screen:
     _guard(c)
+    c.recover_to = "maze"
     step = await c.services.solo.maze_pick(c.player, _int(c.a))
     if step.fight is not None:
         await c.show(f"⚔️ {bold('نبرد در هزارتو!')}\n\n" + "\n".join(step.lines))

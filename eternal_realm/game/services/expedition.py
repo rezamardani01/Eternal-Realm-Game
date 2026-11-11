@@ -118,8 +118,8 @@ class ExpeditionService:
             level = int((await tx.scalar("SELECT level FROM players WHERE id = ?", (player.id,), player.level)))
             report = Report(kind, hours, [])
             boost = await self.players.boost_factor(tx, player.id)
-            report.gold = round(kind.gold * hours * loot.level_scale(level) * rng.uniform(0.9, 1.1)) * boost
-            report.xp = round(kind.xp * hours * loot.xp_scale(level) * rng.uniform(0.9, 1.1)) * boost
+            report.gold = round(kind.gold * hours * data.REWARD_SHARE * loot.level_scale(level) * rng.uniform(0.9, 1.1)) * boost
+            report.xp = round(kind.xp * hours * data.REWARD_SHARE * loot.xp_scale(level) * rng.uniform(0.9, 1.1)) * boost
             for item_id, per_hour, chance in kind.items:
                 if rng.random() <= chance:
                     qty = max(1, round(per_hour * hours * rng.uniform(0.8, 1.2))) if per_hour >= 1 else int(rng.random() < per_hour * hours)

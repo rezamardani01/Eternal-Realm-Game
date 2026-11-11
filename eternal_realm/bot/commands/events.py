@@ -25,7 +25,7 @@ async def events(ctx: CommandContext) -> None:
 
 
 @command(
-    "event", ["/event"], "(مدیر گروه) درخواست یک رویداد تازه: /event [mystery_chest|merchant|double_xp|hidden_boss|hidden_chest|invasion|meteor|gold_rain|spring|wheel|egg]",
+    "event", ["/event"], "(مدیر گروه) درخواست یک رویداد تازه: /event [mystery_chest|merchant|double_xp|hidden_boss|hidden_chest|invasion|meteor|gold_rain|spring|wheel|egg|riddle|tiles|raffle]",
     category="⚙️ مدیریت گروه", needs_player=False, private=False, always_on=True, takes_args=True, points=0,
 )
 async def event(ctx: CommandContext) -> None:

@@ -261,7 +261,7 @@ def help_pages(balance) -> dict[str, tuple[str, str]]:  # noqa: ANN001 - Balance
             f"🎲 {bold('رویدادهای گروه')}",
             "ربات گاهی خودش در گروه‌های فعال اتفاق می‌اندازد؛ هرچه گروه فعال‌تر باشد، بیشتر و بزرگ‌تر.",
             "🎁 صندوقچه‌ی اسرارآمیز · 🗝️ صندوقچه‌ی مخفی (با سرنخ)\n🧳 تاجر دوره‌گرد · ✨ تجربه‌ی دوبرابر · 🌑 باس مخفی",
-            "🚨 تهاجم هیولاها (همه با هم دفاع می‌کنند) · ☄️ شهاب‌سنگ\n🌧️ باران سکه · 💧 چشمه‌ی برکت · 🎡 چرخ شانس · 🥚 تخم اژدها",
+            "🚨 تهاجم هیولاها (همه با هم دفاع می‌کنند) · ☄️ شهاب‌سنگ\n🌧️ باران سکه · 💧 چشمه‌ی برکت · 🎡 چرخ شانس · 🥚 تخم اژدها\n🧠 معما · 🔲 کاشی‌های شانس · 🎟️ قرعه‌کشی بزرگ",
             "👇 هر رویداد دکمه‌ی خودش را دارد؛ فقط همان را بزنید.\n📋 «رویدادها» وضعیت همین گروه را نشان می‌دهد.",
         )),
         "gear": ("🎒 کوله‌پشتی", page(
@@ -890,7 +890,73 @@ def event_text(view) -> str:  # noqa: ANN001 - EventView
         return _wheel_text(view)
     if view.kind == "egg":
         return _egg_text(view)
+    if view.kind == "riddle":
+        return _riddle_text(view)
+    if view.kind == "tiles":
+        return _tiles_text(view)
+    if view.kind == "raffle":
+        return _raffle_text(view)
     return f"{view.kind}"
+
+
+def _riddle_text(view) -> str:  # noqa: ANN001 - EventView
+    from ..game.data.group_games import RIDDLES
+
+    st = view.state
+    question, answer, _ = RIDDLES[st["q"]]
+    if view.status == "done":
+        gains = [f"🪙 {fa(st['gold'])} سکه", "⭐ تجربه"] + (["💎 ۱ کریستال"] if st.get("crystal") else [])
+        return (
+            f"🧠 {bold('معما حل شد!')}\n\n{question}\n\n✅ پاسخ: {bold(answer)}\n\n"
+            f"🏆 {st['winner']} زودتر از همه پاسخ داد و برد: {'، '.join(gains)}"
+        )
+    if view.status == "expired":
+        return f"🕸️ {bold('معما بی‌پاسخ ماند')}\n\n{question}\n\n✅ پاسخ: {bold(answer)}\n\nکسی آن را حل نکرد."
+    return (
+        f"🧠 {bold('معمای کاروان!')}\n\n"
+        "فرزانه‌ای دوره‌گرد معمایی پیش پای گروه گذاشته. اولین کسی که درست جواب دهد، جایزه را می‌برد.\n\n"
+        f"❓ {question}\n\n"
+        f"🙋 حدس‌ها: {fa(len(st['at']))} نفر\n⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}\n"
+        "👇 گزینه‌ی درست را بزنید (هر ۱۲ ثانیه یک حدس)"
+    )
+
+
+def _tiles_text(view) -> str:  # noqa: ANN001 - EventView
+    st = view.state
+    if view.status == "active":
+        lines = [
+            f"🔲 {bold('کاشی‌های شانس!')}", "",
+            "کف تالار از کاشی‌های نقش‌دار پر شده و زیر هر کدام چیزی پنهان است. هر نفر یک کاشی برمی‌دارد.", "",
+            f"🧩 کاشی‌های مانده: {fa(len(st['tiles']) - len(st['picked']))} از {fa(len(st['tiles']))}",
+        ]
+    else:
+        lines = [f"🏁 {bold('کاشی‌ها تمام شد')}", ""]
+    if st["players"]:
+        entries = [(st["names"][pid], [text]) for pid, tile in list(st["players"].items())[-8:] for text in [st["picked"][str(tile)]]]
+        lines += ["", f"🎯 {bold('برندگان و بازندگان')}", *tidy_list(entries, 8, ranked=False)]
+    if view.status == "active":
+        lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "👇 یک کاشی انتخاب کنید"]
+    return "\n".join(lines)
+
+
+def _raffle_text(view) -> str:  # noqa: ANN001 - EventView
+    st = view.state
+    count = len(st["entries"])
+    if view.status == "done":
+        return (
+            f"🎟️ {bold('قرعه‌کشی انجام شد!')}\n\n"
+            f"از میان {fa(count)} شرکت‌کننده، قرعه به نام {st['winner']} افتاد.\n"
+            f"🏆 جایزه: {fa(st['prize'])} سکه و ۱ کریستال"
+        )
+    if view.status == "expired":
+        return f"🎟️ {bold('قرعه‌کشی برگزار نشد')}\n\nشرکت‌کننده‌ی کافی نبود (دست‌کم ۲ نفر لازم است)."
+    return (
+        f"🎟️ {bold('قرعه‌کشی بزرگ!')}\n\n"
+        "هر کس نامش را بنویسد (رایگان!) در قرعه می‌ماند و هر نام تازه، جایزه را بزرگ‌تر می‌کند.\n\n"
+        f"🪙 جایزه‌ی فعلی: {fa(st['pot'])} سکه و ۱ کریستال\n"
+        f"👥 شرکت‌کننده‌ها: {fa(count)} نفر\n"
+        f"⏳ تا قرعه‌کشی: {_clock(view.seconds_left)}\n\n👇 نامتان را ثبت کنید"
+    )
 
 
 def _rain_text(view) -> str:  # noqa: ANN001 - EventView
@@ -1054,14 +1120,15 @@ def events_overview(views_, double_xp: bool) -> str:  # noqa: ANN001
             label = {"mystery_chest": "🎁 صندوقچه‌ی اسرارآمیز", "merchant": "🧳 تاجر دوره‌گرد",
                      "double_xp": "✨ تجربه‌ی دوبرابر", "hidden_chest": "🗝️ صندوقچه‌ی مخفی",
                      "invasion": "🚨 تهاجم هیولاها", "meteor": "☄️ شهاب‌سنگ", "gold_rain": "🌧️ باران سکه",
-                     "spring": "💧 چشمه‌ی برکت", "wheel": "🎡 چرخ شانس", "egg": "🥚 تخم اژدها"}.get(v.kind, v.kind)
+                     "spring": "💧 چشمه‌ی برکت", "wheel": "🎡 چرخ شانس", "egg": "🥚 تخم اژدها", "riddle": "🧠 معمای کاروان",
+                     "tiles": "🔲 کاشی‌های شانس", "raffle": "🎟️ قرعه‌کشی بزرگ"}.get(v.kind, v.kind)
             lines.append(f"• {label} — {duration(v.seconds_left)} مانده")
         lines.append("")
     else:
         lines += ["الان رویدادی در جریان نیست.", ""]
     lines += [
         "ربات گاهی خودش در گروه‌های فعال اتفاق می‌اندازد: صندوقچه‌ی اسرارآمیز، صندوقچه‌ی مخفی با سرنخ، "
-        "تاجر دوره‌گرد، ستاره‌ی تجربه، باس مخفی، تهاجم هیولاها، شهاب‌سنگ، باران سکه، چشمه‌ی برکت، چرخ شانس و تخم اژدها. "
+        "تاجر دوره‌گرد، ستاره‌ی تجربه، باس مخفی، تهاجم هیولاها، شهاب‌سنگ، باران سکه، چشمه‌ی برکت، چرخ شانس، تخم اژدها، معما، کاشی‌های شانس و قرعه‌کشی. "
         "هرچه گروه فعال‌تر باشد، رویدادها بیشتر و بزرگ‌تر می‌شوند.",
         "",
         "مدیران گروه با «غیرفعال رویدادها» می‌توانند آن‌ها را خاموش کنند.",

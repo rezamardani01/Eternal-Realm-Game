@@ -126,6 +126,17 @@ def event_buttons(view) -> Rows | None:  # noqa: ANN001 - EventView
         return [[Button.inline("🎡 چرخاندن", EventCb(action="spin", id=view.id), style="success")]]
     if view.kind == "egg":
         return [[Button.inline("🔥 گرم کردن تخم", EventCb(action="warm", id=view.id), style="danger")]]
+    if view.kind == "riddle":
+        from ..game.data.group_games import RIDDLES
+
+        question = RIDDLES[view.state["q"]]
+        options = [question[1], *question[2]]
+        return grid([Button.inline(options[view.state["order"][i]], EventCb(action="answer", id=view.id, arg=i)) for i in range(4)], 2)
+    if view.kind == "tiles":
+        free = [i for i in range(len(view.state["tiles"])) if str(i) not in view.state["picked"]]
+        return grid([Button.inline(f"🔲 {fa(i + 1)}", EventCb(action="tile", id=view.id, arg=i)) for i in free], 3) or None
+    if view.kind == "raffle":
+        return [[Button.inline("🎟️ شرکت در قرعه‌کشی", EventCb(action="enter", id=view.id), style="success")]]
     return None
 
 

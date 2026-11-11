@@ -16,6 +16,7 @@ from ...db.repos import events as repo
 from ...db.repos import players as player_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
+from ..data import group_games
 from ..data.items import get_item
 from ..data.world_events import ARMIES, METEOR_LOOT, METEOR_PER_PLAYER, METEOR_PIECES, PLACES, REGIONS
 from ..engine import progression
@@ -25,18 +26,21 @@ from .inventory import InventoryService
 
 KINDS = (
     "mystery_chest", "merchant", "double_xp", "hidden_boss", "hidden_chest", "invasion", "meteor",
-    "gold_rain", "spring", "wheel", "egg",
+    "gold_rain", "spring", "wheel", "egg", "riddle", "tiles", "raffle",
 )
 BASE_WEIGHTS = {
     "mystery_chest": 22, "merchant": 14, "double_xp": 12, "hidden_boss": 8, "hidden_chest": 10, "invasion": 6,
     "meteor": 8, "gold_rain": 10, "spring": 8, "wheel": 10, "egg": 6,
+    "riddle": 12, "tiles": 9, "raffle": 8,
 }
 #: busy groups get the big team events more often
 CROWD_KINDS = ("invasion", "egg", "hidden_boss")
 LIFETIME = {
     "mystery_chest": 300, "merchant": 600, "double_xp": 1800, "hidden_chest": 900, "invasion": 180, "meteor": 600,
     "gold_rain": 480, "spring": 600, "wheel": 600, "egg": 180,
+    "riddle": 240, "tiles": 420, "raffle": 600,
 }
+RIDDLE_GAP = 12
 RAIN_DROPS, RAIN_PER_PLAYER, RAIN_GAP = 20, 4, 10
 SPRING_VISITORS = 12
 WARM_GAP = 4
@@ -158,6 +162,18 @@ class EventService:
             elif kind == "egg":
                 members = max(2, await repo.active_members(tx, chat_id, now - 86400))
                 state = {"need": min(60, max(12, 3 * members)), "warm": 0, "hits": {}, "names": {}, "at": {}}
+            elif kind == "riddle":
+                index = rng.randrange(len(group_games.RIDDLES))
+                order = list(range(4))
+                rng.shuffle(order)
+                state = {"q": index, "order": order, "at": {}, "names": {}}
+            elif kind == "tiles":
+                prizes = rng.choices(
+                    [p for p, _ in group_games.TILE_PRIZES], weights=[w for _, w in group_games.TILE_PRIZES], k=group_games.TILE_COUNT,
+                )
+                state = {"tiles": prizes, "picked": {}, "players": {}, "names": {}}
+            elif kind == "raffle":
+                state = {"entries": {}, "pot": 300}
             elif kind == "merchant":
                 picks = rng.sample(MERCHANT_STOCK, 3)
                 state = {"stock": [{"item": i, "price": round(p * rng.uniform(0.6, 0.85)), "left": rng.randint(2, 3)}
@@ -407,6 +423,94 @@ class EventService:
             paid.append({"mention": state["names"][pid], "taps": taps, "gold": gold, "chest": chest})
         return paid
 
+    # --- riddle: the first right answer wins ------------------------------------------------------------------
+    async def answer(self, event_id: int, player: Player, position: int) -> tuple[EventView, bool]:
+        now, rng = self.ctx.now(), self.ctx.rng
+        async with self.ctx.db.transaction() as tx:
+            row = await self._live(tx, event_id, "riddle")
+            state = json.loads(row["state"])
+            if not 0 <= position < 4:
+                raise GameError("این گزینه نیست.")
+            key = str(player.id)
+            wait = state["at"].get(key, 0) + RIDDLE_GAP - now
+            if wait > 0:
+                raise GameError(f"⏳ {wait} ثانیه دیگر دوباره حدس بزنید.")
+            state["at"][key] = now
+            state["names"][key] = player.mention
+            right = state["order"][position] == 0
+            if right and await repo.finish(tx, event_id, "done"):
+                gold = 150 + 12 * player.level
+                crystal = 1 if rng.random() < 0.3 else 0
+                await wallet.apply(tx, player.id, gold=gold, crystal=crystal, reason="riddle", now=now)
+                await self.bosses.players.grant_xp(tx, player.id, 60 + 6 * player.level)
+                state["winner"], state["gold"], state["crystal"] = player.mention, gold, crystal
+            else:
+                right = False
+            await repo.save_state(tx, event_id, json.dumps(state))
+            fresh = await repo.get(tx, event_id)
+            assert fresh is not None
+            return self._view(fresh), right
+
+    # --- lucky tiles: one tile each, the prize is shown to all ----------------------------------------------------
+    async def pick_tile(self, event_id: int, player: Player, tile: int) -> tuple[EventView, str]:
+        now, rng = self.ctx.now(), self.ctx.rng
+        async with self.ctx.db.transaction() as tx:
+            row = await self._live(tx, event_id, "tiles")
+            state = json.loads(row["state"])
+            key = str(player.id)
+            if not 0 <= tile < len(state["tiles"]):
+                raise GameError("این کاشی نیست.")
+            if key in state["players"]:
+                raise GameError("هر نفر یک کاشی برمی‌دارد؛ شانستان را آزموده‌اید.")
+            if str(tile) in state["picked"]:
+                raise GameError("این کاشی را قبلاً برداشته‌اند.")
+            prize = state["tiles"][tile]
+            if prize == "gold":
+                amount = rng.randint(150, 500) + 8 * player.level
+                await wallet.apply(tx, player.id, gold=amount, reason="tiles", now=now)
+                text = f"🪙 {amount} سکه"
+            elif prize == "xp":
+                amount = rng.randint(80, 220) + 8 * player.level
+                await self.bosses.players.grant_xp(tx, player.id, amount)
+                text = f"⭐ {amount} تجربه"
+            elif prize == "crystal":
+                await wallet.apply(tx, player.id, crystal=2, reason="tiles", now=now)
+                text = "💎 ۲ کریستال"
+            elif prize == "chest":
+                await self.inventory.grant(tx, player.id, "wooden_chest", 1)
+                text = f"🎁 {get_item('wooden_chest').name}"
+            else:
+                text = "🍂 کاشی خالی بود"
+            state["picked"][str(tile)] = text
+            state["players"][key] = tile
+            state["names"][key] = player.mention
+            if len(state["picked"]) >= len(state["tiles"]):
+                await repo.finish(tx, event_id, "done")
+            await repo.save_state(tx, event_id, json.dumps(state))
+            fresh = await repo.get(tx, event_id)
+            assert fresh is not None
+            return self._view(fresh), text
+
+    # --- raffle: everybody may enter; when the time is up one entry wins the pot -------------------------------------
+    async def enter_raffle(self, event_id: int, player: Player) -> EventView:
+        async with self.ctx.db.transaction() as tx:
+            row = await self._live(tx, event_id, "raffle")
+            state = json.loads(row["state"])
+            key = str(player.id)
+            if key in state["entries"]:
+                raise GameError("نام شما در قرعه‌کشی هست؛ منتظر نتیجه بمانید.")
+            state["entries"][key] = player.mention
+            state["pot"] += 60 + 3 * player.level  # every entry grows the pot a little
+            await repo.save_state(tx, event_id, json.dumps(state))
+            fresh = await repo.get(tx, event_id)
+            assert fresh is not None
+            return self._view(fresh)
+
+    async def _draw_raffle(self, tx: Tx, event_id: int, state: dict[str, Any], now: int) -> None:
+        winner = self.ctx.rng.choice(sorted(state["entries"]))
+        await wallet.apply(tx, int(winner), gold=state["pot"], crystal=1, reason="raffle", now=now, ref=f"raffle:{event_id}")
+        state["winner"], state["prize"] = state["entries"][winner], state["pot"]
+
     async def hunters(self, chat_id: int, min_level: int, limit: int = 30) -> list[int]:
         """Players of this group who could join a boss now and have not switched personal messages off."""
         now = self.ctx.now()
@@ -425,7 +529,14 @@ class EventService:
         async with self.ctx.db.transaction() as tx:
             for row in await repo.lapsed(tx, now):
                 status = "done" if row["kind"] == "double_xp" else "expired"
+                raffle = row["kind"] == "raffle" and len(json.loads(row["state"] or "{}").get("entries", {})) >= group_games.RAFFLE_MIN_ENTRIES
+                if raffle:
+                    status = "done"
                 if await repo.finish(tx, row["id"], status):
+                    if raffle:
+                        drawn = json.loads(row["state"] or "{}")
+                        await self._draw_raffle(tx, row["id"], drawn, now)
+                        await repo.save_state(tx, row["id"], json.dumps(drawn))
                     if row["kind"] == "invasion":
                         state = json.loads(row["state"] or "{}")
                         state["payouts"] = await self._pay_invasion(tx, row["id"], state, won=False, now=now)
