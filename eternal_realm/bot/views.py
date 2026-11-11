@@ -651,7 +651,7 @@ def delivery(order, granted: str = "") -> str:  # noqa: ANN001 - Order
 SECTION_NAMES = {
     "coins": "بسته‌ی سکه", "crystals": "بسته‌ی کریستال", "bundles": "بسته‌ی ویژه",
     "materials": "منابع", "lucky": "بسته‌ی شانسی روزانه", "deal": "تخفیف روز", "boost": "بوست دو برابر",
-    "xp": "بسته‌ی تجربه", "wheel": "گردونه شانس", "city": "منابع فرمانروایی",
+    "xp": "بسته‌ی تجربه", "wheel": "گردونه شانس", "city": "منابع فرمانروایی", "rare": "منابع کمیاب",
 }
 
 

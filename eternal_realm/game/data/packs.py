@@ -61,6 +61,7 @@ SECTIONS = {
     "xp": "⭐ بسته‌های تجربه",
     "wheel": "🎡 گردونه شانس",
     "city": "🏰 منابع فرمانروایی",
+    "rare": "💠 منابع کمیاب",
 }
 
 BOOST_FACTOR = 2
@@ -131,6 +132,30 @@ PACKS: dict[str, Pack] = {
         Pack("city_food", "🌾", "بسته‌ی آذوقه و غله", 40_000, section="city", city={"food": 60_000}),
         Pack("city_shield_24", "🔰", "سپر دفاعی شهر ۲۴ ساعته", 50_000, section="city", city_shield_hours=24),
         Pack("city_shield_72", "🔰", "سپر دفاعی شهر ۷۲ ساعته", 120_000, section="city", city_shield_hours=72),
+        # the rare materials of the forge, each at a price that matches how hard it is to find (a dragon scale: 5 000 toman)
+        Pack("rare_scale_1", "🐉", "۱ فلس اژدها", 50_000, items={"dragon_scale": 1}, section="rare"),
+        Pack("rare_scale_3", "🐉", "۳ فلس اژدها", 135_000, items={"dragon_scale": 3}, section="rare"),
+        Pack("rare_scale_5", "🐉", "۵ فلس اژدها", 210_000, items={"dragon_scale": 5}, section="rare"),
+        Pack("rare_shard_1", "💠", "۱ پاره‌کریستال", 30_000, items={"crystal_shard": 1}, section="rare"),
+        Pack("rare_shard_5", "💠", "۵ پاره‌کریستال", 135_000, items={"crystal_shard": 5}, section="rare"),
+        Pack("rare_goldore_5", "🥇", "۵ سنگ طلا", 50_000, items={"gold_ore": 5}, section="rare"),
+        Pack("rare_moon_5", "🍀", "۵ گیاه ماه‌تاب", 40_000, items={"moon_herb": 5}, section="rare"),
+        Pack("rare_scroll_5", "📜", "۵ طومار کهنه", 35_000, items={"old_scroll": 5}, section="rare"),
+        Pack("rare_fang_10", "🦷", "۱۰ دندان هیولا", 50_000, items={"monster_fang": 10}, section="rare"),
+        Pack("rare_hide_10", "🧶", "۱۰ پوست هیولا", 50_000, items={"monster_hide": 10}, section="rare"),
+        # everything a forge recipe asks for (except the gold and the base piece), a little cheaper than buying the parts
+        Pack("kit_fire_sword", "🔥", "کیت شمشیر آتشین", 280_000, section="rare",
+             items={"dragon_scale": 3, "crystal_shard": 5, "iron_ore": 10}),
+        Pack("kit_dragon_armor", "🐲", "کیت زره اژدها", 350_000, section="rare",
+             items={"dragon_scale": 5, "crystal_shard": 4, "iron_ore": 12}),
+        Pack("kit_shadow_dagger", "🗡️", "کیت خنجر سایه", 155_000, section="rare",
+             items={"crystal_shard": 3, "gold_ore": 4, "monster_fang": 6}),
+        Pack("kit_crystal_staff", "🔮", "کیت عصای کریستالی", 220_000, section="rare",
+             items={"crystal_shard": 6, "moon_herb": 4, "old_scroll": 3}),
+        Pack("kit_dragonbane_helm", "🪖", "کیت کلاه‌خود اژدهاکُش", 150_000, section="rare",
+             items={"dragon_scale": 3, "iron_ore": 8}),
+        Pack("kit_dragonbane_boots", "👢", "کیت چکمه اژدهاکُش", 180_000, section="rare",
+             items={"dragon_scale": 3, "monster_hide": 8}),
         Pack("lucky_s", "🎲", "بسته شانسی کوچک", 60_000, section="lucky", lucky=True),
         Pack("lucky_m", "🎲", "بسته شانسی متوسط", 200_000, section="lucky", lucky=True),
         Pack("lucky_l", "🎲", "بسته شانسی بزرگ", 600_000, section="lucky", lucky=True),

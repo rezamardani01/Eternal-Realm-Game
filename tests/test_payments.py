@@ -104,7 +104,7 @@ async def test_invoice_flow_through_the_bot(h, services):
     await h.say(10, "/start")
     await h.panel(10, "premium")
     assert "خزانه قلمرو" in h.session.last_text()
-    assert len(h.labels()) == 15  # the wheel, twelve sections (boost and experience included) and a back button
+    assert len(h.labels()) == 16  # the wheel, thirteen sections (rare materials, boost and experience included) and a back button
     await h.tap(10, "خرید کریستال")
     assert any("تومان" in b["text"] for b in h.session.last_buttons())  # the prices are on the buttons
     await h.click(10, h.button_data("۲۰ کریستال"))
@@ -245,3 +245,39 @@ async def test_lucky_purchase_through_the_bot_shows_what_was_inside(h, services)
     assert any("این‌ها از بسته درآمد" in t for t in h.session.texts())
     owner_report = [m["text"] for m in h.session.sent("sendMessage") if m["chat_id"] == 1][0]
     assert "محتوای تصادفی" in owner_report
+
+
+def test_the_rare_materials_are_sold_and_the_kits_match_the_forge_recipes():
+    from eternal_realm.game.data.items import get_item
+    from eternal_realm.game.data.recipes import RECIPES
+
+    rare = {p.id: p for p in PACKS.values() if p.section == "rare"}
+    assert PACKS["rare_scale_1"].price_toman == 5_000  # a dragon scale costs five thousand toman
+    parts = {}
+    for pack in rare.values():
+        assert len(pack.items) >= 1 and pack.price_rial % 10 == 0
+        if len(pack.items) == 1 and not pack.id.startswith("kit_"):
+            (item, qty), = pack.items.items()
+            parts[item] = min(parts.get(item, 10**9), pack.price_rial / qty)
+    kit_of = {
+        "fire_sword": "kit_fire_sword", "dragon_armor": "kit_dragon_armor", "shadow_dagger": "kit_shadow_dagger",
+        "crystal_staff": "kit_crystal_staff", "dragonbane_helm": "kit_dragonbane_helm", "dragonbane_boots": "kit_dragonbane_boots",
+    }
+    for recipe in RECIPES:
+        assert rare[kit_of[recipe.id]].items == recipe.materials, recipe.id  # the kit is exactly what the recipe asks for
+    # a rare material is never sold cheaper than the shop value it would fetch, and every single one can be bought
+    for item in {i for r in RECIPES for i in r.materials} - {"iron_ore"}:
+        assert item in parts, item
+        assert parts[item] / 10 >= get_item(item).sell
+
+
+async def test_the_rare_section_is_in_the_treasury_and_a_scale_can_be_bought(h, services):
+    p = await reg(services)
+    await h.panel(10, "premium")
+    assert any("منابع کمیاب" in t for t in h.labels())
+    await h.panel(10, "prem", "rare")
+    assert "فلس اژدها" in " ".join(h.labels()) and "کیت شمشیر آتشین" in h.session.last_text()
+    order = await services.payments.create_order(p, "rare_scale_3")
+    await services.payments.complete(10, order.payload, order.amount, "ch-rare")
+    async with services.ctx.db.read() as tx:
+        assert await tx.scalar("SELECT qty FROM inventory WHERE player_id = ? AND item_id = 'dragon_scale'", (p.id,), 0) == 3
