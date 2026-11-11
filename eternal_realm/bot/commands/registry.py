@@ -6,6 +6,7 @@ central resolver in :mod:`.router` does the matching.
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -16,6 +17,17 @@ if TYPE_CHECKING:
     from .context import CommandContext
 
 Handler = Callable[["CommandContext"], Awaitable[None]]
+
+#: polite little words people put around a command («پروفایل من رو نشون بده», «ربات پروفایل»): they change nothing
+FILLERS = frozenset({"من", "لطفا", "لطفاً", "ربات", "بات", "رو", "را", "بده", "نشون", "نشان", "ممنون", "مرسی"})
+
+
+def _tidy(text: str) -> str:
+    """The text of a message without the marks people put at its end («پروفایل!», «شکار 😎», «معدن...»)."""
+    body = text.rstrip()
+    while body and unicodedata.category(body[-1])[0] in "PSZC" and body[-1] not in "/@_":
+        body = body[:-1].rstrip()
+    return body
 
 
 #: words that open a personal panel: they work in the private chat only (a group gets no answer at all)
@@ -108,13 +120,15 @@ class CommandRegistry:
 
     def resolve(self, text: str) -> Match | None:
         """Match ``text`` against the longest known alias at its start."""
-        body = normalize(text)
+        body = _tidy(normalize(text))
         if not body:
             return None
         slash = body.startswith("/")
         if slash:
             body = body[1:]
         words = body.split(" ")
+        while len(words) > 1 and not slash and words[0] in FILLERS:  # «ربات پروفایل»
+            words.pop(0)
         words[0] = words[0].split("@", 1)[0]  # /fish@my_bot
         for count in range(min(self._max_words, len(words)), 0, -1):
             candidate = " ".join(words[:count]).lower()
@@ -125,7 +139,9 @@ class CommandRegistry:
                 continue  # English aliases only work as /commands
             rest = words[count:]
             if rest and not command.takes_args:
-                continue
+                rest = [w for w in rest if w not in FILLERS]  # «پروفایل من رو نشون بده»
+                if rest or count == len(words):
+                    continue
             return Match(command, rest, " ".join(rest))
         return None
 

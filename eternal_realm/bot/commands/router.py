@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from baleropy import Bot, F, Router
 from baleropy.types import Message
 
@@ -12,6 +14,10 @@ from .context import CommandContext
 from .registry import REGISTRY
 
 router = Router(name="commands")
+
+#: seconds before the same stranger is told again, in a group, that they have no hero yet (the group is not a notice board)
+STRANGER_GAP = 180
+_told: dict[int, float] = {}
 
 
 def _is_private(message: Message) -> bool:
@@ -50,8 +56,14 @@ async def on_text(message: Message, bot: Bot, services: Services) -> None:
     if cmd.needs_player:
         player = await services.players.find(user.id, user.username)
         if player is None:
+            now = time.monotonic()
+            if not private and now - _told.get(user.id, -STRANGER_GAP) < STRANGER_GAP:
+                return  # told a moment ago: stay quiet instead of filling the group
+            if len(_told) > 5000:
+                _told.clear()
+            _told[user.id] = now
             await message.reply(
-                "🎮 ای ماجراجوی ناشناس! هنوز قهرمانی نساخته‌اید. به پیام خصوصی ربات بروید، شروع را بزنید و قهرمان خود را بسازید؛ بعد برگردید و ماجراجویی کنید!",
+                "🎮 هنوز قهرمانی نساخته‌اید!\nدکمه‌ی زیر را بزنید، قهرمانتان را بسازید و برگردید 👇",
                 buttons=[keyboards.start_button(services.bot_username)] if services.bot_username else None,
             )
             return

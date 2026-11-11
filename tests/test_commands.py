@@ -134,3 +134,30 @@ async def test_streak_pays_a_chest_every_week(services, clock):
         assert await tx.scalar("SELECT qty FROM inventory WHERE player_id = ? AND item_id = 'wooden_chest'", (p.id,), 0) == 1
     clock.advance(3 * 86_400)  # missing days breaks the streak
     assert (await services.players.claim_daily(p.id)).streak == 1
+
+
+def test_people_write_commands_with_marks_and_polite_words_and_they_still_work():
+    from eternal_realm.bot.commands import REGISTRY
+
+    for text in ("پروفایل", "پروفایل!", "پروفایل؟", "پروفایل 😎", "پروفایل...", "پروفایل من", "پروفایل من رو نشون بده", "ربات پروفایل"):
+        assert REGISTRY.resolve(text).command.name == "profile", text
+    assert REGISTRY.resolve("شکار ✅").command.name == "hunt"
+    assert REGISTRY.resolve("انتقال 500!").args == ["500"]
+    assert REGISTRY.resolve("غیرفعال پروفایل").command.name == "group_off"
+    for text in ("من", "ربات", "پروفایل رضا", "شکار گرگ", "سلام"):
+        assert REGISTRY.resolve(text) is None, text  # ordinary chatter is never taken for a command
+
+
+async def test_a_stranger_is_told_once_in_a_group_not_on_every_word(h, services):
+    import importlib
+
+    commands_router = importlib.import_module("eternal_realm.bot.commands.router")
+    commands_router._told.clear()
+    await h.say(10, "پروفایل", group=True)
+    assert "قهرمانی نساخته" in h.session.last_text() and h.session.last_buttons()[0]["url"].startswith("https://ble.ir/")
+    before = len(h.session.texts())
+    await h.say(10, "شکار", group=True)
+    await h.say(10, "ماهیگیری", group=True)
+    assert len(h.session.texts()) == before  # quiet: the group is not a notice board
+    await h.say(10, "پروفایل")  # in the private chat the answer always comes
+    assert len(h.session.texts()) == before + 1
