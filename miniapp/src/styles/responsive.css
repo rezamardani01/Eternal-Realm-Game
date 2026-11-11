@@ -1,0 +1,86 @@
+/* Fitting every screen: small phones (narrow or short) get a tighter HUD and smaller pieces; wide screens keep the
+   game column centred with roomy grids. */
+
+/* narrow phones (iPhone SE, small Androids) */
+@media (max-width: 360px) {
+  :root { --tab-h: 60px; }
+  .avatar { width: 54px; height: 54px; border-radius: 14px; }
+  .avatar .icon { width: 34px !important; height: 34px !important; }
+  .nameplate { font-size: 15px; padding: 1px 9px 2px; }
+  .powerplate { font-size: 12.5px; padding: 0 9px 1px; }
+  .hud-id .minibar { width: 90px !important; }
+  .chip { min-width: 84px; font-size: 12px; padding: 2px 7px 2px 4px; }
+  .chip .icon, .chip .add { width: 16px; height: 16px; }
+  .orb { width: 46px; font-size: 9.5px; }
+  .orb .disc { width: 40px; height: 40px; }
+  .orb .disc .icon { width: 22px; height: 22px; }
+  .side { gap: 6px; top: calc(100px + var(--safe-t)); }
+  .site { transform: translateY(-100%) scale(0.86); transform-origin: bottom center; }
+  .site .label { font-size: 10px; }
+  .tab { font-size: 10.5px; }
+  .tab .medal { width: 40px; height: 40px; }
+  .tab .medal .icon { width: 22px; height: 22px; }
+  .t-title h2, .keep-name { font-size: 24px; }
+  .pk .amount { font-size: 18px; }
+  .buy { font-size: 13px; padding: 7px 6px; }
+  .t-grid, .perks { gap: 8px; }
+  .pile { height: 72px; }
+  .pile .art { width: 48px !important; height: 48px !important; }
+  .gp-tiles { gap: 8px; }
+  .gp-tile { min-height: 92px; font-size: 11.5px; }
+  .gp-stats { grid-template-columns: 1fr; }
+  .gp-stat.wide { grid-column: auto; }
+  .podium { height: 300px; }
+  .podium-spot.p1 .podium-face { width: 78px; height: 78px; }
+  .podium-face { width: 62px; height: 62px; }
+  .podium-num { font-size: 36px; }
+  .podium-spot.p1 .podium-num { font-size: 46px; }
+  .medals { gap: 6px; }
+  .medal-card b { font-size: 14px; }
+  .bt-fighter { transform: scale(0.85); }
+  .bt-disc { width: 56px; height: 56px; }
+  .bt-act.strike .bt-disc { width: 72px; height: 72px; }
+  .cal { gap: 6px; }
+  .day { font-size: 10px; }
+  .ex-big { font-size: 34px; }
+  .scales { transform: scale(0.88); transform-origin: top center; height: 190px; }
+  .works { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .work { padding: 10px 6px; }
+  .work-go { font-size: 16px; padding: 9px 0; }
+  .work-art .art { width: 56px !important; height: 56px !important; }
+}
+
+/* short screens (landscape-ish or small phones): less height spent on headers */
+@media (max-height: 690px) {
+  .side { gap: 6px; }
+  .orb .disc { width: 42px; height: 42px; }
+  .orb .disc .icon { width: 23px; height: 23px; }
+  .gp-head { height: 120px; }
+  .gp-head .art { width: 76px !important; height: 76px !important; }
+  .th .gp-head { height: 130px; }
+  .vip-hero { padding: 14px 12px; }
+  .vip-hero .art { width: 84px !important; height: 84px !important; }
+  .bt-stage { min-height: 360px; }
+  .gift-card { padding-top: 46px; }
+  .win { height: 140px; }
+}
+
+/* wide phones and tablets: the column stays centred, grids get more columns */
+@media (min-width: 440px) {
+
+  .t-grid.one { grid-template-columns: 1fr 1fr; }
+
+  .gp-stats { grid-template-columns: repeat(3, 1fr); }
+  .loot-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (min-width: 521px) {
+  body { background: radial-gradient(80% 60% at 50% 30%, #142642, #05080c); }
+  .app { box-shadow: 0 0 0 1px rgba(227, 189, 98, 0.25), 0 0 60px rgba(0, 0, 0, 0.7); }
+}
+
+/* people who asked for less motion get still pictures */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+.section-ribbon { flex-wrap: wrap; white-space: nowrap; }
+.deal-timer { white-space: nowrap; }

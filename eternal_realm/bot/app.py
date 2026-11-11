@@ -63,6 +63,11 @@ async def run(settings: Settings) -> None:
         services.bot_username = me.username or ""
         log.info("Eternal Realm is up as @%s", services.bot_username)
         dp = build_dispatcher(services)
+        web_runner = None
+        if settings.miniapp_enabled:  # the mini app's API and page live in this same process (one database, one set of locks)
+            from ..web import server as web_server
+
+            web_runner = await web_server.start(services, bot)
         background = [
             asyncio.create_task(duels.janitor(bot, services), name="janitor"),
             asyncio.create_task(maintenance.backup_loop(db), name="backup"),
@@ -82,6 +87,8 @@ async def run(settings: Settings) -> None:
             for task in background:
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
+            if web_runner is not None:
+                await web_runner.cleanup()
     finally:
         with contextlib.suppress(Exception):
             await bot.close()

@@ -111,6 +111,14 @@ class Settings:
     #: community links shown as buttons in the private main menu (empty = button hidden)
     group_url: str = ""
     channel_url: str = ""
+    #: the mini app: its API and page are served by the bot's own process when enabled
+    miniapp_enabled: bool = False
+    miniapp_host: str = "127.0.0.1"
+    miniapp_port: int = 8085
+    #: the public https address of the page (shown as a button in the bot's main menu when set)
+    miniapp_url: str = ""
+    #: local preview only: accept a plain user id instead of Bale's signed data. Never switch on in production.
+    miniapp_dev: bool = False
 
     def is_admin(self, user_id: int) -> bool:
         return user_id == self.owner_id or user_id in self.admin_ids
@@ -163,6 +171,10 @@ def parse_settings(data: dict[str, Any]) -> Settings:
         command_overrides=overrides,
         group_url=_link(data.get("links", {}).get("group", "")),
         channel_url=_link(data.get("links", {}).get("channel", "")),
+        miniapp_enabled=bool(data.get("miniapp", {}).get("enabled", False)),
+        miniapp_host=str(data.get("miniapp", {}).get("host", "127.0.0.1")),
+        miniapp_port=int(data.get("miniapp", {}).get("port", 8085)),
+        miniapp_url=_link(data.get("miniapp", {}).get("url", "")),
     )
 
 

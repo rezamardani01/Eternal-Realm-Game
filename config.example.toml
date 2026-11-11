@@ -24,6 +24,14 @@ path = "data/game.db"
 enabled = true
 provider_token = "WALLET-TEST-1111111111111111"
 
+[miniapp]
+# مینی‌اپ بله: API و صفحه‌ی آن داخل همین پردازش ربات اجرا می‌شود (راهنما: miniapp/README.md)
+enabled = false
+host = "127.0.0.1"
+port = 8085
+# آدرس https عمومی صفحه؛ اگر پر باشد دکمه‌ی «باز کردن مینی اپ» در ردیف اول منوی ربات دیده می‌شود
+url = ""
+
 # برای تغییر ضرایب بازی، مقادیر زیر را باز کنید (همه اختیاری‌اند)
 # [balance]
 # max_level = 500
