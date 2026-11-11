@@ -246,7 +246,7 @@ async def test_listing_and_buying_through_the_panel(h, services, db):
     await h.panel(10, "piece", str(spare))
     await h.tap(10, "عرضه در بازار")
     assert "قیمت فروش" in h.session.last_text()
-    await h.say(10, "1200")  # the answer to the price prompt
+    await h.say(10, "120")  # the answer to the price prompt
     await h.tap(10, "بله")
     assert "آگهی شما نصب شد" in h.session.last_text()
 
@@ -256,7 +256,7 @@ async def test_listing_and_buying_through_the_panel(h, services, db):
     assert "تأیید خرید" in h.session.last_text()
     await h.tap(11, "بله، بخر")
     assert any(g.item.id == "leather_cap" for g in (await services.inventory.view(2)).gear)
-    assert (await services.players.require(11)).gold == services.ctx.balance.start_gold + 5_000 - 1_200
+    assert (await services.players.require(11)).gold == services.ctx.balance.start_gold + 5_000 - 120
     # after the purchase we are back on the first page of the list, with a success note and no stray «previous» button
     assert "خرید موفق" in h.session.last_text() and "🏪" in h.session.last_text()
     assert not any("قبلی" in label for label in h.labels())
@@ -267,7 +267,7 @@ async def test_cancelling_a_listing_returns_the_item(h, services, db):
     spare = (await give(services, db, seller.id, "leather_cap"))[0]
     await h.panel(10, "piece", str(spare))
     await h.tap(10, "عرضه در بازار")
-    await h.say(10, "500")
+    await h.say(10, "100")
     await h.tap(10, "بله")
     await h.panel(10, "mine")
     await h.tap(10, "کلاه چرمی")
@@ -283,7 +283,7 @@ async def test_bad_price_keeps_asking_and_a_tap_cancels(h, services, db):
     await h.say(10, "خیلی")
     assert "عدد" in h.session.last_text()
     await h.tap(10, "انصراف")
-    await h.say(10, "500")  # no longer in the prompt: ignored as chatter
+    await h.say(10, "100")  # no longer in the prompt: ignored as chatter
     assert not await services.market.mine(seller)
 
 
@@ -339,8 +339,8 @@ async def test_market_has_category_buttons_with_listings_below(h, services, db):
     await reg(services, 11, "سارا", "fairy", "mage")
     cap = (await give(services, db, seller.id, "leather_cap"))[0]
     await give(services, db, seller.id, "iron_ore", 3)
-    await services.market.list_gear(await services.players.require(10), cap, 700)
-    await services.market.list_stack(await services.players.require(10), __import__("eternal_realm.game.data.items", fromlist=["x"]).get_item("iron_ore"), 3, 90)
+    await services.market.list_gear(await services.players.require(10), cap, 100)
+    await services.market.list_stack(await services.players.require(10), __import__("eternal_realm.game.data.items", fromlist=["x"]).get_item("iron_ore"), 3, 200)
 
     await h.panel(11, "market")
     labels = h.labels()
@@ -507,10 +507,12 @@ async def test_the_listing_confirmation_compares_the_price_with_the_real_value(h
     worth = item_value(get_item("leather_cap"))
     await h.panel(10, "piece", str(spare))
     await h.tap(10, "عرضه در بازار")
-    await h.say(10, str(worth * 3))
+    await h.say(10, str(worth * 3))  # three times the worth is refused outright and the prompt stays
+    assert "باید میان" in h.session.last_text()
+    await h.say(10, str(worth * 6 // 5))
     text = h.session.last_text()
     assert "تأیید آگهی" in text and "ارزش واقعی" in text and "قیمتی که زدید" in text
-    assert "بالاتر از ارزش واقعی" in text and "قیمت خیلی بالاست" in text and "در «بازارچه» برای همه" in text
+    assert "بالاتر از ارزش واقعی" in text and "در «بازارچه» برای همه" in text
     labels = h.labels()
     assert any("بله" in t for t in labels) and any("نه" in t for t in labels)
     await h.tap(10, "نه")  # declining puts nothing on the board

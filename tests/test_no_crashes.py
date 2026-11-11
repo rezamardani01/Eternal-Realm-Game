@@ -61,7 +61,7 @@ async def test_walking_the_whole_panel_never_crashes(services, db, caplog):
     me = await prepared_player(services, db, 10, "آرش")
     await prepared_player(services, db, 11, "سارا")
     gear = [g for g in (await services.inventory.view(me.id)).gear if g.item.id == "leather_cap"]
-    await services.market.list_gear(me, gear[0].id, 900)
+    await services.market.list_gear(me, gear[0].id, 100)
 
     await h.say(10, "/start")
     pressed_private = await explore(h, 10, group=False)

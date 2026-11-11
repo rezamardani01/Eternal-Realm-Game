@@ -10,7 +10,7 @@ from ...db.repos import market as repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
 from ...shared.text import fa
-from ..data.items import ITEMS, Item, Kind, get_item
+from ..data.items import ITEMS, Item, Kind, get_item, item_value
 from ..models import Player
 from .inventory import InventoryService
 
@@ -49,19 +49,33 @@ class MarketService:
     def fee_for(self, price: int) -> int:
         return max(1, price * self.ctx.balance.market_fee_percent // 100)
 
-    def _check_price(self, price: int) -> None:
+    def price_range(self, item: Item, qty: int = 1, upgrade: int = 0) -> tuple[int, int]:
+        """The cheapest and dearest price a listing of this may ask: half to one and a fifth of its real worth."""
+        b = self.ctx.balance
+        worth = item_value(item, upgrade) * qty
+        low = max(1, -(-worth * b.market_min_percent // 100))
+        high = min(b.market_max_price, max(low, worth * b.market_max_percent // 100))
+        return low, high
+
+    def _check_price(self, price: int, item: Item, qty: int = 1, upgrade: int = 0) -> None:
         if not 1 <= price <= self.ctx.balance.market_max_price:
             raise GameError(f"بها را درست بنویسید: عددی بین ۱ تا {fa(self.ctx.balance.market_max_price)} سکه.")
+        low, high = self.price_range(item, qty, upgrade)
+        if not low <= price <= high:
+            raise GameError(
+                f"بهای این آگهی باید میان {fa(low)} تا {fa(high)} سکه باشد "
+                f"(از {fa(self.ctx.balance.market_min_percent)}٪ تا {fa(self.ctx.balance.market_max_percent)}٪ ارزش واقعی)."
+            )
 
     async def _check_slots(self, tx, seller: Player) -> None:  # noqa: ANN001
         if await repo.count_active(tx, seller.id) >= self.ctx.balance.market_max_listings:
             raise GameError(f"روی تخته‌ی بازار حداکثر {self.ctx.balance.market_max_listings} آگهی فعال می‌توانید داشته باشید. یکی را لغو کنید یا صبر کنید تا فروخته شود.")
 
     async def list_gear(self, seller: Player, gear_id: int, price: int) -> Listing:
-        self._check_price(price)
         async with self.ctx.db.transaction() as tx:
             await self._check_slots(tx, seller)
             piece = await self.inventory.piece(tx, seller.id, gear_id)
+            self._check_price(price, piece.item, 1, piece.upgrade)
             if piece.slot is not None:
                 raise GameError("اول این تجهیزات را از تن خود دربیاورید؛ با «درآوردن شماره».")
             if not piece.item.tradable:
@@ -71,13 +85,13 @@ class MarketService:
             return Listing(listing_id, seller.id, seller.name, piece.item, 1, price, piece.id, piece.upgrade)
 
     async def list_stack(self, seller: Player, item: Item, qty: int, price: int) -> Listing:
-        self._check_price(price)
         if item.is_gear:
             raise GameError("برای سلاح و زره، شماره‌اش را بنویسید: عرضه #شماره قیمت")
         if not item.tradable:
             raise GameError("این آیتم ویژه است و نمی‌شود آن را به دیگران فروخت.")
         if not 1 <= qty <= 10_000:
             raise GameError("تعداد را درست بنویسید؛ مثلاً: 5")
+        self._check_price(price, item, qty)
         async with self.ctx.db.transaction() as tx:
             await self._check_slots(tx, seller)
             await self.inventory.take(tx, seller.id, item.id, qty)

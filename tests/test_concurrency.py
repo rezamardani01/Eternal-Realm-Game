@@ -49,7 +49,7 @@ async def test_two_buyers_racing_for_one_listing(services, db):
         await services.inventory.grant(tx, seller.id, "iron_ore", 3)
         for b in buyers:
             await wallet.apply(tx, b.id, gold=1_000, reason="t", now=services.ctx.now())
-    listing = await services.market.list_stack(await services.players.require(10), get_item("iron_ore"), 3, 500)
+    listing = await services.market.list_stack(await services.players.require(10), get_item("iron_ore"), 3, 300)
     results = await asyncio.gather(*(services.market.buy(b, listing.id) for b in buyers), return_exceptions=True)
     assert sum(not isinstance(r, Exception) for r in results) == 1
     holders = 0

@@ -39,9 +39,9 @@ async def seed_market(services, db):
     await stock(services, db, seller.id, leather_cap=1, steel_sword=1, dagger=1, iron_ore=10)
     seller = await services.players.require(10)
     pieces = {g.item.id: g.id for g in (await services.inventory.view(seller.id)).gear}
-    await services.market.list_gear(seller, pieces["leather_cap"], 900)
-    await services.market.list_gear(seller, pieces["steel_sword"], 5_000)
-    await services.market.list_gear(seller, pieces["dagger"], 300)
+    await services.market.list_gear(seller, pieces["leather_cap"], 140)
+    await services.market.list_gear(seller, pieces["steel_sword"], 3_000)
+    await services.market.list_gear(seller, pieces["dagger"], 100)
     await services.market.list_stack(seller, get_item("iron_ore"), 10, 700)
     return seller
 
@@ -58,7 +58,7 @@ async def test_sorting_cheapest_most_expensive_and_rarest(h, services, db):
     assert any("✅ ارزان‌ترین" in t for t in h.labels())  # the tick moved
     await h.tap(11, "نمایش آگهی‌ها")
     prices = [t.split("—")[-1] for t in listing_labels(h)]
-    assert "خنجر" in listing_labels(h)[0] and "۳۰۰" in prices[0]
+    assert "خنجر" in listing_labels(h)[0] and "۱۰۰" in prices[0]
 
     await h.tap(11, "فیلتر")
     await h.tap(11, "گران‌ترین")
@@ -128,14 +128,18 @@ async def test_selling_in_a_group_works_and_chatter_still_reaches_commands(h, se
     await h.panel(10, "market", group=True)
     await h.tap(10, "فروش کالای من", group=True)
     await h.tap(10, "کلاه چرمی", group=True)
-    assert "قیمت فروش" in h.session.last_text()
+    assert "قیمت فروش" in h.session.last_text() and "مجاز: ۶۰ تا ۱۴۴" in h.session.last_text()
     await h.say(10, "پروفایل", group=True)  # a game word while the prompt is open still works
     assert "آرش" in h.session.last_text()
     await h.say(10, "نمی‌دانم", group=True)  # chatter is ignored, the prompt stays
-    await h.say(10, "800", group=True)
+    await h.say(10, "800", group=True)  # far above the real worth: refused, and the prompt stays open
+    assert "باید میان ۶۰ تا ۱۴۴" in h.session.last_text()
+    await h.say(10, "20", group=True)  # far below: refused too
+    assert "باید میان" in h.session.last_text()
+    await h.say(10, "140", group=True)
     await h.tap(10, "بله", group=True)
     assert "آگهی شما نصب شد" in h.session.last_text()
-    assert (await services.market.mine(seller))[0].price == 800
+    assert (await services.market.mine(seller))[0].price == 140
 
 
 async def test_buying_listed_gear_then_selling_it_to_the_npc_does_not_crash(h, services, db):

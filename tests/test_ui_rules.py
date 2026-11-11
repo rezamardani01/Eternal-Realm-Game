@@ -43,8 +43,8 @@ async def test_no_line_or_button_starts_with_two_emojis(services, db):
         await services.inventory.grant(tx, me.id, "iron_sword", 1)
     me = await services.players.require(10)
     cap = next(g.id for g in (await services.inventory.view(me.id)).gear if g.item.id == "leather_cap")
-    await services.market.list_gear(me, cap, 700)
-    await services.market.list_stack(me, __import__("eternal_realm.game.data.items", fromlist=["x"]).get_item("iron_ore"), 5, 100)
+    await services.market.list_gear(me, cap, 100)
+    await services.market.list_stack(me, __import__("eternal_realm.game.data.items", fromlist=["x"]).get_item("iron_ore"), 5, 300)
 
     steps = [("say", "/start"), ("say", "قلمرو"), ("say", "راهنما"), ("say", "پروفایل"), ("say", "جایزه"),
              ("say", "ماهیگیری"), ("say", "معدن"), ("say", "گیاه"), ("say", "جستجو"), ("say", "شکار"),

@@ -62,7 +62,7 @@ async def test_history_follows_a_traded_piece(h, services, db):
     seller, buyer = await hero(services, db, 1, "آرش"), await hero(services, db, 2, "سارا")
     async with db.transaction() as tx:
         gid = (await services.inventory.grant(tx, seller.id, "steel_sword", 1, origin="غنیمت شکست باس\nنخستین صاحب: آرش"))[0]
-    listing = await services.market.list_gear(seller, gid, 500)
+    listing = await services.market.list_gear(seller, gid, 3_000)
     await services.market.buy(buyer, listing.id)
     async with db.read() as tx:
         row = await inv_repo.get_gear(tx, gid)

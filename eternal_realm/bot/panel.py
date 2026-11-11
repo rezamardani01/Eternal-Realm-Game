@@ -1062,15 +1062,17 @@ async def listing_ask(c: Ctx) -> Screen:
     if kind == "g":
         piece_ = await _piece(c, _int(ref))
         what, back = piece_.label, c.btn("❌ انصراف", "piece", piece_.id)
+        low, high = c.services.market.price_range(piece_.item, 1, piece_.upgrade)
     else:
         item_id, _, qty = ref.partition(".")
         item = get_item(item_id)
         what, back = f"{item.label} ×{fa(_int(qty))}", c.btn("❌ انصراف", "lqty", item.id)
+        low, high = c.services.market.price_range(item, _int(qty))
     await c.state.set_state(ListingFlow.waiting)
     await c.state.update_data(kind=kind, ref=ref)
     text = (
         f"🏷️ {bold('قیمت فروش')}\n\n{what}\n\n"
-        "قیمت کل را به سکه بنویسید و بفرستید.\nمثال: 5000\n\n"
+        f"قیمت کل را به سکه بنویسید و بفرستید.\nمجاز: {fa(low)} تا {fa(high)} سکه (۵۰٪ تا ۱۲۰٪ ارزش واقعی)\n\n"
         "پس از ثبت، آگهی شما برای همه‌ی بازیکنان در هر گروهی دیده می‌شود."
     )
     return Screen(text, [[back]])
@@ -1436,17 +1438,20 @@ async def got_listing_price(message: Message, state: FSMContext, services: Servi
         raise GameError("فقط یک عدد بنویسید؛ مثلاً: 5000")
     player = await services.players.require(message.from_user.id)  # type: ignore[union-attr]
     data = await state.get_data()
-    await state.clear()
     kind, ref = str(data.get("kind")), str(data["ref"])
     if kind == "g":
         piece_ = await services.inventory.view(player.id)
         owned = next((p_ for p_ in piece_.gear if p_.id == int(ref)), None)
         what = owned.label if owned else "تجهیزات"
         worth = item_value(owned.item, owned.upgrade) if owned else 0
+        if owned:
+            services.market._check_price(price, owned.item, 1, owned.upgrade)  # a price outside the fair range is refused here
     else:
         item_id, _, qty = ref.partition(".")
         what = f"{get_item(item_id).label} ×{fa(int(qty))}"
+        services.market._check_price(price, get_item(item_id), int(qty))
         worth = item_value(get_item(item_id)) * int(qty)
+    await state.clear()  # the price passed the checks above; a refused one keeps the prompt open
     fee = services.market.fee_for(price)
     owner = player.platform_user_id
     lines = [f"🏷️ {bold('تأیید آگهی')}", "", f"📦 {what}", ""]

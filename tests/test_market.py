@@ -100,3 +100,20 @@ async def test_listed_gear_cannot_be_equipped_or_sold_to_npc(services, db):
         await services.shop.sell_gear(seller, gear.id)
     with pytest.raises(GameError):
         await services.inventory.equip(seller, gear.id)
+
+
+async def test_a_listing_may_ask_between_half_and_one_and_a_fifth_of_the_real_worth(services, db):
+    from eternal_realm.game.data.items import item_value
+
+    seller, _ = await setup_pair(services, db)
+    ore = get_item("iron_ore")
+    worth = item_value(ore) * 4
+    low, high = services.market.price_range(ore, 4)
+    assert (low, high) == (-(-worth // 2), worth * 120 // 100)
+    for bad in (low - 1, high + 1, 48_999):
+        with pytest.raises(GameError, match="باید میان"):
+            await services.market.list_stack(seller, ore, 2, bad) if False else await services.market.list_stack(seller, ore, 4, bad)
+    await services.market.list_stack(seller, ore, 4, low)
+    await services.market.list_stack(seller, ore, 4, high)
+    # a cheap item can never be listed for a fortune
+    assert services.market.price_range(get_item("herb"))[1] < 100

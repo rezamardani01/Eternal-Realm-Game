@@ -42,6 +42,9 @@ class Balance:
     market_fee_percent: int = 5
     market_max_listings: int = 10
     market_max_price: int = 10_000_000
+    #: a listing may ask at most this much above the item's real worth, and at least this much of it
+    market_max_percent: int = 120
+    market_min_percent: int = 50
     command_gap_seconds: float = 1.0
     #: pause between the steps of «در حال شکار...»-style animations (0 turns them off)
     animation_seconds: float = 1.0
