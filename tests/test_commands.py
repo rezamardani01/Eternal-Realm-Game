@@ -73,23 +73,17 @@ async def test_profile_and_help_in_group(h, services):
     assert await services.groups.get(-500) is not None
 
 
-async def test_profile_of_replied_player(h, services):
+async def test_profile_with_a_reply_does_nothing(h, services):
     await services.players.register(10, "a", "آرش", "elf", "archer")
     await services.players.register(11, "b", "سارا", "fairy", "mage")
     await h.say(10, "پروفایل", group=True, reply_to=h.message_of(11))
-    assert "سارا" in h.session.last_text()
+    assert not h.session.texts()
 
 
 async def test_unregistered_user_is_sent_to_start(h):
     await h.say(10, "پروفایل", group=True)
     assert "قهرمانی نساخته" in h.session.last_text()
     assert h.session.last_buttons()[0]["url"].startswith("https://ble.ir/")
-
-
-async def test_unregistered_reply_target(h, services):
-    await services.players.register(10, "a", "آرش", "elf", "archer")
-    await h.say(10, "پروفایل", group=True, reply_to=h.message_of(99))
-    assert "قهرمانی نساخته" in h.session.last_text()
 
 
 async def test_banned_player_blocked(h, services):

@@ -454,15 +454,11 @@ async def test_names_are_mentions_in_groups_but_plain_in_private(h, services):
     assert "(uid:" not in " ".join(h.session.texts())
 
 
-async def test_profile_of_another_player_is_a_glass_panel_with_their_numbers(h, services):
+async def test_profile_is_only_your_own_card(h, services):
     await reg(services)
-    other = await reg(services, 11, "سارا", "fairy", "mage")
-    stats = await services.characters.stats(other)
+    await reg(services, 11, "سارا", "fairy", "mage")
     await h.say(10, "پروفایل", group=True, reply_to=h.message_of(11))
-    labels = h.labels()
-    assert any("حمله" in t and str(stats.atk).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")) in t for t in labels)
-    assert "سارا" in h.session.last_text()
-    assert not any("کوله‌پشتی" in t for t in labels)  # it is their profile, not your backpack
+    assert not h.session.texts()  # a reply gets no answer at all
     await h.say(10, "پروفایل", group=True)
     assert any("قلمرو من" in t for t in h.labels()) and not any("کوله‌پشتی" in t for t in h.labels())  # a group sees the card only
     await h.say(10, "پروفایل")

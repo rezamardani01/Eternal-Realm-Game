@@ -9,15 +9,13 @@ from .registry import REGISTRY, command
 
 
 @command(
-    "profile", ["پروفایل", "شخصیت", "مشخصات", "profile"], "قهرمان شما (با ریپلای: قهرمان دیگران)",
+    "profile", ["پروفایل", "شخصیت", "مشخصات", "profile"], "قهرمان شما",
     category="👤 شخصیت", points=0,
 )
 async def profile(ctx: CommandContext) -> None:
-    target = await ctx.replied_player()
-    if target is None or target.id == ctx.me.id:
-        await panel.send(ctx.message, ctx.services, ctx.me, "profile", reply=True)
-        return
-    await panel.send(ctx.message, ctx.services, ctx.me, "profile", str(target.id), reply=True)
+    if ctx.message.reply_to_message is not None:
+        return  # a reply never shows someone else's profile
+    await panel.send(ctx.message, ctx.services, ctx.me, "profile", reply=True)
 
 
 @command(
