@@ -64,7 +64,7 @@ async def trip(c: Ctx) -> Screen:
         f"🏚️ دخمه‌ها{mark('dungeon')}: هر روز سه دخمه‌ی پنج‌طبقه؛ طبقه‌به‌طبقه پاداش",
         f"🐉 باس‌ها{mark('boss')}: پنج باس با ترفند؛ کریستال و صندوقچه",
         f"🥊 میدان بات‌ها{mark('arena')}: تمرین در چهار سطح سختی",
-        f"♾️ هزارتو{mark('maze')}: {fa(maze_data.FLOORS)} طبقه؛ هر طبقه یک ماجرا و تصمیم، و غول‌هایی که راه را بسته‌اند",
+        f"♾️ هزارتو{mark('maze')}: {fa(len(maze_data.CHAPTERS))} فصل و {fa(maze_data.FLOORS)} طبقه؛ هر طبقه یک ماجرا و تصمیم، و غول‌هایی که راه را بسته‌اند",
         f"🎲 گشت‌زنی{mark('wander')}: اتفاق‌های راه؛ گنج، راهزن، معما و تاجر مرموز",
         "🏕️ اعزام: قهرمان را بفرستید و در غیبتتان پاداش بگیرید",
         f"🌍 جهان زنده{mark('world')}: رویداد جهانی و تاریکی مناطق",
@@ -213,7 +213,7 @@ def _next_rows(c: Ctx, kind: str, info: dict, won: bool) -> list:
     elif kind == "world":
         rows.append([c.btn("🌍 جهان", "world")])
     elif kind == "maze":
-        if won and info["floor"] < maze_data.FLOORS:
+        if won and info["floor"] < maze_data.chapter_end(info["floor"]):
             rows.append([c.btn("➡️ ادامه‌ی هزارتو", "maze", style="success")])
         else:
             rows.append([c.btn("♾️ هزارتوی ابدی", "maze")])
@@ -519,22 +519,38 @@ async def maze(c: Ctx) -> Screen:
     progress = await c.services.solo.overview(c.player.id)
     best = progress.get("maze:best", 0)
     if run is None:
+        done = await c.services.solo.maze_chapters_done(c.player.id)
+        total = len(maze_data.CHAPTERS)
+        if done >= total:
+            lines = [
+                f"♾️ {bold('هزارتوی ابدی')}", LINE,
+                f"🏆 هر {fa(total)} فصل هزارتو را فتح کرده‌اید.",
+                "هزارتو برای هر قهرمان فقط یک بار باز است و دیگر درهایش بسته شد؛ این افسانه برای همیشه به نام شماست.",
+                f"🏅 رکورد شما: طبقه‌ی {fa(best)}",
+            ]
+            return Screen("\n".join(lines), [c.back("trip", "🧭 سفر قهرمان")])
+        title, icon = maze_data.CHAPTERS[done]
+        first = done * maze_data.CHAPTER_FLOORS + 1
+        last = first + maze_data.CHAPTER_FLOORS - 1
         lines = [
             f"♾️ {bold('هزارتوی ابدی')}", LINE,
-            f"{fa(maze_data.FLOORS)} طبقه رو به پایین. هر طبقه ماجرایی تازه دارد و شما تصمیم می‌گیرید چه کنید؛ هر تصمیم می‌تواند گنج، برکت، زخم یا کمین باشد.",
-            "👹 هر دو سه طبقه یک غول راه را بسته است. غول‌ها قدرت خودشان را دارند و هر چه پایین‌تر بروید سرسخت‌تر می‌شوند؛ اگر شکست خوردید، قوی‌تر برگردید.",
-            "جانتان بین طبقه‌ها برنمی‌گردد مگر با تصمیم درست، و برکت‌ها فقط تا پایان همین هزارتو می‌مانند.",
-            "با بیرون آمدن، همه‌ی غنیمت می‌ماند؛ با شکست، نیمی از آن.",
+            f"{icon} {bold('فصل ' + fa(done + 1) + ': ' + title)}",
+            f"طبقه‌ی {fa(first)} تا {fa(last)} · هر طبقه ماجرایی تازه و تصمیمی تازه دارد.",
+            "👹 هر دو سه طبقه یک غول راه را بسته است و هر چه پایین‌تر بروید سرسخت‌تر می‌شود؛ اگر شکست خوردید، قوی‌تر برگردید.",
+            "برکت‌ها فقط تا پایان همین فصل می‌مانند. با بیرون آمدن، همه‌ی غنیمت می‌ماند؛ با شکست، نیمی از آن.",
+            f"📚 فصل‌ها: {fa(done)} از {fa(total)} فتح شده · هر فصل پس از فتح، دوباره باز نمی‌شود.",
             f"🏅 رکورد شما: طبقه‌ی {fa(best)}",
-            "", f"🎁 {bold('پاداش ماندگار رسیدن به طبقه')}",
-            *[f"نگهبان طبقه‌ی {fa(f)}: {fa(cr)} کریستال و صندوقچه" for f, (cr, _) in maze_data.MILESTONES.items()],
+            "", f"🎁 {bold('پاداش ماندگار نگهبان‌های این فصل')}",
+            *[f"طبقه‌ی {fa(f)}: {fa(cr)} کریستال و صندوقچه" for f, (cr, _) in maze_data.MILESTONES.items() if first <= f <= last],
             "", await _energy_line(c), f"⚡ ورود: {fa(maze_data.ENERGY)} انرژی",
         ]
         rows = [[c.btn("🚪 ورود به هزارتو", "mazego", style="success")], c.back("trip", "🧭 سفر قهرمان")]
         return Screen("\n".join(lines), rows)
+    chapter = maze_data.chapter_of(run.floor)
     lines = [
         f"♾️ {bold('هزارتوی ابدی')}", LINE,
-        f"🏚️ طبقه‌ی {fa(run.floor)} از {fa(maze_data.FLOORS)}",
+        f"{maze_data.CHAPTERS[chapter - 1][1]} فصل {fa(chapter)}: {maze_data.CHAPTERS[chapter - 1][0]}",
+        f"🏚️ طبقه‌ی {fa(run.floor)} از {fa(maze_data.chapter_end(run.floor))}",
         f"❤️ {bar(round(run.hp * 100), 100, 10)} {fa(round(run.hp * 100))}٪ جان",
     ]
     names = {"atk": "قدرت حمله", "def": "دفاع", "hp": "جان"}
@@ -568,7 +584,7 @@ async def maze(c: Ctx) -> Screen:
         scene = maze_data.SCENES[run.ref]
         lines += [
             f"{scene.emoji} {bold(scene.title)}", scene.text, "",
-            f"👣 غول بعدی در طبقه‌ی {fa(maze_data.next_giant(run.floor))} منتظر است" if run.floor < maze_data.FLOORS else "",
+            f"👣 غول بعدی در طبقه‌ی {fa(maze_data.next_giant(run.floor))} منتظر است" if run.floor < maze_data.chapter_end(run.floor) else "",
             "چه می‌کنید؟ 👇",
         ]
         rows += [[c.btn(choice.label, "mazepick", i)] for i, choice in enumerate(scene.choices)]

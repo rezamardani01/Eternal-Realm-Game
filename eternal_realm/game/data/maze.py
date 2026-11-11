@@ -8,16 +8,34 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-FLOORS = 60
+CHAPTER_FLOORS = 50
+#: the maze is told in chapters; each one is its own run, opened by finishing the one before, and each is walked once
+CHAPTERS: tuple[tuple[str, str], ...] = (
+    ("دالان‌های فراموش‌شده", "🕯️"),
+    ("ژرفای یخ‌زده", "❄️"),
+    ("کوره‌ی دوزخ", "🌋"),
+    ("قلب ابدیت", "♾️"),
+)
+FLOORS = CHAPTER_FLOORS * len(CHAPTERS)
 ENERGY = 10
 #: the great guardians, and the lasting prizes for beating them the first time: (crystals, chest)
 BOSS_FLOORS = {
     10: "crypt_lord", 20: "dragon_brood", 30: "lord_of_darkness", 40: "ice_king", 50: "fire_queen", 60: "boss_titan",
 }
+#: guardians of the later chapters, taken in turn
+_LATER_GUARDIANS = (
+    "boss_undead_king", "boss_red_dragon", "boss_time_keeper", "boss_shadow_lord", "dark_commander", "hell_warden",
+    "jailer", "temple_guardian", "blood_giant", "dragon_brood", "ice_king", "fire_queen", "crypt_lord", "lord_of_darkness",
+)
+for _i, _floor in enumerate(range(70, FLOORS, 10)):
+    BOSS_FLOORS[_floor] = _LATER_GUARDIANS[_i % len(_LATER_GUARDIANS)]
+BOSS_FLOORS[FLOORS] = "boss_titan"
 MILESTONES: dict[int, tuple[int, str]] = {
     10: (3, "magic_chest"), 20: (5, "magic_chest"), 30: (8, "royal_chest"),
-    40: (10, "royal_chest"), 50: (12, "royal_chest"), 60: (20, "royal_chest"),
+    40: (10, "royal_chest"), 50: (12, "royal_chest"), 60: (14, "royal_chest"),
 }
+for _floor in BOSS_FLOORS:
+    MILESTONES.setdefault(_floor, (min(25, 14 + (_floor - 60) // 10), "royal_chest"))
 #: a lost run still pays this share of what it gathered
 DEFEAT_SHARE = 0.5
 #: slipping past an ordinary giant: the chance it works, and the health it costs when it does not
@@ -34,6 +52,9 @@ POOLS: tuple[tuple[int, tuple[str, ...]], ...] = (
     (30, ("bridge_keeper", "shadow_mage", "hell_warden", "jailer", "temple_guardian")),
     (45, ("ice_golem", "frost_archer", "sentinel", "dragon_cultist", "drake", "trap_spirit", "bot_knight")),
     (60, ("dark_commander", "smuggler", "hell_warden", "jailer", "temple_guardian", "blood_giant", "fire_queen")),
+    (100, ("burnt_warden", "forbidden_mage", "mirror_shade", "shadow_mage", "ice_knight", "lava_beast", "bridge_keeper", "sentinel")),
+    (150, ("hell_warden", "jailer", "temple_guardian", "blood_giant", "dragon_cultist", "drake", "ice_golem", "frost_archer", "dark_commander")),
+    (200, ("dark_commander", "fire_queen", "ice_king", "hell_warden", "jailer", "temple_guardian", "blood_giant", "shadow_mage", "mirror_shade")),
 )
 
 #: temporary powers a blessing can give: stat -> (label, amount)
@@ -558,6 +579,15 @@ def giant_tier(floor: int) -> str | None:
     return "giant" if floor % 5 == 3 else None
 
 
+def chapter_of(floor: int) -> int:
+    return (max(1, floor) - 1) // CHAPTER_FLOORS + 1
+
+
+def chapter_end(floor: int) -> int:
+    """The last floor of the chapter this floor belongs to."""
+    return chapter_of(floor) * CHAPTER_FLOORS
+
+
 def next_giant(floor: int) -> int:
     return next(f for f in range(floor, FLOORS + 1) if giant_tier(f))
 
@@ -566,7 +596,9 @@ def depth_level(floor: int) -> int:
     """The level the maze itself has on a floor: its foes are never weaker than this, whoever walks in."""
     if floor <= 30:
         return max(1, 2 * floor - 3)
-    return round(57 + 1.5 * (floor - 30))  # the second half of the maze deepens more slowly
+    if floor <= 60:
+        return round(57 + 1.5 * (floor - 30))  # the second half of the maze deepens more slowly
+    return round(102 + (floor - 60))
 
 
 def foe_level(floor: int, hero_level: int) -> int:

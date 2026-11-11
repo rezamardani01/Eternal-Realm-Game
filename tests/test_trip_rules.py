@@ -104,8 +104,8 @@ async def test_trip_pays_less_than_it_used_to(services, db):
 
 
 # --- the longer maze ----------------------------------------------------------------------------------------------------
-def test_the_maze_has_sixty_floors_six_guardians_and_pools_for_every_depth():
-    assert md.FLOORS == 60 and sorted(md.BOSS_FLOORS) == [10, 20, 30, 40, 50, 60]
+def test_the_maze_has_four_chapters_of_fifty_floors_a_guardian_every_ten_and_pools_for_every_depth():
+    assert md.FLOORS == 200 and len(md.CHAPTERS) == 4 and sorted(md.BOSS_FLOORS) == list(range(10, 201, 10))
     assert set(md.MILESTONES) == set(md.BOSS_FLOORS)
     for floor in range(1, md.FLOORS + 1):
         assert md.pool_for(floor)
@@ -263,3 +263,48 @@ async def test_the_new_games_can_be_tapped_in_a_group(h, services, db):
         await h.click(999, f"e:{action}:{view.id}:0", group=True)
     answers = [a.get("text", "") for a in h.session.callback_answers()]
     assert any("قرعه" in x for x in answers) and any(x for x in answers)
+
+
+async def _finish_chapter(services, db, p, chapter):
+    """Walk a chapter's last floor: stand on its guardian and win."""
+    from tests.test_solo import maze_win  # noqa: PLC0415
+
+    last = chapter * md.CHAPTER_FLOORS
+    async with db.transaction() as tx:
+        await tx.execute(
+            "UPDATE maze_runs SET floor = ?, options = ? WHERE player_id = ?",
+            (last, json.dumps({"kind": "giant", "ref": md.BOSS_FLOORS[last], "seen": []}), p.id),
+        )
+    step = await services.solo.maze_pick(p, 0)
+    assert step.fight is not None
+    return await maze_win(services, db, p)
+
+
+async def test_the_maze_is_four_chapters_each_opened_by_the_last_and_walked_once(services, db, clock):
+    p = await hero(services, db, level=300)  # strong enough that the last guardian cannot end the fight before the test rigs it
+    for chapter in range(1, 5):
+        run = await services.solo.maze_start(p)
+        assert md.chapter_of(run.floor) == chapter and run.floor == (chapter - 1) * md.CHAPTER_FLOORS + 1
+        update = await _finish_chapter(services, db, p, chapter)
+        assert update.won and await services.solo.maze_run(p.id) is None
+        assert await services.solo.maze_chapters_done(p.id) == chapter
+        clock.advance(86400)
+    with pytest.raises(GameError, match="فقط یک بار"):
+        await services.solo.maze_start(p)  # all four are won: the maze is closed for this hero
+
+
+async def test_a_lost_chapter_is_tried_again_not_skipped(services, db, clock):
+    p = await hero(services, db, level=60)
+    await services.solo.maze_start(p)
+    await services.solo.maze_retreat(p)
+    clock.advance(86400)
+    run = await services.solo.maze_start(p)
+    assert md.chapter_of(run.floor) == 1  # leaving does not finish the chapter
+
+
+async def test_the_maze_screens_know_the_chapters(h, services, db, clock):
+    await hero(services, db, level=60)
+    await h.panel(1, "maze")
+    assert "فصل ۱" in h.session.last_text() and "دالان‌های فراموش‌شده" in h.session.last_text()
+    await h.panel(1, "mazego")
+    assert "فصل ۱" in h.session.last_text() and "از ۵۰" in h.session.last_text()

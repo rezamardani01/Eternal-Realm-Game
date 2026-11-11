@@ -533,15 +533,23 @@ class SoloService:
         async with self.ctx.db.transaction() as tx:
             if await self._run(tx, player.id) is not None:
                 raise GameError("یک هزارتوی نیمه‌کاره دارید؛ ادامه‌اش بدهید یا با غنیمت بیرون بیایید.")
+            done = await self._progress(tx, player.id, "maze:chapters")
+            if done >= len(maze_data.CHAPTERS):
+                raise GameError("هر چهار فصل هزارتو را فتح کرده‌اید؛ هزارتو برای هر قهرمان فقط یک بار باز است و دیگر درهایش بسته شد. 🏆")
             await self._use_today(tx, player, "maze")
             await self.players.spend_energy(tx, player.id, maze_data.ENERGY)
-            run = MazeRun(1, 1.0, {}, 0, 0, "scene", "")
-            self._enter(run, 1)
+            first = done * maze_data.CHAPTER_FLOORS + 1
+            run = MazeRun(first, 1.0, {}, 0, 0, "scene", "")
+            self._enter(run, first)
             await tx.execute(
-                "INSERT INTO maze_runs (player_id, floor, hp, buffs, gold, xp, options, started) VALUES (?, 1, 1.0, '{}', 0, 0, ?, ?)",
-                (player.id, self._stage_json(run), self.ctx.now()),
+                "INSERT INTO maze_runs (player_id, floor, hp, buffs, gold, xp, options, started) VALUES (?, ?, 1.0, '{}', 0, 0, ?, ?)",
+                (player.id, first, self._stage_json(run), self.ctx.now()),
             )
             return run
+
+    async def maze_chapters_done(self, player_id: int) -> int:
+        async with self.ctx.db.read() as tx:
+            return await self._progress(tx, player_id, "maze:chapters")
 
     async def _maze_fight(self, tx: Tx, player: Player, run: MazeRun, foe_id: str, path: str, bonus: float = 0.0) -> SoloFight:
         """A fight on the run's floor. ``path``: a giant's tier, or "ambush" for a foe met by accident."""
@@ -670,9 +678,16 @@ class SoloService:
         if floor > await self._progress(tx, pid, "maze:best"):
             await self._set_progress(tx, pid, "maze:best", floor)
             notes.append(f"رکورد تازه‌ی هزارتو: طبقه‌ی {fa(floor)}")
-        if floor >= maze_data.FLOORS:
+        if floor >= maze_data.chapter_end(floor):
+            chapter = maze_data.chapter_of(floor)
+            await self._set_progress(tx, pid, "maze:chapters", max(chapter, await self._progress(tx, pid, "maze:chapters")))
             pay = await self._finish_run(tx, pid, run, 1.0)
-            pay.notes = notes + ["هزارتو را فتح کردید! همه‌ی غنیمت‌تان با شماست."]
+            title = maze_data.CHAPTERS[chapter - 1][0]
+            if chapter >= len(maze_data.CHAPTERS):
+                notes.append("هر چهار فصل هزارتو را فتح کردید؛ این افسانه برای همیشه به نام شماست! 🏆")
+            else:
+                notes.append(f"فصل «{title}» به پایان رسید؛ فصل بعد باز شد. همه‌ی غنیمت‌تان با شماست.")
+            pay.notes = notes
             extra = await self._pay(tx, pid, 0, 0, crystal, items)
             pay.crystal, pay.items = extra.crystal, extra.items
             return pay

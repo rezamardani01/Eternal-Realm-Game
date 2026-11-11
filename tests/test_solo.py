@@ -495,13 +495,13 @@ async def test_the_maze_screens(h, services, db):
     await h.panel(1, "mazego")
     scene = md.SCENES[(await services.solo.maze_run(p.id)).ref]
     text = h.session.last_text()
-    assert f"طبقه‌ی ۱ از {fa(md.FLOORS)}" in text and scene.title in text and scene.text in text and "غول بعدی در طبقه‌ی ۳" in text
+    assert f"طبقه‌ی ۱ از {fa(md.chapter_end(1))}" in text and scene.title in text and scene.text in text and "غول بعدی در طبقه‌ی ۳" in text
     assert {choice.label for choice in scene.choices} <= set(h.labels())
     for line in text.splitlines():
         assert len(re.findall(EMOJI, line)) <= 1, line
     await put_on_floor(db, p, 1, "scene", "forge")
     await h.panel(1, "mazepick", "2")  # rummaging the forge never starts a fight
-    assert "در راه چه گذشت" in h.session.last_text() and f"طبقه‌ی ۲ از {fa(md.FLOORS)}" in h.session.last_text()
+    assert "در راه چه گذشت" in h.session.last_text() and f"طبقه‌ی ۲ از {fa(md.chapter_end(1))}" in h.session.last_text()
     for line in h.session.last_text().splitlines():
         assert len(re.findall(EMOJI, line)) <= 1, line
     await put_on_floor(db, p, 3, "giant", md.pool_for(3)[0])
@@ -520,7 +520,7 @@ async def test_the_maze_screens(h, services, db):
             break
     assert any("ادامه‌ی هزارتو" in x for x in h.labels())
     await h.panel(1, "maze")
-    assert "غنیمت تا اینجا" in h.session.last_text() and f"طبقه‌ی ۴ از {fa(md.FLOORS)}" in h.session.last_text()
+    assert "غنیمت تا اینجا" in h.session.last_text() and f"طبقه‌ی ۴ از {fa(md.chapter_end(1))}" in h.session.last_text()
     await put_on_floor(db, p, 5, "giant", md.pool_for(5)[0])
     await h.panel(1, "maze")
     assert "غول سرسخت" in h.session.last_text() and not any("دزدکی" in x for x in h.labels())
