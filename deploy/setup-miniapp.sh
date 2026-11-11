@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # One-time setup of the Bale mini app on the server. Run as root with the domain that points at this server:
-#   sudo bash /opt/eternal-realm/deploy/setup-miniapp.sh play.example.com
-# It installs Caddy (free automatic HTTPS), sends that domain to the bot's mini app on 127.0.0.1:8085, turns the
-# mini app on in config.toml and restarts the bot. After that the bot's main menu shows «باز کردن مینی اپ».
+#   sudo bash /opt/eternal-realm/deploy/setup-miniapp.sh play.example.com          # Caddy gets the HTTPS certificate
+#   sudo bash /opt/eternal-realm/deploy/setup-miniapp.sh play.example.com cdn      # a CDN (e.g. ArvanCloud) does HTTPS
+# Use "cdn" on servers in Iran: certificate authorities abroad cannot reach them, so the CDN's edge terminates
+# HTTPS and talks to this server over plain HTTP on port 80.
+# It installs Caddy, sends that domain to the bot's mini app on 127.0.0.1:8085, turns the mini app on in
+# config.toml and restarts the bot. After that the bot's main menu shows «باز کردن مینی اپ».
 set -euo pipefail
 
 DOMAIN="${1:-}"
+MODE="${2:-}"
 APP_DIR="/opt/eternal-realm"
 PORT=8085
 
@@ -25,8 +29,13 @@ if ! command -v caddy >/dev/null 2>&1; then
   apt-get update -y
   apt-get install -y caddy
 fi
+if [ "${MODE}" = "cdn" ]; then
+  SITE="http://${DOMAIN}"   # the CDN does HTTPS; here plain HTTP, no certificate requests
+else
+  SITE="${DOMAIN}"
+fi
 cat > /etc/caddy/Caddyfile <<EOF
-${DOMAIN} {
+${SITE} {
 	encode gzip
 	reverse_proxy 127.0.0.1:${PORT}
 }
