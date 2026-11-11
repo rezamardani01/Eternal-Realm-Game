@@ -59,23 +59,32 @@ def final_text(view: RaidView) -> str:
     if view.status == "cancelled":
         return f"🌫️ {bold(kind.title)}\n\nشرکت‌کننده‌ی کافی نبود و این رویداد برگزار نشد. دفعه‌ی بعد همه را خبر کنید!"
     top = s.get("top", [])
+    line = "━━━━━━━━━━━━"
+    medals = ["🥇", "🥈", "🥉", "🎖️", "🎖️"]
+    count = s.get("count", view.count)
+    lines = [f"{kind.emoji} {bold(kind.title)}", line]
     if kind.mode == "raid":
-        head = "🏆 قلمرو پیروز شد! همه‌ی فرمانروایان متحد، غول را عقب راندند." if s.get("victory") else "💔 این بار غول پیروز شد... اما قلمرو ایستاد."
-        board = [f"{['🥇', '🥈', '🥉', '🔹', '🔹'][i]} {t['name']} — {fa(t['score'])} امتیاز" for i, t in enumerate(top)]
-        title = "برترین‌ها"
+        win = s.get("victory")
+        lines += [
+            "🏆 " + bold("قلمرو پیروز شد!") if win else "💔 " + bold("این بار غول پیروز شد"),
+            data.VICTORY[kind.id] if win else data.DEFEAT[kind.id],
+            "", f"📊 {bold('گزارش نبرد')}",
+            f"👥 قهرمانان: {fa(count)}",
+            f"⚔️ قدرت یورش قهرمانان: {fa(round(100 * s.get('removed', 0) / max(0.01, s.get('need', 1))))}٪ هدف پیروزی",
+            f"🗡️ غول را شکست دادند: {fa(s.get('slain', 0))} نفر",
+        ]
+        title = "برترین قهرمانان"
+        board = [f"{medals[i]} {t['name']} — {fa(t['score'])} امتیاز" + (f" · 💎 {fa(t['crystal'])}" if t["crystal"] else "") for i, t in enumerate(top)]
     elif kind.mode == "cup":
-        head = "🏆 جام قهرمانان به پایان رسید!"
-        board = [f"{['🥇', '🥈', '🥉', '🔹', '🔹'][i]} {t['name']} — {fa(t['score'])} امتیاز · 💎 {fa(t['crystal'])}" for i, t in enumerate(top)]
-        title = "برترین‌ها"
+        lines += ["🏆 " + bold("جام قهرمانان به پایان رسید!"), data.CUP_STORY, "", f"📊 {bold('گزارش جام')}", f"👥 شرکت‌کننده‌ها: {fa(count)}"]
+        title = "سکوی افتخار"
+        board = [f"{medals[i]} {t['name']} — {fa(t['score'])} امتیاز · 💎 {fa(t['crystal'])}" for i, t in enumerate(top)]
     else:
-        head = "💰 قرعه‌کشی انجام شد!"
-        board = [f"🥇 {s.get('jackpot', '')} — جایزه‌ی بزرگ"] if s.get("jackpot") else []
-        title = "برنده‌ی بزرگ"
-    return (
-        f"{kind.emoji} {bold(kind.title)}\n\n{head}\n"
-        f"👥 شرکت‌کننده‌ها: {fa(s.get('count', view.count))}\n\n🏅 {bold(title)}\n" + "\n".join(board)
-        + "\n\n🎁 جایزه‌ی هر قهرمان همین حالا در پیوی‌اش رسید."
-    )
+        lines += ["💰 " + bold("قرعه‌کشی انجام شد!"), data.LOTTERY_STORY, "", f"📊 {bold('گزارش قرعه')}", f"👥 شرکت‌کننده‌ها: {fa(count)}"]
+        title = "برنده‌ی جایزه‌ی بزرگ"
+        board = [f"🥇 {s['jackpot']} — {fa(top[0]['gold']) if top else ''} سکه و ۲۰ کریستال"] if s.get("jackpot") else []
+    lines += ["", f"🏅 {bold(title)}", *board, "", line, f"🎁 در مجموع: 🪙 {fa(s.get('gold', 0))} · 💎 {fa(s.get('crystal', 0))} · 📦 {fa(s.get('chests', 0))} صندوقچه", "هر قهرمان نتیجه و جایزه‌ی خودش را در پیوی دریافت کرد ✉️"]
+    return "\n".join(lines)
 
 
 def dm_text(view: RaidView) -> str:

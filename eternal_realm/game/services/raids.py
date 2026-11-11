@@ -253,6 +253,9 @@ class RaidService:
             await self._pay(tx, row["id"], o, now)
         summary.update(
             kind=kind.id, count=len(outcomes),
+            gold=sum(o.gold for o in outcomes), crystal=sum(o.crystal for o in outcomes),
+            xp=sum(o.xp for o in outcomes), chests=sum(sum(o.items.values()) for o in outcomes),
+            slain=sum(1 for o in outcomes if o.won),
             top=[{"name": o.player.name, "score": o.score, "rank": o.rank, "crystal": o.crystal, "gold": o.gold}
                  for o in sorted(outcomes, key=lambda o: o.rank or 10**9)[:5]],
         )
@@ -324,20 +327,36 @@ class RaidService:
     # --- what a hero reads afterwards -----------------------------------------------------------------
     def _text(self, kind: data.GlobalKind, o: Outcome, summary: dict) -> str:
         from ..data.items import get_item
+        from ...shared.text import bar
 
-        lines = [f"{kind.emoji} *{kind.title}*"]
+        line = "━━━━━━━━━━━━"
+        medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(o.rank, "🎖️")
+        lines = [f"{kind.emoji} *{kind.title}*", line]
         if kind.mode == "raid":
-            lines.append("🏆 قلمرو پیروز شد!" if summary["victory"] else "💔 این بار غول پیروز شد؛ اما شما خوب جنگیدید.")
-            taken = f"{fa(round(o.removed * 100))}٪ از غول را پایین آوردید" + (" و او را شکست دادید" if o.won else "")
-            lines += [f"⚔️ {taken}", f"🏅 رتبه‌ی شما: {fa(o.rank)} از {fa(summary['count'])}"]
+            win = summary["victory"]
+            lines.append("🏆 *قلمرو پیروز شد!*" if win else "💔 *این بار غول پیروز شد*")
+            lines.append(data.VICTORY[kind.id] if win else data.DEFEAT[kind.id])
+            percent = round(o.removed * 100)
+            lines += [
+                "", "📜 *سرگذشت نبرد شما*",
+                f"⚔️ آسیبی که زدید: {fa(percent)}٪",
+                bar(percent, 100, 10),
+                "🗡️ ضربه‌ی آخر را شما زدید و غول را شکست دادید!" if o.won else "🛡️ تا آخرین نفس جنگیدید و غول را عقب راندید.",
+                f"{medal} رتبه‌ی شما: {fa(o.rank)} از {fa(summary['count'])} قهرمان",
+            ]
         elif kind.mode == "cup":
-            lines += [f"🏅 رتبه‌ی شما در جام: {fa(o.rank)} از {fa(summary['count'])}", f"⚔️ امتیاز شما: {fa(o.score)}"]
+            lines += [data.CUP_STORY, "", "📜 *کارنامه‌ی شما*", f"{medal} رتبه: {fa(o.rank)} از {fa(summary['count'])} شرکت‌کننده", f"⚔️ امتیاز: {fa(o.score)}"]
+            lines.append("🏆 روی سکوی افتخار ایستادید!" if o.rank <= 3 else "🔥 دفعه‌ی بعد بالاتر می‌روید!")
         else:
-            where = {1: "🥇 جایزه‌ی بزرگ برنده‌ی شما بود!", 2: "🥈 از برنده‌های دسته‌ی دوم بودید!", 3: "🎟️ قرعه به نام شما نیفتاد، ولی هدیه‌ی دلگرمی دارید."}
-            lines.append(where[o.rank])
-        gains = [f"🪙 {fa(o.gold)} سکه", f"⭐ {fa(o.xp)} تجربه"] if o.xp else [f"🪙 {fa(o.gold)} سکه"]
+            lines += [
+                data.LOTTERY_STORY, "",
+                {1: "🥇 *جایزه‌ی بزرگ مال شما شد!*", 2: "🥈 *از برنده‌های دسته‌ی دوم بودید!*", 3: "🎟️ *قرعه به نام شما نیفتاد، اما هدیه‌ی دلگرمی دارید.*"}[o.rank],
+            ]
+        gains = [f"🪙 {fa(o.gold)} سکه"]
+        if o.xp:
+            gains.append(f"⭐ {fa(o.xp)} تجربه")
         if o.crystal:
             gains.append(f"💎 {fa(o.crystal)} کریستال")
         gains += [f"🎁 {get_item(i).name}" + (f" ×{fa(q)}" if q > 1 else "") for i, q in o.items.items()]
-        lines += ["", "جایزه‌های شما (همین حالا به کیفتان آمد):", *gains]
+        lines += ["", line, "🎁 *جایزه‌های شما (همین حالا به کیفتان آمد)*", *gains, line, "ممنون که کنار قلمرو ایستادید 🙏"]
         return "\n".join(lines)
