@@ -178,4 +178,4 @@ async def test_home_menu_uses_the_new_names(h, services, db):
     await h.panel(11, "fight")
     assert {"🕳️ سیاه‌چال", "📜 داستان‌ها", "🏆 تالار بزرگان"} <= set(h.labels())
     await h.panel(11, "profile")
-    assert {"🃏 آلبوم کارت", "🐾 یار همراه", "🏅 دستاوردها", "🧰 تجهیزات"} <= set(h.labels())
+    assert {"🃏 آلبوم کارت", "🐱 حیوان خانگی", "🏅 دستاوردها", "🧰 تجهیزات"} <= set(h.labels())

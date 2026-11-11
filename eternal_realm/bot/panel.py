@@ -346,7 +346,7 @@ async def profile(c: Ctx) -> Screen:
     elif target is me:
         rows += [
             [c.btn("🎒 کوله‌پشتی", "inv"), c.btn("🧰 تجهیزات", "gear")],
-            [c.btn("🐾 یار همراه", "pets"), c.btn("🃏 آلبوم کارت", "album")],
+            [c.btn("🐱 حیوان خانگی", "pets"), c.btn("🃏 آلبوم کارت", "album")],
             [c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")],
             [c.btn("📅 مأموریت‌ها", "missions"), c.btn("🏅 دستاوردها", "ach")],
             [c.btn("🕯️ محراب", "altar"), c.btn("👥 دوستان", "friends")],
