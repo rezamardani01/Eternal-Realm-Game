@@ -365,67 +365,66 @@ WORKING = {
 
 
 def _activity_head(name: str, activity) -> str:  # noqa: ANN001 - Activity
-    story = activity.intro.format(name=name).split("\n")
-    story[0] = story[0].removeprefix(activity.emoji).lstrip()
-    return f"{activity.emoji} {bold(activity.title)}\n" + "\n".join(story)
+    return f"{activity.emoji} {bold(activity.title)} · {name}"
 
 
 def activity_frames(name: str, activity) -> list[str]:  # noqa: ANN001 - Activity
-    """What the player sees while the activity is «in progress»: the story, then a waiting line."""
-    head = _activity_head(name, activity)
-    return [head, f"{head}\n\n{WORKING.get(activity.id, '⏳ در حال انجام... لطفاً صبر کنید')}"]
+    """One short waiting frame (a group should not fill up with story)."""
+    return [f"{_activity_head(name, activity)}\n{WORKING.get(activity.id, '⏳ در حال انجام... لطفاً صبر کنید')}"]
+
+
+def gains_line(gold: int = 0, xp: int = 0, crystal: int = 0, items=()) -> str:  # noqa: ANN001
+    parts = []
+    if gold:
+        parts.append(f"🪙 {fa(gold)}")
+    if xp:
+        parts.append(f"⭐ {fa(xp)}")
+    if crystal:
+        parts.append(f"💎 {fa(crystal)}")
+    parts += [f"{label} ×{fa(qty)}" for label, qty, _ in items]
+    return " · ".join(parts)
+
+
+def _boost_note(double_xp: bool, boosted: bool) -> str:
+    if boosted:
+        return "🚀 بوست فعال: پاداش دو برابر"
+    return "✨ ستاره‌ی تجربه: تجربه دو برابر" if double_xp else ""
 
 
 def activity_result(name: str, result) -> str:  # noqa: ANN001 - ActivityResult
-    """Story and outcome; the numbers (coins, xp, items, energy) are glass buttons below."""
+    """A short card: what happened, what it paid, how much energy is left and when to come back."""
+    rolled = result.rolled
     lines = [
         _activity_head(name, result.activity),
-        "",
-        emphasize(result.rolled.outcome.text.format(name=name)),
-        "",
-        f"⏰ {result.activity.title} بعدی: {duration(result.next_in)} دیگر",
-        *(["✨ ستاره‌ی تجربه فعال است؛ تجربه‌ی این کار دو برابر شد!"] if result.double_xp else []),
-        *(["🚀 بوست فعال است؛ سکه، تجربه و آیتم‌ها دو برابر شد!"] if getattr(result, "boosted", False) else []),
-        "",
-        "🎁 چیزهایی که به دست آوردید 👇",
+        emphasize(rolled.outcome.text.format(name=name)),
+        gains_line(rolled.gold, rolled.xp, rolled.crystal, result.items) or "این بار دست خالی بودید",
+        _boost_note(result.double_xp, getattr(result, "boosted", False)),
+        f"⚡ انرژی {fa(result.player.energy)} · ⏰ بعدی: {duration(result.next_in)}",
     ]
     if result.level_up:
-        lines += ["", level_up_text(result.level_up.new_level)]
-    return "\n".join(lines)
+        lines.append(level_up_text(result.level_up.new_level))
+    return "\n".join(line for line in lines if line)
 
 
 def hunt_frames(name: str, r) -> list[str]:  # noqa: ANN001 - HuntResult
-    """Short story told one edit at a time: searching, meeting the monster, the first blows."""
-    frames = [
-        f"🌲 {bold('در حال شکار')}\nفرمانده {name} ردّ پاها را در سرزمین‌های وحشی دنبال می‌کند 👣",
-        f"{r.monster.emoji} {bold(r.monster.name + ' پیدا شد!')}\nبوته‌ها کنار می‌روند و شمشیرها بیرون می‌آید...",
-    ]
-    for count in (2, 4):
-        if len(r.log) >= count:
-            frames.append(f"⚔️ {bold('نبرد')}\n\n" + "\n".join(r.log[:count]))
-    return frames
+    return [f"🐺 {bold('شکار')} · {name}\n{r.monster.emoji} {r.monster.name} پیدا شد... نبرد آغاز می‌شود"]
 
 
 def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
-    lines = [f"{r.monster.emoji} {bold('نبرد با ' + r.monster.name)}", f"فرمانده {name} · {fa(r.rounds)} دور", ""]
-    if r.won:
-        lines.append(f"🏆 {bold('پیروز شدید')} و هیولا به زانو درآمد.")
-    else:
-        lines.append(
-            f"💔 {bold('این بار هیولا قوی‌تر بود')} و عقب‌نشینی کردید. چیزی از دست ندادید؛ "
-            "قوی‌تر شوید و دوباره بیایید!"
-        )
-    lines += ["", f"⏰ شکار بعدی: {duration(r.next_in)} دیگر"]
-    if r.double_xp:
-        lines.append("✨ ستاره‌ی تجربه فعال است؛ تجربه‌ی این شکار دو برابر شد!")
-    if getattr(r, "boosted", False):
-        lines.append("🚀 بوست فعال است؛ سکه، تجربه و غنیمت دو برابر شد!")
+    verdict = "🏆 پیروز شدید" if r.won else "💔 هیولا قوی‌تر بود؛ عقب‌نشینی کردید"
+    lines = [
+        f"{r.monster.emoji} {bold('شکار ' + r.monster.name)} · {name}",
+        f"{verdict} ({fa(r.rounds)} دور)",
+        gains_line(r.gold, r.xp, 0, r.items) if r.won else "",
+        _boost_note(r.double_xp, getattr(r, "boosted", False)),
+        f"❤️ جان {fa(r.hero_hp)}/{fa(r.hero_max_hp)} · ⚡ انرژی {fa(r.player.energy)}",
+        f"⏰ شکار بعدی: {duration(r.next_in)}",
+    ]
     if r.card is not None:
-        lines += ["", f"🃏 {bold('کارت تازه پیدا کردید!')}", f"{r.card.emoji} {r.card.name}"]
-    lines += ["", "🎁 چیزهایی که به دست آوردید 👇"]
+        lines.append(f"🃏 کارت تازه: {r.card.emoji} {r.card.name}")
     if r.level_up:
-        lines += ["", level_up_text(r.level_up.new_level)]
-    return "\n".join(lines)
+        lines.append(level_up_text(r.level_up.new_level))
+    return "\n".join(line for line in lines if line)
 
 
 # --- upgrades ----------------------------------------------------------------------------------

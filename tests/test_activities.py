@@ -82,7 +82,7 @@ async def test_fishing_command_in_group(h, services):
     await reg(services)
     await h.say(10, "ماهیگیری", group=True)
     text = h.session.last_text()
-    assert "قلاب" in text and any("انرژی" in t for t in h.labels())
+    assert "ماهیگیری" in text and "انرژی" in text and len(text.splitlines()) <= 6
     await h.say(10, "ماهی", group=True)  # alias, but still on cooldown
     assert "خسته" in h.session.last_text()
 
@@ -99,7 +99,7 @@ async def test_group_can_disable_activity(h, services):
 async def test_each_activity_command_works(h, services, word):
     await reg(services)
     await h.say(10, word, group=True)
-    assert any("انرژی" in t for t in h.labels())
+    assert "انرژی" in h.session.last_text()
 
 
 def test_race_perk_boosts_matching_activity():
@@ -158,7 +158,7 @@ async def test_the_wait_message_says_when_and_what(services, clock):
 async def test_result_tells_when_the_next_turn_comes(h, services):
     await reg(services)
     await h.say(10, "ماهیگیری", group=True)
-    assert "ماهیگیری بعدی" in h.session.last_text() and "۵ دقیقه" in h.session.last_text()
+    assert "بعدی" in h.session.last_text() and "۵ دقیقه" in h.session.last_text()
     assert any("دوباره" in t and "۵ دقیقه" in t for t in h.labels())
 
 

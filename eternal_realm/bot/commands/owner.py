@@ -49,6 +49,8 @@ OWNER_COMMANDS = """\
 • احضار باران سکه · احضار چشمه · احضار چرخ شانس · احضار تخم اژدها
 • احضار معما · احضار کاشی · احضار قرعه کشی
 • احضار باس — بدون هزینه، سطح و فاصله‌ی زمانی
+• رویداد سراسری لشکر|اژدها|مردگان|تایتان|جام|گنج [دقیقه] — اعلام در همه‌ی گروه‌ها
+• رویداد سراسری خودکار روشن|خاموش
 
 ⚔️ مبارزه و ماجراجویی
 • دوئل: سقف روزانه‌ی هر جفت و سقف پاداش برای مالک برداشته شده است
@@ -202,6 +204,34 @@ async def owner_summon(ctx: CommandContext) -> None:
     if view is None:
         raise GameError("الان نمی‌شود این رویداد را این‌جا ساخت (مثلاً باس زنده است یا کسی در گروه فعال نیست).")
     await events_ui.announce(ctx.bot, ctx.services, EventAction("spawned", view))
+
+
+@command(
+    "global_event", ["رویداد سراسری", "یورش سراسری"],
+    "(مالک) رویداد سراسری در همه‌ی گروه‌ها: رویداد سراسری لشکر [دقیقه]", **_OPTIONS,
+)
+async def global_event(ctx: CommandContext) -> None:
+    if not _owner(ctx):
+        return
+    from ...game.data import raids as raid_data
+    from .. import raid_ui
+
+    if ctx.args and ctx.args[0] == "خودکار":
+        on = len(ctx.args) > 1 and ctx.args[1] in ("روشن", "فعال")
+        await ctx.services.raids.set_auto(on)
+        await ctx.reply(
+            f"🤖 رویداد سراسری خودکار {'روشن شد' if on else 'خاموش شد'}."
+            + (f" هر {fa(raid_data.AUTO_GAP_HOURS)} ساعت یک رویداد تصادفی در ساعت‌های روز اعلام می‌شود." if on else "")
+        )
+        return
+    words = [w for w in ctx.args if not w.isdigit()]
+    digits = [to_int(w) for w in ctx.args if w.isdigit()]
+    kind = raid_data.find_kind(" ".join(words)) if words else raid_data.KINDS[0]
+    if kind is None:
+        names = "، ".join(k.words[0] for k in raid_data.KINDS)
+        raise GameError(f"کدام؟ بنویسید: رویداد سراسری + یکی از «{names}» + (دقیقه‌ی انتظار)")
+    view = await raid_ui.start_event(ctx.bot, ctx.services, kind.id, digits[0] if digits else raid_data.LOBBY_MINUTES)
+    await ctx.reply(f"{kind.emoji} {bold(kind.title)} در همه‌ی گروه‌ها اعلام شد؛ {fa(view.count)} نفر تا الان. {fa(len(await ctx.services.raids.posts(view.id)))} گروه خبردار شد.")
 
 
 @command("owner_commands", ["دستورات مالک", "لیست دستورات مالک"], "(مالک) فهرست دستورهای مالک", **_OPTIONS)

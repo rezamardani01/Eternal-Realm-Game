@@ -150,6 +150,14 @@ async def test_attacks_limits_and_early_settlement(services, db, clock):
         if hub.last.result == "won":
             assert await treasury_of(db, north) == 3_500
         async with db.read() as tx:
+            assert await tx.scalar("SELECT COUNT(*) FROM transactions WHERE ref LIKE 'cwar:%'", (), 0) == 0  # nothing is paid until claimed
+            assert await tx.scalar("SELECT COUNT(*) FROM player_alerts WHERE screen = 'cwarclaim'", (), 0) == 4  # both clans are told
+        wars = await services.clan_wars.history(a1)
+        for member in (a1, a2, b1, b2):
+            await services.clan_wars.claim_reward(member, wars[0].id)
+        with pytest.raises(GameError, match="قبلاً"):
+            await services.clan_wars.claim_reward(a1, wars[0].id)
+        async with db.read() as tx:
             paid = await tx.scalar("SELECT COUNT(*) FROM transactions WHERE ref LIKE 'cwar:%'", (), 0)
         assert paid >= 4
         # a truce follows
@@ -170,9 +178,12 @@ async def test_time_up_settles_once(services, db, clock):
     assert hub.last.result == ("won" if r.stars else "draw")
     assert await treasury_of(db, north) == (3_500 if r.stars else 3_000)
     assert await treasury_of(db, south) == (2_500 if r.stars else 3_000)
+    await services.clan_wars.claim_reward(a1, war.id)
     async with db.read() as tx:
         paid = await tx.scalar("SELECT COUNT(*) FROM transactions WHERE ref = ?", (f"cwar:{war.id}:{a1.id}",), 0)
     assert paid == 1
+    with pytest.raises(GameError, match="جایزه"):
+        await services.clan_wars.claim_reward(a1, war.id)  # once only
     assert [w.id for w in await services.clan_wars.history(a1)] == [war.id]
     _, champions = await services.clan_wars.champions(a1)
     assert champions and champions[0].ours and champions[0].stars == r.stars

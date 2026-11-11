@@ -32,6 +32,7 @@ from ..game.services.advisor import AdvisorService
 from ..game.services.alerts import AlertService
 from ..game.services.city import CityService
 from ..game.services.expedition import ExpeditionService
+from ..game.services.raids import RaidService
 from ..game.services.solo import SoloService
 from ..game.services.world import WorldService
 from ..game.services.exchange import ExchangeService
@@ -82,6 +83,7 @@ class Services:
     city: CityService
     alerts: AlertService
     solo: SoloService
+    raids: RaidService
     advisor: AdvisorService
     expeditions: ExpeditionService
     world: WorldService
@@ -147,6 +149,7 @@ class Services:
             city=city,
             alerts=AlertService(ctx, players),
             solo=solo,
+            raids=RaidService(ctx, players, solo, inventory),
             advisor=advisor,
             expeditions=ExpeditionService(ctx, players, inventory),
             world=world,

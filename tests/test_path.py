@@ -172,11 +172,10 @@ async def test_new_tier_message_is_sent_once_per_tier(h, services, db):
     assert await notify_new_tiers(h.bot, services) == 1
 
 
-async def test_profile_has_a_decorative_separator(h, services, db):
+async def test_profile_shows_the_stats_in_the_text_and_only_hero_buttons(h, services, db):
     await hero(services, db, 11, "نگار")
     await h.panel(11, "profile")
+    text = h.session.last_text()
+    assert all(word in text for word in ("جان", "حمله", "دفاع", "جادو", "سرعت", "شانس", "انرژی"))
     labels = [b["text"] for row in h.session.last_markup_rows() for b in row]
-    at = labels.index("▫️▫️▫️▫️▫️▫️▫️")
-    assert "شانس" in labels[at - 1] and "تجهیزات" in labels[at + 1]
-    await h.tap(11, "▫️▫️")
-    assert h.session.last_text().startswith("👤")  # tapping it changes nothing
+    assert not any(word in t for t in labels for word in ("حمله", "دفاع", "جادو", "سرعت", "شانس")) and len(labels) <= 10

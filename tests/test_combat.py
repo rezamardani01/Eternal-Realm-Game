@@ -105,4 +105,4 @@ async def test_hunt_command_in_group(services):
     h = Harness(services)
     await services.players.register(10, "u", "آرش", "dragonborn", "warrior")
     await h.say(10, "شکار", group=True)
-    assert "نبرد با" in h.session.last_text()
+    assert "شکار" in h.session.last_text() and "پیروز" in h.session.last_text() or "عقب" in h.session.last_text()

@@ -22,7 +22,7 @@ async def test_non_admin_cannot_change_settings(h, services):
     await h.say(10, "غیرفعال ماهیگیری", group=True)
     assert "مدیران" in h.session.last_text()
     await h.say(10, "ماهیگیری", group=True)
-    assert "قلاب" in h.session.last_text()
+    assert "انرژی" in h.session.last_text()
 
 
 async def test_admin_toggles_activity(h, services):
@@ -36,7 +36,7 @@ async def test_admin_toggles_activity(h, services):
     assert "ماهیگیری" in h.session.last_text()
     await h.say(99, "فعال ماهیگیری", group=True)
     await h.say(10, "ماهیگیری", group=True)
-    assert "قلاب" in h.session.last_text()
+    assert "انرژی" in h.session.last_text()
 
 
 async def test_admin_pauses_whole_game(h, services):

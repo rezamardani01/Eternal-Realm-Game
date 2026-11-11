@@ -257,17 +257,30 @@ class ClanWarService:
             (pid for pid, (cid, _, _) in tally.items() if cid == winner), key=lambda pid: tally[pid][1], default=None
         )
         draw_gold = (b.clan_war_win_gold + b.clan_war_lose_gold) // 2
-        for pid, (cid, _, _) in tally.items():
-            gold, khan = (
+
+        def share(cid: int) -> tuple[int, int]:
+            return (
                 (draw_gold, KHAN_DRAW) if not winner
                 else (b.clan_war_win_gold, KHAN_WIN) if cid == winner else (b.clan_war_lose_gold, KHAN_LOSE)
             )
+
+        # nothing is paid yet: every member of both clans finds a prize waiting behind the button of the result message
+        # (those who fought get all of it, those who only stood behind the walls a quarter)
+        prizes: dict[int, tuple[int, int, int, str, int]] = {}  # player -> (clan, gold, khan, chest, fought)
+        for cid in sides:
+            gold, khan = share(cid)
+            for member in await repo.roster(tx, cid, war["starts_at"]):
+                prizes[member["player_id"]] = (cid, gold // 4, khan // 4, "", 0)
+        for pid, (cid, _, _) in tally.items():
+            gold, khan = share(cid)
+            prizes[pid] = (cid, gold, khan, HERO_PRIZE if pid == hero_id else "", 1)
+        for pid, (cid, gold, khan, chest, fought) in prizes.items():
             if await player_repo.get(tx, pid) is None:
                 continue
-            await wallet.apply(tx, pid, gold=gold, reason="clan_war", now=now, ref=f"cwar:{war['id']}:{pid}")
-            await tx.execute("UPDATE players SET khan_points = khan_points + ? WHERE id = ?", (khan, pid))
-            if pid == hero_id:
-                await self.inventory.grant(tx, pid, HERO_PRIZE, 1, origin="clan_war")
+            await tx.execute(
+                "INSERT OR IGNORE INTO clan_war_rewards (war_id, player_id, clan_id, gold, khan, chest, fought) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (war["id"], pid, cid, gold, khan, chest, fought),
+            )
 
         hero_line = f"\n🏅 قهرمان جنگ: {tally[hero_id][2]} (یک صندوقچه جادویی گرفت)" if hero_id is not None else ""
         for cid in sides:
@@ -278,7 +291,7 @@ class ClanWarService:
                     f"🤝 {bold('جنگ خاندان‌ها مساوی شد')}\n\n{board}\n\n"
                     "هیچ پرچمی پایین نیامد."
                     + (f" 🪙 {fa(stake)} سکه‌ی گرو به خزانه برگشت." if stake else "")
-                    + f"\n🎖️ جنگاوران: {fa(draw_gold)} سکه و {fa(KHAN_DRAW)} خان‌پوینت"
+                    + f"\n🎖️ جنگاوران: {fa(draw_gold)} سکه و {fa(KHAN_DRAW)} خان‌پوینت (بقیه‌ی اعضا یک‌چهارم)"
                 )
             elif cid == winner:
                 text = (
@@ -295,8 +308,34 @@ class ClanWarService:
                     + (f"\n🪙 {fa(stake)} سکه‌ی گرو از دست رفت." if stake else "")
                     + f"\n🎖️ جنگاوران: {fa(b.clan_war_lose_gold)} سکه و {fa(KHAN_LOSE)} خان‌پوینت"
                 )
+            text += "\n\n🎁 جایزه‌ی هر عضو آماده است؛ دکمه‌ی زیر را بزنید."
             for pid in await self._everyone(tx, cid):
-                await notify.queue(tx, pid, f"cwar:{war['id']}:end", text, now, "cwar")
+                has_prize = pid in prizes
+                await notify.queue(
+                    tx, pid, f"cwar:{war['id']}:end", text, now, "cwarclaim" if has_prize else "cwar", str(war["id"]) if has_prize else "",
+                )
+
+    async def claim_reward(self, player: Player, war_id: int) -> tuple[int, int, str]:
+        """Collect the prize of a finished war once. Returns (gold, khan points, chest item id or '')."""
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            row = await tx.fetchone("SELECT * FROM clan_war_rewards WHERE war_id = ? AND player_id = ?", (war_id, player.id))
+            if row is None:
+                raise GameError("برای شما در این جنگ جایزه‌ای نیست.")
+            if row["claimed"]:
+                raise GameError("جایزه‌ی این جنگ را قبلاً گرفته‌اید.")
+            await tx.execute("UPDATE clan_war_rewards SET claimed = 1 WHERE war_id = ? AND player_id = ?", (war_id, player.id))
+            if row["gold"]:
+                await wallet.apply(tx, player.id, gold=row["gold"], reason="clan_war", now=now, ref=f"cwar:{war_id}:{player.id}")
+            if row["khan"]:
+                await tx.execute("UPDATE players SET khan_points = khan_points + ? WHERE id = ?", (row["khan"], player.id))
+            if row["chest"]:
+                await self.inventory.grant(tx, player.id, row["chest"], 1, origin="clan_war")
+            return int(row["gold"]), int(row["khan"]), row["chest"]
+
+    async def reward_status(self, player_id: int, war_id: int) -> Row | None:
+        async with self.ctx.db.read() as tx:
+            return await tx.fetchone("SELECT * FROM clan_war_rewards WHERE war_id = ? AND player_id = ?", (war_id, player_id))
 
     # --- reading --------------------------------------------------------------------------------
     async def hub(self, player: Player) -> Hub:

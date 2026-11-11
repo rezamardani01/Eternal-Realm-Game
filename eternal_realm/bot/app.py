@@ -14,7 +14,7 @@ from ..context import AppContext
 from ..db.database import Database
 from . import boss, clan_panel, clanwar_panel, group_dungeon, membership, duels, events, maintenance, onboarding, panel, payments, quest_panel  # noqa: F401
 from .lockdown import MaintenanceMiddleware
-from . import solo_panel, notifier, gift_panel, city_panel, wheel_panel, exchange_panel, team_battle, achievement_panel, admin_panel, bet_panel, invite_panel, ascend_panel, altar_panel, card_panel, contest_panel, craft_panel, dungeon_panel, mission_panel, offers, path_panel, pet_panel, transfer_panel, vip_panel  # noqa: F401
+from . import solo_panel, raid_ui, notifier, gift_panel, city_panel, wheel_panel, exchange_panel, team_battle, achievement_panel, admin_panel, bet_panel, invite_panel, ascend_panel, altar_panel, card_panel, contest_panel, craft_panel, dungeon_panel, mission_panel, offers, path_panel, pet_panel, transfer_panel, vip_panel  # noqa: F401
 from .commands import REGISTRY
 from .commands import router as commands_router
 from .membership import MembershipMiddleware
@@ -72,6 +72,7 @@ async def run(settings: Settings) -> None:
             asyncio.create_task(path_panel.processor(bot, services), name="path-notifier"),
             asyncio.create_task(city_panel.processor(bot, services), name="city-alerts"),
             asyncio.create_task(notifier.processor(bot, services), name="notifier"),
+            asyncio.create_task(raid_ui.processor(bot, services), name="raid-processor"),
         ]
         try:
             await dp.start_polling(bot, skip_updates=True)

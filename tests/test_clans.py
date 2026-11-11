@@ -158,6 +158,6 @@ async def test_clan_member_opens_a_full_profile_and_goes_back(h, services, db):
     await h.click(1, h.button_data("پروفایل کامل"))
     text = h.session.sent("editMessageText")[-1]["text"]
     assert "آرش" in text and "سطح" in text
-    assert any("حمله" in t or "جان" in t for t in h.labels())  # the stat buttons of a real profile
+    assert "حمله" in h.session.last_text() and "جان" in h.session.last_text()  # the stats are in the text of a real profile
     await h.click(1, h.button_data("بازگشت به عضو خاندان"))
     assert "مقام" in h.session.sent("editMessageText")[-1]["text"]

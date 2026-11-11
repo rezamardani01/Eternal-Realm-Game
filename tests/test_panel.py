@@ -101,12 +101,10 @@ async def test_stats_are_one_per_line_in_text_and_buttons_in_the_panel(h, servic
         assert sum(label in line for line in lines) == 1  # never two stats on one line
 
     await h.panel(10, "profile")
-    rows = h.session.last_markup_rows()
-    flat = [b["text"] for row in rows for b in row]
-    assert any("حمله" in t for t in flat) and any("دفاع" in t for t in flat) and any("انرژی" in t for t in flat)
-    assert all(len(row) <= 2 for row in rows)
-    await h.tap(10, "حمله")  # tapping a stat explains it in an alert
-    assert any("قدرت ضربه" in a.get("text", "") for a in h.session.callback_answers())
+    text = h.session.last_text()
+    assert all(word in text for word in ("جان", "حمله", "دفاع", "انرژی"))  # the stats live in the text now
+    flat = [b["text"] for row in h.session.last_markup_rows() for b in row]
+    assert not any("حمله" in t or "دفاع" in t for t in flat) and all(len(row) <= 2 for row in h.session.last_markup_rows())
 
 
 # --- ownership -----------------------------------------------------------------------------------
@@ -294,7 +292,7 @@ async def test_adventure_buttons(h, services):
     await reg(services)
     await h.panel(10, "adv")
     await h.tap(10, "ماهیگیری")
-    assert any("انرژی شما" in t for t in h.labels())
+    assert "انرژی" in h.session.last_text()
     assert any("دوباره" in t for t in h.labels())
 
 
@@ -378,9 +376,8 @@ async def test_hunt_in_a_group_is_played_as_edits_of_one_message(h, services):
     await h.say(10, "شکار", group=True)
     sent = [p["text"] for p in h.session.sent("sendMessage")]
     edits = [p["text"] for p in h.session.sent("editMessageText")]
-    assert "در حال شکار" in sent[0]
-    assert len(edits) >= 3 and "پیدا شد" in edits[0]
-    assert "نبرد با" in edits[-1]  # the last edit is the full result
+    assert "شکار" in sent[0] and "پیدا شد" in sent[0]
+    assert edits and "شکار" in edits[-1]  # the last edit is the short result
 
 
 async def test_opening_a_chest_shows_a_waiting_frame_first(h, services, db):
@@ -396,7 +393,7 @@ async def test_fishing_shows_progress_then_result(h, services):
     await reg(services)
     await h.say(10, "ماهیگیری", group=True)
     assert h.session.sent("sendMessage") and h.session.sent("editMessageText")
-    assert any("انرژی شما" in t for t in h.labels())
+    assert "انرژی" in h.session.last_text()
 
 
 async def test_declining_the_purchase_changes_nothing(h, services, db):

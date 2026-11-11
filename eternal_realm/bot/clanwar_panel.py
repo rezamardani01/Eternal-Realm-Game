@@ -354,6 +354,22 @@ async def war_board(c: Ctx) -> Screen:
     return Screen("\n".join(lines), [c.back("cwar")])
 
 
+@screen("cwarclaim")
+async def war_claim(c: Ctx) -> Screen:
+    war_id = _int(c.a)
+    gold, khan, chest = await c.services.clan_wars.claim_reward(c.player, war_id)
+    await c.refresh()
+    from ..game.data.items import get_item
+
+    gains = [f"🪙 {fa(gold)} سکه"] if gold else []
+    if khan:
+        gains.append(f"🎖️ {fa(khan)} خان‌پوینت")
+    if chest:
+        gains.append(f"🎁 {get_item(chest).name}")
+    lines = [f"🎁 {bold('جایزه‌ی جنگ خاندان‌ها')}", "", *(gains or ["این بار چیزی نبود"]), "", "به نام خاندان‌تان ماندگار شد 🏆"]
+    return Screen("\n".join(lines), [[c.btn("⚔️ جنگ خاندان‌ها", "cwar")]])
+
+
 @screen("cwarlog")
 async def war_log(c: Ctx) -> Screen:
     wars = await c.services.clan_wars.history(c.player)

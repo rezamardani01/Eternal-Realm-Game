@@ -326,35 +326,34 @@ async def profile(c: Ctx) -> Screen:
     stats = await c.services.characters.stats(target)
     top = c.services.characters.max_energy(target)
 
-    def stat(key: str, value: str):
-        label = "⚡ انرژی" if key == "energy" else STAT_LABELS[key]
-        return c.btn(f"{label} {value}", "stat", key)
+    def fmt(key: str) -> str:
+        return f"{STAT_LABELS[key]} {fa(getattr(stats, key))}"
 
-    rows = [
-        [stat("hp", fa(stats.hp)), stat("energy", f"{fa(target.energy)}/{fa(top)}")],
-        [stat("atk", fa(stats.atk)), stat("defense", fa(stats.defense))],
-        [stat("magic", fa(stats.magic)), stat("speed", fa(stats.speed))],
-        [stat("luck", fa(stats.luck))],
-    ]
+    sheet = "\n".join([
+        f"❤️ جان {fa(stats.hp)} · ⚡ انرژی {fa(target.energy)}/{fa(top)}",
+        f"{fmt('atk')} · {fmt('defense')}",
+        f"{fmt('magic')} · {fmt('speed')} · {fmt('luck')}",
+    ])
+    rows = []
     if target is me and c.is_group:
         rows.append([c.btn("🏰 قلمرو من", "home")])
         if c.services.bot_username:
             rows.append(keyboards.open_panel_button(c.services.bot_username))
     elif target is me:
-        rows.append([c.btn("▫️▫️▫️▫️▫️▫️▫️", "noop")])
-        rows.append([c.btn("🧰 تجهیزات", "gear"), c.btn("🎒 کوله‌پشتی", "inv")])
-        rows.append([c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")])
-        rows.append([c.btn("📅 مأموریت‌ها", "missions"), c.btn("🕯️ محراب", "altar")])
-        rows.append([c.btn("🐱 حیوان همراه من", "pets"), c.btn("🏅 دستاوردها", "ach")])
-        rows.append([c.btn("🃏 کلکسیون کارت", "album")])
-        rows.append(c.back("home"))
+        rows += [
+            [c.btn("🎒 کوله‌پشتی", "inv"), c.btn("🧰 تجهیزات", "gear")],
+            [c.btn("🐾 یار همراه", "pets"), c.btn("🃏 آلبوم کارت", "album")],
+            [c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")],
+            [c.btn("📅 مأموریت‌ها", "missions"), c.btn("🏅 دستاوردها", "ach")],
+            [c.btn("🕯️ محراب", "altar")],
+            c.back("home"),
+        ]
     elif c.b == "cm":
         rows.append(c.back("clanmember", "🔙 بازگشت به عضو خاندان", target.id))
     else:
         rows.append([c.btn("🏰 قلمرو من", "home")])
-    hint = "روی هر ویژگی بزنید تا بدانید چه می‌کند 👇"
-    text = views.profile_header(target, c.services.characters.xp_needed(target), c.services.ctx.now()) + f"\n\n{hint}"
-    return Screen(text, rows)
+    header = views.profile_header(target, c.services.characters.xp_needed(target), c.services.ctx.now())
+    return Screen(f"{header}\n{views.LINE}\n{sheet}", rows)
 
 
 @screen("stat")

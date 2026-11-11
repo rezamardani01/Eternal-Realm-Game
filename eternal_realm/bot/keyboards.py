@@ -42,21 +42,8 @@ def result_rows(
     owner: int, *, gold: int = 0, crystal: int = 0, xp: int = 0, items=(), energy: int, again: str,  # noqa: ANN001
     hp: tuple[int, int] | None = None, wait: int = 0,
 ) -> Rows:
-    """Glass buttons under an activity result: what you got, your energy, and what to do next."""
-    chips = []
-    if gold:
-        chips.append(panel_button(f"🪙 {fa(gold)} سکه", "note", owner, "gold"))
-    if xp:
-        chips.append(panel_button(f"⭐ {fa(xp)} تجربه", "note", owner, "xp"))
-    if crystal:
-        chips.append(panel_button(f"💎 {fa(crystal)} کریستال", "note", owner, "crystal"))
-    for label, qty, item_id in items:
-        chips.append(panel_button(f"{label} ×{fa(qty)}", "note", owner, "item", item_id))
-    rows = grid(chips, 2)
-    status = [panel_button(f"⚡ انرژی شما: {fa(energy)}", "note", owner, "energy")]
-    if hp is not None:
-        status.insert(0, panel_button(f"❤️ جان: {fa(hp[0])}/{fa(hp[1])}", "note", owner, "hp"))
-    rows.append(status)
+    """Glass buttons under an activity result: just the next step (the numbers are in the text)."""
+    rows: Rows = []
     again_label = f"🔁 دوباره · {duration(wait)}" if wait else "🔁 دوباره"
     rows.append([panel_button(again_label, "act", owner, again), panel_button("🗺️ ماجراجویی", "adv", owner)])
     return rows

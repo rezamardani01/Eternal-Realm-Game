@@ -831,6 +831,52 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_clan_war_attacks_war ON clan_war_attacks (war_id, clan_id);
     """,
+    # 54: what each member of a finished clan war may collect with the button in the result message
+    """
+    CREATE TABLE clan_war_rewards (
+        war_id    INTEGER NOT NULL REFERENCES clan_wars (id),
+        player_id INTEGER NOT NULL,
+        clan_id   INTEGER NOT NULL,
+        gold      INTEGER NOT NULL DEFAULT 0,
+        khan      INTEGER NOT NULL DEFAULT 0,
+        chest     TEXT    NOT NULL DEFAULT '',
+        fought    INTEGER NOT NULL DEFAULT 0,
+        claimed   INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (war_id, player_id)
+    );
+    """,
+    # 55: realm-wide events: the event, the heroes who joined (with the private message that counts down for them) and
+    # the group messages that announce it
+    """
+    CREATE TABLE raids (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind       TEXT    NOT NULL,
+        status     TEXT    NOT NULL,
+        created_at INTEGER NOT NULL,
+        starts_at  INTEGER NOT NULL,
+        ended_at   INTEGER NOT NULL DEFAULT 0,
+        summary    TEXT    NOT NULL DEFAULT '{}'
+    );
+    CREATE INDEX idx_raids_status ON raids (status, starts_at);
+    CREATE TABLE raid_players (
+        raid_id    INTEGER NOT NULL REFERENCES raids (id),
+        player_id  INTEGER NOT NULL REFERENCES players (id),
+        joined_at  INTEGER NOT NULL,
+        dm_message INTEGER NOT NULL DEFAULT 0,
+        score      INTEGER NOT NULL DEFAULT 0,
+        gold       INTEGER NOT NULL DEFAULT 0,
+        xp         INTEGER NOT NULL DEFAULT 0,
+        crystal    INTEGER NOT NULL DEFAULT 0,
+        rank       INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (raid_id, player_id)
+    );
+    CREATE TABLE raid_posts (
+        raid_id    INTEGER NOT NULL REFERENCES raids (id),
+        chat_id    INTEGER NOT NULL,
+        message_id INTEGER NOT NULL,
+        PRIMARY KEY (raid_id, chat_id)
+    );
+    """,
 ]
 
 

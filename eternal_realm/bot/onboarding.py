@@ -14,7 +14,7 @@ from ..game.data.classes import CLASSES
 from ..game.data.races import RACES
 from ..shared.errors import GameError
 from ..shared.text import bold, fa, headline
-from . import keyboards, panel, views
+from . import keyboards, panel, raid_ui, views
 from .callbacks import ClassCb, RaceCb
 from .services import Services
 
@@ -34,12 +34,19 @@ async def start(message: Message, state: FSMContext, services: Services) -> None
     if user is None:
         return
     await state.clear()
+    payload = (message.text or "").partition(" ")[2].strip()
+    raid_id = int(payload[3:]) if payload.startswith("ev_") and payload[3:].isdigit() else 0
     player = await services.players.find(user.id, user.username)
     if player is not None:
+        if raid_id:
+            await raid_ui.join_from_start(message, services, raid_id)
+            return
         await panel.send(message, services, player, "home")
         return
     await state.set_state(Onboarding.name)
-    inviter = services.invites.parse((message.text or "").partition(" ")[2].strip())
+    if raid_id:
+        await state.update_data(raid=raid_id)  # joins the realm-wide event as soon as the hero is born
+    inviter = services.invites.parse(payload)
     if inviter is not None:
         await state.update_data(ref=inviter)  # paid when this newcomer finishes creating the hero
     await message.answer(views.welcome())
@@ -110,4 +117,7 @@ async def got_class(
     await panel.send(query.message, services, player, "home")
     if data.get("ref"):
         await _pay_inviter(query.message.bot, services, player, int(data["ref"]))
+    if data.get("raid"):
+        with contextlib.suppress(GameError):
+            await raid_ui.join_from_start(query.message, services, int(data["raid"]), user)
     await query.answer("قهرمان شما به دنیا آمد 🎉")
