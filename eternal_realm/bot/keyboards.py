@@ -183,23 +183,10 @@ def hero_battle_rows(fighter: Fighter, button, last: list) -> Rows:  # noqa: ANN
 
 
 def duel_actions(duel_id: int, fighter: Fighter) -> Rows:
-    if fighter.has_skills:
-        return hero_battle_rows(
-            fighter, lambda action, label, style: Button.inline(label, DuelCb(action=action, id=duel_id), style=style),
-            [
-                Button.inline("🛡️ دفاع", DuelCb(action="defend", id=duel_id)),
-                Button.inline("🏳️ تسلیم", DuelCb(action="surrender", id=duel_id), style="danger"),
-            ],
-        )
-    wait = fighter.skill_ready_in - 1
-    skill = f"{fighter.skill_emoji} {fighter.skill_name}" + (f" ({fa(wait)})" if wait > 0 else "")
-    return [
-        [
-            Button.inline("⚔️ حمله", DuelCb(action="attack", id=duel_id), style="primary"),
-            Button.inline(skill, DuelCb(action="skill", id=duel_id), style="success" if wait <= 0 else None),
-        ],
+    return hero_battle_rows(
+        fighter, lambda action, label, style: Button.inline(label, DuelCb(action=action, id=duel_id), style=style),
         [
             Button.inline("🛡️ دفاع", DuelCb(action="defend", id=duel_id)),
             Button.inline("🏳️ تسلیم", DuelCb(action="surrender", id=duel_id), style="danger"),
         ],
-    ]
+    )

@@ -17,7 +17,6 @@ from ..game.services.chests import ChestService
 from ..game.services.clan_wars import ClanWarService
 from ..game.services.clans import ClanService
 from ..game.services.contests import ContestService
-from ..game.services.crafting import CraftingService
 from ..game.services.duels import DuelService
 from ..game.services.effects import EffectService
 from ..game.services.dungeon import DungeonService
@@ -81,7 +80,6 @@ class Services:
     cards: CardService
     pets: PetService
     dungeon: DungeonService
-    crafting: CraftingService
     season: SeasonService
     offers: OfferService
     missions: MissionService
@@ -154,7 +152,6 @@ class Services:
             cards=cards,
             pets=PetService(ctx),
             dungeon=DungeonService(ctx, players, inventory, characters),
-            crafting=CraftingService(ctx, inventory),
             season=SeasonService(ctx, inventory, cards),
             offers=offers,
             missions=missions,

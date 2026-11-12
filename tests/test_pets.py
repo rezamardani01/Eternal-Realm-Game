@@ -124,9 +124,9 @@ def test_a_pet_announces_its_strike_in_the_duel_log():
     from eternal_realm.game.engine import combat
 
     stats = Stats(hp=500, atk=30, defense=5, magic=0, speed=10, luck=0)
-    a = combat.Fighter.for_player(1, "آرش", CLASSES["warrior"], stats)
+    a = combat.Fighter.for_player(1, "آرش", CLASSES["warrior"], stats, race_id="human")
     a.pet_emoji, a.pet_name, a.pet_power = "🐱", "گربه‌ی چابک", 20
-    b = combat.Fighter.for_player(2, "سارا", CLASSES["warrior"], stats)
+    b = combat.Fighter.for_player(2, "سارا", CLASSES["warrior"], stats, race_id="human")
     battle = combat.Battle.start(a, b, 15, random.Random(1))
     seen = []
     for _ in range(60):

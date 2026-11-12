@@ -19,7 +19,7 @@ from ...shared.text import fa
 from ..data.arms import CAPS, RATING
 from ..data.classes import CharacterClass
 from ..data.growth import SKILL_LEVELS
-from ..data.skills import CLASS_SKILLS, DOTS, EFFECT_INFO, HARMFUL, TICKING, Effect, HeroSkill, skills_for
+from ..data.skills import DOTS, EFFECT_INFO, HARMFUL, TICKING, Effect, HeroSkill, skills_for
 from ..data.stats import Stats
 
 #: traits whose strength lives in the chance (the rest in the value)
@@ -102,22 +102,19 @@ class Fighter:
     @classmethod
     def for_player(
         cls, player_id: int, name: str, char_class: CharacterClass, stats: Stats, mention: str = "",
-        race_id: str = "", traits: tuple | list = (), level: int = 999,
+        *, race_id: str, traits: tuple | list = (), level: int = 999,
     ) -> Fighter:
-        skill = char_class.skill
+        """A hero: his stats, his three skills (by race and class), and the traits of his gear and talents."""
         fighter = cls(
             name=name, emoji=char_class.emoji, max_hp=stats.hp, hp=stats.hp, atk=stats.atk,
             defense=stats.defense, magic=stats.magic, speed=stats.speed, luck=stats.luck,
-            skill_name=skill.name, skill_emoji=skill.emoji, skill_kind=skill.kind,
-            skill_power=skill.power, skill_cooldown=skill.cooldown, skill_effect=skill.effect,
             crit_bonus=char_class.crit_bonus, player_id=player_id, mention=mention,
         )
-        if race_id and char_class.id in CLASS_SKILLS:
-            fighter.skills = [s.to_dict() for s in skills_for(race_id, char_class.id)]
-            fighter.cds = [0, 0, 0]
-            fighter.lock = [need if level < need else 0 for need in SKILL_LEVELS]
-            top = fighter.skills[2]  # the old single-skill fields describe the signature move
-            fighter.skill_name, fighter.skill_emoji, fighter.skill_kind = top["name"], top["emoji"], top["kind"]
+        fighter.skills = [s.to_dict() for s in skills_for(race_id, char_class.id)]
+        fighter.cds = [0, 0, 0]
+        fighter.lock = [need if level < need else 0 for need in SKILL_LEVELS]
+        top = fighter.skills[2]  # the single-skill fields mirror the signature move
+        fighter.skill_name, fighter.skill_emoji, fighter.skill_kind = top["name"], top["emoji"], top["kind"]
         fighter.traits = [{"k": t.k, "v": t.v, "c": t.c, "t": t.t} for t in traits]
         fighter.trait_power = trait_rating(fighter.traits)
         for t in fighter.traits:  # the opening rush starts with the fight

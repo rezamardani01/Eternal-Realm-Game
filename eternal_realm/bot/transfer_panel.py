@@ -74,8 +74,6 @@ async def xlist(c: Ctx) -> Screen:
             for k, q in sorted(owned.items()) if q >= 2
         ]
     elif kind == "items":
-        entries += [(f"{p.label}", "xconf", f"{other.id}.g{p.id}", "1") for p in view.gear
-                    if p.slot is None and p.item.tradable]
         entries += [(f"{i.label} ×{fa(q)}", "xamt", f"{other.id}.{i.id}", "1") for i, q in view.stacks
                     if i.tradable and i.kind is not Kind.MATERIAL]
     else:
@@ -153,14 +151,8 @@ async def xconf(c: Ctx) -> Screen:
     target, what = _split(c)
     other = await _receiver(c, target)
     amount = _int(c.b or "1")
-    if what.startswith("g") and what[1:].isdigit():
-        piece = next((p for p in (await c.services.inventory.view(c.player.id)).gear if p.id == int(what[1:])), None)
-        if piece is None:
-            raise GameError("این تجهیزات دیگر در کوله‌پشتی شما نیست.")
-        label = piece.label
-    else:
-        _, label_, unit = await _limits(c, what)
-        label = f"{label_} — {fa(amount)} {unit}"
+    _, label_, unit = await _limits(c, what)
+    label = f"{label_} — {fa(amount)} {unit}"
     text = (
         f"🎁 {bold('مطمئنید می‌خواهید ببخشید؟')}\n\n"
         f"گیرنده: {_who(c, other)}\n\n"

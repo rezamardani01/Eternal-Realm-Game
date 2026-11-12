@@ -36,12 +36,11 @@ def listing_labels(h):
 
 async def seed_market(services, db):
     seller = await reg(services, 10, "آرش")
-    await stock(services, db, seller.id, leather_cap=1, steel_sword=1, dagger=1, iron_ore=10)
+    await stock(services, db, seller.id, herb=1, dragon_scale=1, energy_potion=1, iron_ore=10)
     seller = await services.players.require(10)
-    pieces = {g.item.id: g.id for g in (await services.inventory.view(seller.id)).gear}
-    await services.market.list_gear(seller, pieces["leather_cap"], 140)
-    await services.market.list_gear(seller, pieces["steel_sword"], 3_000)
-    await services.market.list_gear(seller, pieces["dagger"], 100)
+    await services.market.list_stack(seller, get_item("herb"), 1, 30)
+    await services.market.list_stack(seller, get_item("dragon_scale"), 1, 1_000)
+    await services.market.list_stack(seller, get_item("energy_potion"), 1, 100)
     await services.market.list_stack(seller, get_item("iron_ore"), 10, 700)
     return seller
 
@@ -58,17 +57,17 @@ async def test_sorting_cheapest_most_expensive_and_rarest(h, services, db):
     assert any("✅ ارزان‌ترین" in t for t in h.labels())  # the tick moved
     await h.tap(11, "نمایش آگهی‌ها")
     prices = [t.split("—")[-1] for t in listing_labels(h)]
-    assert "خنجر" in listing_labels(h)[0] and "۱۰۰" in prices[0]
+    assert "گیاه" in listing_labels(h)[0] and "۳۰" in prices[0]
 
     await h.tap(11, "فیلتر")
     await h.tap(11, "گران‌ترین")
     await h.tap(11, "نمایش آگهی‌ها")
-    assert "شمشیر فولادی" in listing_labels(h)[0]
+    assert "فلس اژدها" in listing_labels(h)[0]
 
     await h.tap(11, "فیلتر")
     await h.tap(11, "کمیاب‌ترین")
     await h.tap(11, "نمایش آگهی‌ها")
-    assert "شمشیر فولادی" in listing_labels(h)[0]  # rarity 3 beats the common items
+    assert "فلس اژدها" in listing_labels(h)[0]  # rarity 5 beats the common items
 
 
 async def test_category_and_sort_work_together_and_survive_paging(h, services, db):
@@ -77,14 +76,14 @@ async def test_category_and_sort_work_together_and_survive_paging(h, services, d
     await h.panel(11, "market")
     assert len(h.labels()) < 14  # only two filter buttons, not a wall of keys
     await h.tap(11, "دسته")
-    await h.tap(11, "سلاح و زره")
+    await h.tap(11, "معجون")
     await h.tap(11, "نمایش آگهی‌ها")
     await h.tap(11, "فیلتر")
     await h.tap(11, "ارزان‌ترین")
     await h.tap(11, "نمایش آگهی‌ها")
     labels = listing_labels(h)
-    assert len(labels) == 3 and "سنگ آهن" not in " ".join(labels)
-    assert any("دسته: سلاح و زره" in t for t in h.labels())
+    assert len(labels) == 1 and "سنگ آهن" not in " ".join(labels)
+    assert any("دسته: معجون" in t for t in h.labels())
     assert any("فیلتر: ارزان‌ترین" in t for t in h.labels())
 
 
@@ -124,10 +123,11 @@ async def test_sell_flow_pick_item_then_choose_quantity_then_type_the_price(h, s
 
 async def test_selling_in_a_group_works_and_chatter_still_reaches_commands(h, services, db):
     seller = await reg(services, 10, "آرش")
-    await stock(services, db, seller.id, leather_cap=1)
+    await stock(services, db, seller.id, energy_potion=1)
     await h.panel(10, "market", group=True)
     await h.tap(10, "فروش کالای من", group=True)
-    await h.tap(10, "کلاه چرمی", group=True)
+    await h.tap(10, "معجون انرژی", group=True)
+    await h.tap(10, "×۱", group=True)
     assert "قیمت فروش" in h.session.last_text() and "مجاز: ۶۰ تا ۱۴۴" in h.session.last_text()
     await h.say(10, "پروفایل", group=True)  # a game word while the prompt is open still works
     assert "آرش" in h.session.last_text()
@@ -140,19 +140,6 @@ async def test_selling_in_a_group_works_and_chatter_still_reaches_commands(h, se
     await h.tap(10, "بله", group=True)
     assert "آگهی شما نصب شد" in h.session.last_text()
     assert (await services.market.mine(seller))[0].price == 140
-
-
-async def test_buying_listed_gear_then_selling_it_to_the_npc_does_not_crash(h, services, db):
-    seller = await reg(services, 10, "آرش")
-    buyer = await reg(services, 11, "سارا")
-    await stock(services, db, seller.id, leather_cap=1)
-    seller = await services.players.require(10)
-    cap = (await services.inventory.view(seller.id)).gear[-1].id
-    listing = await services.market.list_gear(seller, cap, 100)
-    await services.market.buy(await services.players.require(11), listing.id)
-    sold, total = await services.shop.sell_gear(await services.players.require(11), cap)
-    assert sold.item.id == "leather_cap" and total > 0
-    assert buyer
 
 
 async def test_empty_market_shows_one_wide_notice_button_between_the_rows(h, services, db):
@@ -174,8 +161,8 @@ async def test_home_menu_uses_the_new_names(h, services, db):
         assert name in labels
     assert "🗺️ ماجراجویی" in h.labels()
     await h.panel(11, "trade")
-    assert {"🛒 فروشگاه آیتم", "🏪 بازارچه", "🏦 مرکز مبادله", "🔥 کوره آهنگری"} <= set(h.labels())
+    assert {"🛒 فروشگاه آیتم", "🏪 بازارچه", "🏦 مرکز مبادله"} <= set(h.labels())
     await h.panel(11, "fight")
     assert {"🕳️ سیاه‌چال", "📜 داستان‌ها", "🏆 تالار بزرگان"} <= set(h.labels())
     await h.panel(11, "profile")
-    assert {"🃏 آلبوم کارت", "🐱 حیوان خانگی", "🏅 دستاوردها", "🧰 تجهیزات"} <= set(h.labels())
+    assert {"🃏 آلبوم کارت", "🐱 حیوان خانگی", "🏅 دستاوردها", "⚔️ تجهیزات و مهارت‌های قهرمان"} <= set(h.labels())

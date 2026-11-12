@@ -25,7 +25,6 @@ async def setup_pair(services, db):
     buyer = await services.players.register(11, "b", "سارا", "fairy", "mage")
     async with db.transaction() as tx:
         await wallet.apply(tx, buyer.id, gold=5_000, reason="test", now=services.ctx.now())
-        await services.inventory.grant(tx, seller.id, "iron_sword")
         await services.inventory.grant(tx, seller.id, "iron_ore", 10)
     return await services.players.require(10), await services.players.require(11)
 
@@ -34,18 +33,17 @@ async def total_gold(services):
     return (await services.players.require(10)).gold + (await services.players.require(11)).gold
 
 
-async def test_gear_sale_moves_item_and_charges_fee(services, db):
+async def test_sale_moves_item_and_charges_fee(services, db):
     seller, buyer = await setup_pair(services, db)
-    gear = next(p for p in (await services.inventory.view(seller.id)).gear if p.item.id == "iron_sword")
-    listing = await services.market.list_gear(seller, gear.id, 1_000)
-    assert all(p.id != gear.id for p in (await services.inventory.view(seller.id)).gear)  # in escrow
+    listing = await services.market.list_stack(seller, get_item("iron_ore"), 4, 400)
+    assert (await services.inventory.view(seller.id)).stack_qty("iron_ore") == 6  # in escrow
 
     before = await total_gold(services)
     await services.market.buy(buyer, listing.id)
-    fee = max(1, 1_000 * services.ctx.balance.market_fee_percent // 100)
+    fee = max(1, 400 * services.ctx.balance.market_fee_percent // 100)
     assert await total_gold(services) == before - fee  # the fee leaves the economy
-    assert (await services.players.require(10)).gold == seller.gold + 1_000 - fee
-    assert any(p.id == gear.id for p in (await services.inventory.view(buyer.id)).gear)
+    assert (await services.players.require(10)).gold == seller.gold + 400 - fee
+    assert (await services.inventory.view(buyer.id)).stack_qty("iron_ore") == 4
 
 
 async def test_stack_listing_and_cancel(services, db):
@@ -81,25 +79,12 @@ async def test_cannot_double_buy_or_buy_own_or_without_money(services, db):
 
 async def test_listing_rules(services, db):
     seller, _ = await setup_pair(services, db)
-    worn = (await services.inventory.view(seller.id)).gear[0]
-    with pytest.raises(GameError):
-        await services.market.list_gear(seller, worn.id, 100)  # equipped
     with pytest.raises(GameError):
         await services.market.list_stack(seller, get_item("iron_ore"), 99, 100)  # not enough
     with pytest.raises(GameError):
         await services.market.list_stack(seller, get_item("iron_ore"), 1, 0)
     with pytest.raises(GameError):
         await services.market.list_stack(seller, get_item("iron_ore"), 1, 10**9)
-
-
-async def test_listed_gear_cannot_be_equipped_or_sold_to_npc(services, db):
-    seller, _ = await setup_pair(services, db)
-    gear = next(p for p in (await services.inventory.view(seller.id)).gear if p.item.id == "iron_sword")
-    await services.market.list_gear(seller, gear.id, 500)
-    with pytest.raises(GameError):
-        await services.shop.sell_gear(seller, gear.id)
-    with pytest.raises(GameError):
-        await services.inventory.equip(seller, gear.id)
 
 
 async def test_a_listing_may_ask_between_half_and_one_and_a_fifth_of_the_real_worth(services, db):

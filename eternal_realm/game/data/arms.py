@@ -146,11 +146,6 @@ class Arm:
     def rial(self) -> int:
         return round(max(MIN_RIAL, self.price * RIAL_PER_COIN) * PRICE_RISE / 1000) * 1000
 
-    @property
-    def sell(self) -> int:
-        """What the shop gives back for a piece the hero no longer wants."""
-        return self.price // 4
-
     def limits(self) -> list[str]:
         from .classes import CLASSES
 

@@ -53,7 +53,7 @@ class EconomyService:
         return b.transfer_daily_limit - used - amount
 
     async def send(self, sender: Player, receiver: Player, kind: str, qty: int) -> Receipt:
-        """Send ``coin``, ``crystal``, ``g<gear id>`` or a stackable item id."""
+        """Send ``coin``, ``crystal``, a card (``k_<id>``) or a stackable item id."""
         if qty <= 0:
             raise GameError("تعداد باید دست‌کم ۱ باشد.")
         if kind == "coin":
@@ -92,18 +92,6 @@ class EconomyService:
                     (receiver.id, card.id, qty, now),
                 )
             return Receipt(f"🃏 {card.name} ×{fa(qty)}")
-        if kind.startswith("g") and kind[1:].isdigit():
-            async with self.ctx.db.transaction() as tx:
-                piece = await self.inventory.piece(tx, sender.id, int(kind[1:]))
-                if piece.slot is not None:
-                    raise GameError("اول این تجهیزات را از تن خود دربیاورید.")
-                if not piece.item.tradable:
-                    raise GameError("این تجهیزات قابل انتقال نیست.")
-                row = await inv_repo.get_gear(tx, piece.id)
-                if row is not None and row.listed:
-                    raise GameError("این تجهیزات در بازار آگهی شده است؛ اول آگهی را لغو کنید.")
-                await inv_repo.transfer_gear(tx, piece.id, receiver.id)
-            return Receipt(f"{piece.label}")
         item = get_item(kind)
         if not item.tradable:
             raise GameError(f"{item.label} قابل انتقال نیست.")

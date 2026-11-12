@@ -75,7 +75,7 @@ _SPECIAL: tuple[Quest, ...] = (
             "end_kind": Step(
                 "پیرزن شما را در آغوش می‌گیرد و گردنبندی قدیمی هدیه می‌دهد. می‌گوید: «قلبی مثل قلب شما، "
                 "در این روزگار کمیاب است.»",
-                reward=Reward(gold=200, crystal=2, xp=120, items=(("life_amulet", 1),)),
+                reward=Reward(gold=200, crystal=2, xp=120, items=(("moon_herb", 3),)),
                 ending="پایان مهربانانه",
             ),
             "end_fair": Step(

@@ -127,12 +127,9 @@ def test_every_piece_is_also_sold_for_real_money_at_the_coin_price():
 
 
 # --- buying and equipping ------------------------------------------------------------------------------------------------------------
-async def test_gear_is_never_sold_for_coins_but_stacks_without_limit(services, db):
+async def test_gear_stacks_without_limit(services, db):
     p = await hero(services, db, gold=10_000_000)
-    for arm_id in ("blood_sword", "b_fire", "nope"):
-        with pytest.raises(GameError):
-            await services.arms.buy(p, arm_id)  # no coin purchase, whatever the price
-    assert not await services.arms.owned(p.id) and (await services.players.require(10)).gold == 10_000_500
+    assert not await services.arms.owned(p.id)
     await give(services, db, p, "blood_sword", 3)
     assert (await services.arms.owned(p.id))["blood_sword"] == 3  # any number may be owned
 
@@ -478,7 +475,7 @@ def test_battles_with_skills_always_finish_and_roundtrip():
 
 
 def test_old_saved_battles_still_load():
-    saved = Battle.start(Fighter.for_player(1, "x", CLASSES["mage"], Stats(100, 10, 5, 12, 5, 2)), fighter(), 15, random.Random(1)).to_dict()
+    saved = Battle.start(Fighter.for_player(1, "x", CLASSES["mage"], Stats(100, 10, 5, 12, 5, 2), race_id="human"), fighter(), 15, random.Random(1)).to_dict()
     for f in saved["fighters"]:
         for key in ("skills", "cds", "traits", "statuses", "trait_power", "undying_used", "stand_used"):
             f.pop(key, None)

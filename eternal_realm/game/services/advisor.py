@@ -63,8 +63,10 @@ class AdvisorService:
             if player.level >= data.CHAPTERS[stage.chapter][2]:
                 tag = "مأموریت آموزشی" if player.level < 5 else "داستان"
                 out.append(Suggestion("📖", f"{tag}: مرحله‌ی {fa(stage.number)}، {stage.title}", "stage", str(stage.number)))
-        if len([g for g in (await self.inventory.view(player.id)).gear if g.slot]) < 3:
-            out.append(Suggestion("🧰", "تجهیزاتتان کم است؛ با ماجراجویی منابع جمع کنید و بخرید", "adv"))
+        async with self.ctx.db.read() as tx:
+            worn = await tx.scalar("SELECT COUNT(*) FROM arms_equipped WHERE player_id = ?", (player.id,), 0)
+        if worn < min(2, player.level):
+            out.append(Suggestion("⚔️", "جایگاه‌های تجهیزات جنگی‌تان خالی است؛ قطعه‌ای بگذارید", "arms"))
         for boss in reversed(data.SOLO_BOSSES):
             if player.level >= boss.min_level and not progress.get(f"today:boss:{boss.foe}", 0):
                 out.append(Suggestion("🐉", f"قدرتتان به باس «{data.get_foe(boss.foe).name}» می‌رسد؛ امروز پاداش اولش را بگیرید", "sbossv", boss.foe))

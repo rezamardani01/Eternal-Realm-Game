@@ -100,14 +100,6 @@ class ArmsService:
             (player_id, arm_id, qty),
         )
 
-    async def buy(self, player: Player, arm_id: str, qty: int = 1) -> Arm:
-        """War gear cannot be bought with coins: the treasury sells it for real money, and it drops in the game."""
-        if arm_id not in ARMS or qty < 1:
-            raise GameError("این تجهیزات در قلمرو شناخته نمی‌شود.")
-        if get_arm(arm_id).boss:
-            raise GameError("این تجهیزات فقط از شکست دادن باس‌ها به دست می‌آید.")
-        raise GameError("تجهیزات جنگی را فقط با پول واقعی از «خزانه قلمرو» می‌توان خرید؛ با سکه نمی‌شود. تجهیزات کم‌ارزش‌تر را گاهی از شکار، سفر، صندوقچه و باس‌ها پیدا می‌کنید.")
-
     async def free_drop(self, tx: Tx, player_id: int, chance: float) -> Arm | None:
         """A lucky find for everybody: a common or uncommon piece (never a boss spoil)."""
         if self.ctx.rng.random() >= chance:

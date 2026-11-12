@@ -35,8 +35,8 @@ def test_the_table_is_sound():
     assert len({s.id for s in data.SLICES}) == len(data.SLICES)
     small = sum(share for s, share in data.odds() if s.id in ("ore", "potion", "herb"))
     assert 0.05 < small < 0.2  # the cheap prizes are a minority
-    strong = {"knight_sword", "knight_armor", "war_hammer", "storm_staff", "elven_bow", "fire_sword", "dragon_armor"}
-    assert strong <= {i for s in data.SLICES for i, _ in s.items}  # gear for high levels
+    rare = {"crystal_shard", "dragon_scale", "gold_ore"}
+    assert rare <= {i for s in data.SLICES for i, _ in s.items}  # valuable materials for high levels
     rng = random.Random(1)
     assert {data.spin(rng).id for _ in range(5000)} >= {s.id for s in data.SLICES if s.weight >= 5}
 

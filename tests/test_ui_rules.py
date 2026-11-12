@@ -39,11 +39,9 @@ async def test_no_line_or_button_starts_with_two_emojis(services, db):
         await tx.execute("UPDATE players SET level = 6 WHERE id = ?", (me.id,))
         await services.inventory.grant(tx, me.id, "wooden_chest", 2)
         await services.inventory.grant(tx, me.id, "iron_ore", 20)
-        await services.inventory.grant(tx, me.id, "leather_cap", 1)
-        await services.inventory.grant(tx, me.id, "iron_sword", 1)
+        await services.inventory.grant(tx, me.id, "gold_ore", 1)
     me = await services.players.require(10)
-    cap = next(g.id for g in (await services.inventory.view(me.id)).gear if g.item.id == "leather_cap")
-    await services.market.list_gear(me, cap, 100)
+    await services.market.list_stack(me, __import__("eternal_realm.game.data.items", fromlist=["x"]).get_item("energy_potion"), 1, 100)
     await services.market.list_stack(me, __import__("eternal_realm.game.data.items", fromlist=["x"]).get_item("iron_ore"), 5, 300)
 
     steps = [("say", "/start"), ("say", "قلمرو"), ("say", "راهنما"), ("say", "پروفایل"), ("say", "جایزه"),

@@ -72,7 +72,7 @@ class ActivityService:
             stats = progression.base_stats(
                 player.race_id, player.class_id, player.level, player.class2_id, player.awakened
             )
-            luck = stats.luck + (await self.inventory.equipped_stats(tx, player_id)).luck
+            luck = stats.luck
             perk = player.race.perks.get(activity.id, 1.0)
             rolled = loot.roll(activity, player.level, luck, perk, self.ctx.rng)
 

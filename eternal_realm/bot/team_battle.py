@@ -24,7 +24,7 @@ router = Router(name="team_battle")
 TEAM_MARKS = ("🟢", "🔴")
 TEAM_NAMES = ("تیم اول", "تیم دوم")
 ACTIONS = {
-    "attack": Action.ATTACK, "skill": Action.SKILL, "skill1": Action.SKILL1, "skill2": Action.SKILL2,
+    "attack": Action.ATTACK, "skill1": Action.SKILL1, "skill2": Action.SKILL2,
     "skill3": Action.SKILL3, "defend": Action.DEFEND, "surrender": Action.SURRENDER,
 }
 
@@ -132,28 +132,14 @@ def lobby_buttons(lobby: Lobby) -> Rows:
 
 
 def action_buttons(battle_id: int, fighter: Fighter) -> Rows:
-    if fighter.has_skills:
-        rows = keyboards.hero_battle_rows(
-            fighter, lambda action, label, style: Button.inline(label, TeamCb(action=action, id=battle_id), style=style),
-            [
-                Button.inline("🛡️ دفاع", TeamCb(action="defend", id=battle_id)),
-                Button.inline("🏳️ تسلیم", TeamCb(action="surrender", id=battle_id), style="danger"),
-            ],
-        )
-        return [*rows, [Button.inline("❌ لغو مبارزه", TeamCb(action="cancel", id=battle_id))]]
-    wait = fighter.skill_ready_in - 1
-    skill = f"{fighter.skill_emoji} {fighter.skill_name}" + (f" ({fa(wait)})" if wait > 0 else "")
-    return [
-        [
-            Button.inline("⚔️ حمله", TeamCb(action="attack", id=battle_id), style="primary"),
-            Button.inline(skill, TeamCb(action="skill", id=battle_id), style="success" if wait <= 0 else None),
-        ],
+    rows = keyboards.hero_battle_rows(
+        fighter, lambda action, label, style: Button.inline(label, TeamCb(action=action, id=battle_id), style=style),
         [
             Button.inline("🛡️ دفاع", TeamCb(action="defend", id=battle_id)),
             Button.inline("🏳️ تسلیم", TeamCb(action="surrender", id=battle_id), style="danger"),
         ],
-        [Button.inline("❌ لغو مبارزه", TeamCb(action="cancel", id=battle_id))],
-    ]
+    )
+    return [*rows, [Button.inline("❌ لغو مبارزه", TeamCb(action="cancel", id=battle_id))]]
 
 
 def result_buttons(battle_id: int) -> Rows:

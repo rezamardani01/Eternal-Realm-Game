@@ -33,7 +33,7 @@ def _tidy(text: str) -> str:
 #: words that open a personal panel: they work in the private chat only (a group gets no answer at all)
 PRIVATE_ONLY = (
     "daily", "rename", "wallet", "open_inventory", "open_gear", "open_chests", "open_shop",
-    "open_premium", "open_quests", "open_album", "open_pets", "open_dungeon", "open_craft",
+    "open_premium", "open_quests", "open_album", "open_pets", "open_dungeon",
     "open_offers", "open_missions", "open_contests", "open_altar", "open_adventure",
 )
 

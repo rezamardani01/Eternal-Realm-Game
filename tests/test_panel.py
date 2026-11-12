@@ -52,11 +52,10 @@ def leading_symbols(text: str) -> int:
 async def test_every_screen_starts_with_exactly_one_emoji(h, services, db):
     p = await reg(services)
     await give(services, db, p.id, "wooden_chest", 1, gold=5_000, crystal=50)
-    gear_id = (await services.inventory.view(p.id)).gear[0].id
-    screens = [("home", ""), ("profile", ""), ("inv", ""), ("gear", ""), ("piece", str(gear_id)), ("items", ""),
-               ("chests", ""), ("chestshop", ""), ("shop", ""), ("shopcat", "gear"), ("shopcat", "pot"),
+    screens = [("home", ""), ("profile", ""), ("inv", ""), ("arms", ""), ("items", ""),
+               ("chests", ""), ("chestshop", ""), ("shop", ""), ("shopcat", "pot"),
                ("market", ""), ("mine", ""), ("top", "level"), ("premium", ""), ("adv", ""), ("help", ""),
-               ("upq", str(gear_id)), ("sellq", str(gear_id))]
+               ]
     problems = []
     for name, arg in screens:
         h.session.reset()
@@ -130,7 +129,7 @@ async def test_start_shows_the_home_panel_with_glass_buttons(h, services):
 
 async def test_group_words_open_panels_and_personal_panel_goes_private(h, services):
     await reg(services)
-    for word, expect in [("کوله‌پشتی", "تجهیزات"), ("فروشگاه", "سلاح"), ("صندوقچه", "خرید صندوقچه")]:
+    for word, expect in [("کوله‌پشتی", "آیتم‌ها"), ("فروشگاه", "معجون"), ("صندوقچه", "خرید صندوقچه")]:
         await h.say(10, word)
         assert any(expect in t for t in h.labels()), (word, h.labels())
         h.session.reset()
@@ -143,34 +142,6 @@ async def test_group_words_open_panels_and_personal_panel_goes_private(h, servic
 
 
 # --- equipment ----------------------------------------------------------------------------------
-async def test_equip_and_unequip_by_tapping(h, services, db):
-    p = await reg(services)
-    await give(services, db, p.id, "dagger")
-    await h.say(10, "/start")
-    await h.tap(10, "قهرمان من")
-    await h.tap(10, "کوله‌پشتی")
-    await h.tap(10, "تجهیزات")
-    assert any("✅" in t for t in h.labels())  # the starter weapon is marked as worn
-    await h.tap(10, "خنجر")
-    assert any("پوشیدن" in t for t in h.labels())
-    await h.tap(10, "پوشیدن")
-    assert any("درآوردن" in t for t in h.labels())
-    assert any(
-        g.item.id == "dagger" and g.slot for g in (await services.inventory.view(p.id)).gear
-    )
-    await h.tap(10, "درآوردن")
-    assert any("پوشیدن" in t for t in h.labels())
-
-
-async def test_gear_that_is_too_heavy_explains_itself(h, services, db):
-    p = await reg(services)
-    await give(services, db, p.id, "iron_sword")
-    await h.panel(10, "gear")
-    await h.tap(10, "شمشیر آهنی")
-    await h.tap(10, "پوشیدن")
-    assert any("سطح" in a.get("text", "") for a in h.session.callback_answers())
-
-
 # --- consumables and chests ---------------------------------------------------------------------
 async def test_use_a_potion_from_the_item_screen(h, services, db):
     p = await reg(services)
@@ -225,37 +196,26 @@ async def test_buy_from_the_shop_by_tapping(h, services, db):
     assert stacks["big_energy_potion"] == 1
 
 
-async def test_upgrade_by_tapping(h, services, db):
-    p = await reg(services)
-    await give(services, db, p.id, "iron_ore", 5, gold=5_000)
-    await h.panel(10, "gear")
-    await h.tap(10, "کمان کوتاه")
-    await h.tap(10, "ارتقا")
-    assert "شانس موفقیت" in h.session.last_text()
-    await h.tap(10, "ارتقا به")
-    assert (await services.inventory.view(p.id)).gear[0].upgrade == 1
-
-
 # --- market --------------------------------------------------------------------------------------
 async def test_listing_and_buying_through_the_panel(h, services, db):
     seller = await reg(services)
     await reg(services, 11, "سارا", "fairy", "mage")
     await give(services, db, 2, None, gold=5_000)
-    spare = (await give(services, db, seller.id, "leather_cap"))[0]
-
-    await h.panel(10, "piece", str(spare))
-    await h.tap(10, "عرضه در بازار")
+    await h.panel(10, "market")
+    await h.tap(10, "فروش کالای من")
+    await h.tap(10, "معجون انرژی")
+    await h.tap(10, "×۱")
     assert "قیمت فروش" in h.session.last_text()
     await h.say(10, "120")  # the answer to the price prompt
     await h.tap(10, "بله")
     assert "آگهی شما نصب شد" in h.session.last_text()
 
     await h.panel(11, "market")
-    await h.tap(11, "کلاه چرمی")
+    await h.tap(11, "معجون انرژی")
     await h.tap(11, "خرید با")
     assert "تأیید خرید" in h.session.last_text()
     await h.tap(11, "بله، بخر")
-    assert any(g.item.id == "leather_cap" for g in (await services.inventory.view(2)).gear)
+    assert (await services.inventory.view(2)).stack_qty("energy_potion") == 3  # its own two, and the one it bought
     assert (await services.players.require(11)).gold == services.ctx.balance.start_gold + 5_000 - 120
     # after the purchase we are back on the first page of the list, with a success note and no stray «previous» button
     assert "خرید موفق" in h.session.last_text() and "🏪" in h.session.last_text()
@@ -264,22 +224,25 @@ async def test_listing_and_buying_through_the_panel(h, services, db):
 
 async def test_cancelling_a_listing_returns_the_item(h, services, db):
     seller = await reg(services)
-    spare = (await give(services, db, seller.id, "leather_cap"))[0]
-    await h.panel(10, "piece", str(spare))
-    await h.tap(10, "عرضه در بازار")
+    await h.panel(10, "market")
+    await h.tap(10, "فروش کالای من")
+    await h.tap(10, "معجون انرژی")
+    await h.tap(10, "×۱")
     await h.say(10, "100")
     await h.tap(10, "بله")
+    assert (await services.inventory.view(seller.id)).stack_qty("energy_potion") == 1
     await h.panel(10, "mine")
-    await h.tap(10, "کلاه چرمی")
+    await h.tap(10, "معجون انرژی")
     await h.tap(10, "لغو آگهی")
-    assert any(g.id == spare for g in (await services.inventory.view(seller.id)).gear)
+    assert (await services.inventory.view(seller.id)).stack_qty("energy_potion") == 2
 
 
 async def test_bad_price_keeps_asking_and_a_tap_cancels(h, services, db):
     seller = await reg(services)
-    spare = (await give(services, db, seller.id, "leather_cap"))[0]
-    await h.panel(10, "piece", str(spare))
-    await h.tap(10, "عرضه در بازار")
+    await h.panel(10, "market")
+    await h.tap(10, "فروش کالای من")
+    await h.tap(10, "معجون انرژی")
+    await h.tap(10, "×۱")
     await h.say(10, "خیلی")
     assert "عدد" in h.session.last_text()
     await h.tap(10, "انصراف")
@@ -320,13 +283,13 @@ def test_help_is_airy_and_every_word_in_it_is_a_real_command():
 
 async def test_shortage_messages_state_the_numbers(h, services, db):
     p = await reg(services)
-    await h.panel(10, "shopitem", "iron_sword", "gear")
-    await h.tap(10, "خرید")  # the confirmation page already shows the numbers
+    await h.panel(10, "shopitem", "grand_energy_potion", "pot")
+    await h.tap(10, "×۱")  # the confirmation page already shows the numbers
     text = h.session.last_text()
     assert "۵۰۰" in text and "۹۰۰" in text and "۴۰۰" in text  # have, price, missing
     assert not any("بله" in t for t in h.labels())  # nothing to confirm when you cannot pay
     # a stale confirm button still cannot spend money that is not there
-    await h.panel(10, "buy", "iron_sword", "1")
+    await h.panel(10, "buy", "grand_energy_potion", "1")
     alert = next(a["text"] for a in h.session.callback_answers() if "کافی نیست" in a.get("text", ""))
     assert "۵۰۰" in alert and "۹۰۰" in alert and "۴۰۰" in alert
     await h.panel(10, "cbuyq", "magic_chest")
@@ -337,20 +300,19 @@ async def test_shortage_messages_state_the_numbers(h, services, db):
 async def test_market_has_category_buttons_with_listings_below(h, services, db):
     seller = await reg(services)
     await reg(services, 11, "سارا", "fairy", "mage")
-    cap = (await give(services, db, seller.id, "leather_cap"))[0]
     await give(services, db, seller.id, "iron_ore", 3)
-    await services.market.list_gear(await services.players.require(10), cap, 100)
+    await services.market.list_stack(await services.players.require(10), __import__("eternal_realm.game.data.items", fromlist=["x"]).get_item("energy_potion"), 1, 100)
     await services.market.list_stack(await services.players.require(10), __import__("eternal_realm.game.data.items", fromlist=["x"]).get_item("iron_ore"), 3, 200)
 
     await h.panel(11, "market")
     labels = h.labels()
     assert any("دسته" in t for t in labels) and any("فیلتر" in t for t in labels)
-    assert any("کلاه چرمی" in t for t in labels) and any("سنگ آهن" in t for t in labels)
+    assert any("معجون انرژی" in t for t in labels) and any("سنگ آهن" in t for t in labels)
     await h.tap(11, "دسته")
     await h.tap(11, "منابع")
     await h.tap(11, "نمایش آگهی‌ها")
     labels = h.labels()
-    assert any("سنگ آهن" in t for t in labels) and not any("کلاه چرمی" in t for t in labels)
+    assert any("سنگ آهن" in t for t in labels) and not any("معجون انرژی" in t for t in labels)
     await h.tap(11, "دسته")
     await h.tap(11, "صندوقچه")
     await h.tap(11, "نمایش آگهی‌ها")
@@ -503,10 +465,11 @@ async def test_the_listing_confirmation_compares_the_price_with_the_real_value(h
     from eternal_realm.game.data.items import get_item, item_value
 
     seller = await reg(services)
-    spare = (await give(services, db, seller.id, "leather_cap"))[0]
-    worth = item_value(get_item("leather_cap"))
-    await h.panel(10, "piece", str(spare))
-    await h.tap(10, "عرضه در بازار")
+    worth = item_value(get_item("energy_potion"))
+    await h.panel(10, "market")
+    await h.tap(10, "فروش کالای من")
+    await h.tap(10, "معجون انرژی")
+    await h.tap(10, "×۱")
     await h.say(10, str(worth * 3))  # three times the worth is refused outright and the prompt stays
     assert "باید میان" in h.session.last_text()
     await h.say(10, str(worth * 6 // 5))
@@ -528,13 +491,13 @@ async def test_merchant_purchase_names_the_backpack_section_and_sends_a_receipt(
     async with db.transaction() as tx:
         await tx.execute(
             "UPDATE group_events SET state = ? WHERE id = ?",
-            (json.dumps({"stock": [{"item": "swift_boots", "price": 100, "left": 2}, {"item": "energy_potion", "price": 50, "left": 2}]}), view.id),
+            (json.dumps({"stock": [{"item": "wooden_chest", "price": 100, "left": 2}, {"item": "energy_potion", "price": 50, "left": 2}]}), view.id),
         )
     await h.click(10, f"e:buy:{view.id}:0", group=True)
-    assert any("تجهیزات" in a.get("text", "") for a in h.session.callback_answers())
+    assert any("صندوقچه" in a.get("text", "") for a in h.session.callback_answers())
     receipt = [m for m in h.session.sent("sendMessage") if str(m["chat_id"]) == "10" and "رسید خرید از تاجر" in m["text"]]
-    assert receipt and "تجهیزات" in receipt[-1]["text"] and receipt[-1]["reply_markup"]
-    assert any(g.item.id == "swift_boots" for g in (await services.inventory.view(p.id)).gear)
+    assert receipt and "صندوقچه" in receipt[-1]["text"] and receipt[-1]["reply_markup"]
+    assert (await services.inventory.view(p.id)).stack_qty("wooden_chest") == 1
     await h.click(10, f"e:buy:{view.id}:1", group=True)
     assert any("آیتم‌ها" in a.get("text", "") for a in h.session.callback_answers())
 
@@ -558,11 +521,6 @@ async def test_selling_the_last_of_a_stack_or_a_piece_returns_to_the_list(h, ser
     await h.tap(10, "فروش ۱")
     await h.tap(10, "بله")
     assert not any("نامعتبر" in a.get("text", "") for a in h.session.callback_answers())
-    spare = (await give(services, db, p.id, "leather_cap"))[0]
-    await h.panel(10, "sellq", str(spare))
-    await h.tap(10, "بله")
-    assert "تجهیزات" in h.session.last_text() and not any("نامعتبر" in a.get("text", "") for a in h.session.callback_answers())
-    assert any("فروخته شد" in a.get("text", "") for a in h.session.callback_answers())
 
 
 async def test_the_adventure_menu_has_no_dungeon_button_the_main_menu_does(h, services):

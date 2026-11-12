@@ -32,8 +32,8 @@ PRIZES: tuple[tuple[str, tuple, int], ...] = (
     ("item", ("wooden_chest", 1), 12),
     ("item", ("iron_ore", 5), 16),
     ("item", ("herb", 3), 8),
-    ("item", ("luck_ring", 1), 2),
-    ("item", ("strength_ring", 1), 2),
+    ("item", ("moon_herb", 2), 2),
+    ("item", ("gold_ore", 2), 2),
 )
 
 #: owner gift names -> the pack they hand out

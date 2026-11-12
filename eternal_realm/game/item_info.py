@@ -15,8 +15,6 @@ from .data.lucky import THEMES
 from .data.monsters import MONSTERS
 from .data.packs import PACKS
 from .data.quests import QUESTS
-from .data.recipes import RECIPES
-from .data.sets import BOSS_DROPS
 from .data.world_events import METEOR_LOOT
 
 #: things no table can say
@@ -25,13 +23,9 @@ SPECIAL_USES = {
     "race_ticket": "🧬 تغییر نژاد قهرمان؛ از «قهرمان من ← ارتقای قهرمان ← خدمات»",
     "class_ticket": "⚔️ تغییر کلاس قهرمان؛ از «قهرمان من ← ارتقای قهرمان ← خدمات»",
 }
-#: the forge and the smithy are the same for every piece of gear
-UPGRADE_LINE = "⬆️ ارتقای تجهیزات در آهنگری"
-UPGRADE_MATERIALS = {"iron_ore": "از +۱", "crystal_shard": "از +۶"}
-SLOT_NAMES = {
-    "weapon": "سلاح", "armor": "زره", "helmet": "کلاه‌خود", "shield": "سپر", "boots": "چکمه", "ring": "انگشتر",
-    "amulet": "گردنبند",
-}
+#: the materials that war gear upgrades consume (see data/arms.py)
+UPGRADE_LINE = "⬆️ ارتقای تجهیزات قهرمان"
+UPGRADE_MATERIALS = {"iron_ore": "تا +۶", "crystal_shard": "از +۴", "gold_ore": "از +۷", "dragon_scale": "+۱۰"}
 
 
 def _names(ids: list[str], limit: int = 4) -> str:
@@ -54,13 +48,8 @@ def sources(item_id: str) -> tuple[str, ...]:
     chests = [get_item(c.item_id).name for c in CHESTS.values() if any(p.item_id == item_id for p in c.prizes)]
     if chests:
         lines.append("🎁 صندوقچه: " + "، ".join(chests))
-    if any(i == item_id for i, _ in BOSS_DROPS):
-        lines.append("🐉 غنیمت باس‌های گروهی")
     if item.buy > 0 and item.kind is not Kind.CHEST:
         lines.append(f"🛒 فروشگاه: {fa(item.buy)} سکه")
-    crafted = [r for r in RECIPES if r.result == item_id]
-    if crafted:
-        lines.append("🔥 ساخت در کوره")
     if any(item_id in pack.items for pack in PACKS.values()):
         lines.append("💎 خزانه قلمرو")
     if any(p.item_id == item_id for t in THEMES for p in t.prizes):
@@ -85,20 +74,10 @@ def uses(item_id: str) -> tuple[str, ...]:
         lines.append(SPECIAL_USES[item_id])
     if item.kind is Kind.CONSUMABLE:
         lines.append(f"🧪 با نوشیدنش {fa(item.energy)} انرژی برمی‌گردد")
-    if item.is_gear:
-        slot = SLOT_NAMES.get(item.slot or "", "تجهیزات")
-        lines.append(f"🛡️ جایگاه: {slot} · سطح لازم {fa(item.level_req)}")
-        lines.append(UPGRADE_LINE + " (تا +۱۰)")
-        made = [get_item(r.result).name for r in RECIPES if r.base == item_id]
-        if made:
-            lines.append("🔥 پایه‌ی ساخت در کوره: " + "، ".join(made))
     if item.kind is Kind.CHEST:
-        lines.append("🗝️ باز کردنش سکه، منابع یا تجهیزات می‌دهد؛ «شانس‌ها» را ببینید")
+        lines.append("🗝️ باز کردنش سکه، کریستال یا منابع می‌دهد؛ «شانس‌ها» را ببینید")
     if item_id in UPGRADE_MATERIALS:
         lines.append(f"{UPGRADE_LINE} ({UPGRADE_MATERIALS[item_id]})")
-    forged = [get_item(r.result).name for r in RECIPES if item_id in r.materials]
-    if forged:
-        lines.append("🔥 ساخت در کوره: " + "، ".join(forged))
     if item.sell > 0:
         lines.append(f"💰 فروش به بازارچه: {fa(item.sell)} سکه")
     if item.tradable:

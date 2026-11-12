@@ -54,8 +54,7 @@ async def test_bundle_delivers_gold_and_items(services):
     after = await services.players.require(10)
     assert after.gold == p.gold + PACKS["adventurer"].gold
     stacks = {i.id: q for i, q in (await services.inventory.view(p.id)).stacks}
-    assert stacks["big_energy_potion"] == 5
-    assert any(g.item.id == "steel_sword" for g in (await services.inventory.view(p.id)).gear)
+    assert stacks["big_energy_potion"] == 5 and stacks["magic_chest"] == 1 and stacks["gold_ore"] == 3
 
 
 async def test_precheckout_rejects_wrong_user_amount_unknown_and_expired(services, clock):
@@ -212,10 +211,8 @@ async def test_lucky_bundle_gives_guaranteed_gold_and_prizes_from_todays_theme(s
     assert gained >= lucky.TIERS["lucky_m"].guaranteed_gold
     theme = lucky.theme_of_day(services.ctx.now())
     allowed = {pr.item_id for pr in theme.prizes if pr.item_id}
-    got = {i.id for i, _ in (await services.inventory.view(p.id)).stacks} | {
-        g.item.id for g in (await services.inventory.view(p.id)).gear
-    }
-    assert (got - {"energy_potion", "short_bow"}) <= allowed | {"big_energy_potion"} | allowed
+    got = {i.id for i, _ in (await services.inventory.view(p.id)).stacks}
+    assert (got - {"energy_potion"}) <= allowed | {"big_energy_potion"}
 
 
 def test_theme_changes_every_day_and_odds_sum_to_one():
@@ -247,28 +244,19 @@ async def test_lucky_purchase_through_the_bot_shows_what_was_inside(h, services)
     assert "محتوای تصادفی" in owner_report
 
 
-def test_the_rare_materials_are_sold_and_the_kits_match_the_forge_recipes():
+def test_the_rare_materials_are_sold_in_sizes_and_never_below_the_shop_value():
     from eternal_realm.game.data.items import get_item
-    from eternal_realm.game.data.recipes import RECIPES
 
-    rare = {p.id: p for p in PACKS.values() if p.section == "rare"}
+    rare = [p for p in PACKS.values() if p.section == "rare"]
     assert PACKS["rare_scale_1"].price_toman == 6_500  # a dragon scale costs 5,000 toman, plus the 30% rise
-    parts = {}
-    for pack in rare.values():
-        assert len(pack.items) >= 1 and pack.price_rial % 10 == 0
-        if len(pack.items) == 1 and not pack.id.startswith("kit_"):
-            (item, qty), = pack.items.items()
-            parts[item] = min(parts.get(item, 10**9), pack.price_rial / qty)
-    kit_of = {
-        "fire_sword": "kit_fire_sword", "dragon_armor": "kit_dragon_armor", "shadow_dagger": "kit_shadow_dagger",
-        "crystal_staff": "kit_crystal_staff", "dragonbane_helm": "kit_dragonbane_helm", "dragonbane_boots": "kit_dragonbane_boots",
-    }
-    for recipe in RECIPES:
-        assert rare[kit_of[recipe.id]].items == recipe.materials, recipe.id  # the kit is exactly what the recipe asks for
-    # a rare material is never sold cheaper than the shop value it would fetch, and every single one can be bought
-    for item in {i for r in RECIPES for i in r.materials} - {"iron_ore"}:
-        assert item in parts, item
-        assert parts[item] / 10 >= get_item(item).sell
+    assert not any(p.id.startswith("kit_") for p in PACKS.values())  # the forge and its kits are gone
+    cheapest: dict[str, float] = {}
+    for pack in rare:
+        assert len(pack.items) == 1 and pack.price_rial % 10 == 0
+        (item, qty), = pack.items.items()
+        cheapest[item] = min(cheapest.get(item, 10**9), pack.price_rial / qty)
+    for item_id, per_piece in cheapest.items():
+        assert per_piece / 10 >= get_item(item_id).sell, item_id
 
 
 async def test_the_rare_section_is_in_the_treasury_and_a_scale_can_be_bought(h, services):
@@ -276,7 +264,7 @@ async def test_the_rare_section_is_in_the_treasury_and_a_scale_can_be_bought(h, 
     await h.panel(10, "premium")
     assert any("منابع کمیاب" in t for t in h.labels())
     await h.panel(10, "prem", "rare")
-    assert "فلس اژدها" in " ".join(h.labels()) and "کیت شمشیر آتشین" in h.session.last_text()
+    assert "فلس اژدها" in " ".join(h.labels()) and "ارتقاهای بالای تجهیزات" in h.session.last_text()
     order = await services.payments.create_order(p, "rare_scale_3")
     await services.payments.complete(10, order.payload, order.amount, "ch-rare")
     async with services.ctx.db.read() as tx:

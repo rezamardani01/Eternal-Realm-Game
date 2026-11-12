@@ -64,9 +64,7 @@ COLLECT_GAP = 15
 CHEST_ODDS = (("wooden_chest", 70), ("magic_chest", 27), ("royal_chest", 3))
 #: (item, price in gold) the travelling merchant may carry
 MERCHANT_STOCK = (
-    ("energy_potion", 80), ("big_energy_potion", 260), ("iron_sword", 600), ("iron_shield", 560),
-    ("chain_mail", 1_800), ("swift_boots", 1_500), ("strength_ring", 1_900), ("luck_ring", 1_900),
-    ("life_amulet", 2_000), ("wooden_chest", 400), ("crystal_shard", 150), ("dragon_scale", 900),
+    ("energy_potion", 80), ("big_energy_potion", 260), ("wooden_chest", 400), ("crystal_shard", 150), ("dragon_scale", 900),
 )
 
 

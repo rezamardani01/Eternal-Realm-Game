@@ -26,7 +26,7 @@ DEFAULT_AMOUNT = {"gold": 100, "crystal": 5, "item": 1}
 
 
 def _split(raw: str) -> tuple[str, str]:
-    """«gold» / «crystal» / «item.iron_ore» / «gear.12» -> (kind, item id or gear id)"""
+    """«gold» / «crystal» / «item.iron_ore» -> (kind, item id)"""
     kind, _, item_id = raw.partition(".")
     return kind, item_id
 
@@ -50,56 +50,9 @@ async def bet_home(c: Ctx) -> Screen:
     )
     rows = [
         [c.btn("🪙 سکه", "betamt", "gold", DEFAULT_AMOUNT["gold"]), c.btn("💎 کریستال", "betamt", "crystal", DEFAULT_AMOUNT["crystal"])],
-        [c.btn("⛓️ منابع", "betitems", 0), c.btn("⚔️ تجهیزات", "betgear", 0)],
+        [c.btn("⛓️ منابع", "betitems", 0)],
         [c.btn("❌ انصراف", "home")],
     ]
-    return Screen(text, rows)
-
-
-@screen("betgear")
-async def bet_gear(c: Ctx) -> Screen:
-    from ..game.data.items import get_item, item_value
-    from ..game.services.bets import gear_label
-
-    pieces = await c.services.bets.bettable_gear(c.player.id)
-    if not pieces:
-        text = f"⚔️ {bold('تجهیزات')}\n\nتجهیزاتی برای شرط ندارید. تجهیزات پوشیده را اول درآورید."
-        return Screen(text, [c.back("bet")])
-    page = max(0, _int(c.a or "0", "صفحه"))
-    chunk, prev, nxt = _page(pieces, page)
-    rows = [
-        [c.btn(f"{gear_label(i, up)} · {fa(item_value(get_item(i), up))}🪙", "betgearok", g)] for g, i, up in chunk
-    ]
-    if nav := _nav(c, "betgear", page, prev, nxt):
-        rows.append(nav)
-    rows.append(c.back("bet"))
-    return Screen(f"⚔️ {bold('تجهیزات')}\n\nکدام را شرط می‌بندید؟ ارزشش کنار نامش است 👇", rows)
-
-
-@screen("betgearok")
-async def bet_gear_confirm(c: Ctx) -> Screen:
-    from ..game.data.items import get_item, item_value
-    from ..game.services.bets import CRYSTAL_RATIO, GOLD_MULTIPLIER, gear_label
-    import math
-
-    gear_id = _int(c.a)
-    piece = next((p for p in await c.services.bets.bettable_gear(c.player.id) if p[0] == gear_id), None)
-    if piece is None:
-        raise GameError("این تجهیزات برای شرط آماده نیست؛ شاید پوشیده یا روی بازار باشد.")
-    _, item_id, upgrade = piece
-    value = item_value(get_item(item_id), upgrade)
-    text = (
-        f"🎰 {bold('شرط روی تجهیزات')}\n\n"
-        f"🎁 {bold(gear_label(item_id, upgrade))}\n"
-        f"💎 ارزش: {fa(value)} سکه\n\n"
-        "حریف لازم نیست همین آیتم را داشته باشد؛ برای قبول یکی از این‌ها را می‌پردازد:\n"
-        f"🪙 {fa(GOLD_MULTIPLIER * value)} سکه\n"
-        f"💎 {fa(max(1, math.ceil(value / CRYSTAL_RATIO)))} کریستال\n"
-        "🔁 یا همان آیتم را می‌گذارد\n\n"
-        "اگر ببازید آیتم را از دست می‌دهید؛ اگر ببرید پرداخت حریف مال شماست.\n"
-        "ثبت شود؟"
-    )
-    rows = [[c.btn("✅ ثبت شرط", "betgo", f"gear.{gear_id}", 1, style="success"), c.btn("↩️ نه", "betgear", 0)]]
     return Screen(text, rows)
 
 
@@ -152,8 +105,7 @@ async def bet_amount(c: Ctx) -> Screen:
 @screen("betgo")
 async def bet_go(c: Ctx) -> Screen:
     kind, item_id = _split(c.a)
-    gear_id = int(item_id) if kind == "gear" and item_id.isdigit() else None
-    bet = await c.services.bets.create(c.player, c.chat_id, kind, item_id, _int(c.b or "1"), gear_id)
+    bet = await c.services.bets.create(c.player, c.chat_id, kind, item_id, _int(c.b or "1"))
     if c.message is not None:
         await c.services.bets.attach_message(bet.id, c.message.message_id)
     await c.refresh()
@@ -169,14 +121,7 @@ async def bet_cancel(c: Ctx) -> Screen:
 def _waiting_buttons(bet):  # noqa: ANN001, ANN202
     from baleropy import Button
 
-    if bet.kind == "gear":
-        accept = [
-            [Button.inline(f"🪙 قبول با {fa(bet.pay_gold)} سکه", BetCb(action="accept_gold", id=bet.id), style="success")],
-            [Button.inline(f"💎 قبول با {fa(bet.pay_crystal)} کریستال", BetCb(action="accept_crystal", id=bet.id), style="success")],
-            [Button.inline("🔁 قبول با همین آیتم", BetCb(action="accept_gear", id=bet.id), style="primary")],
-        ]
-    else:
-        accept = [[Button.inline("⚔️ قبول شرط و ورود به دوئل", BetCb(action="accept", id=bet.id), style="success")]]
+    accept = [[Button.inline("⚔️ قبول شرط و ورود به دوئل", BetCb(action="accept", id=bet.id), style="success")]]
     return accept + [[Button.inline("❌ لغو شرط (سازنده)", BetCb(action="cancel", id=bet.id), style="danger")]]
 
 
@@ -187,9 +132,8 @@ async def on_bet_button(query: CallbackQuery, callback_data: BetCb, services: Se
         await query.answer()
         return
     player = await services.players.require(query.from_user.id)
-    if callback_data.action in ("accept", "accept_gold", "accept_crystal", "accept_gear"):
-        pay = callback_data.action.partition("_")[2] or "gold"
-        bet, duel, update = await services.bets.accept(callback_data.id, player, pay)
+    if callback_data.action == "accept":
+        bet, duel, update = await services.bets.accept(callback_data.id, player)
         await services.duels.attach_message(duel.id, message.message_id)
         text, buttons = render(update, services.ctx.balance.duel_turn_seconds)
         header = f"🎰 {bold('دوئل شرطی شروع شد')} · شرط: {bold(bet.label)}\n\n"

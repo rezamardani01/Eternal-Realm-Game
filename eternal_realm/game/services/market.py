@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ...context import AppContext
-from ...db.repos import inventory as inv_repo
 from ...db.repos import market as repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
@@ -23,21 +22,17 @@ class Listing:
     item: Item
     qty: int
     price: int
-    gear_id: int | None
-    upgrade: int
 
     @property
     def label(self) -> str:
-        plus = f" +{self.upgrade}" if self.upgrade else ""
         qty = f" ×{self.qty}" if self.qty > 1 else ""
-        return f"{self.item.emoji} {self.item.name}{plus}{qty}"
+        return f"{self.item.emoji} {self.item.name}{qty}"
 
 
 def _listing(row) -> Listing:  # noqa: ANN001
     return Listing(
         row["id"], row["seller_id"], row["seller_name"] if "seller_name" in row.keys() else "",
-        get_item(row["item_id"]), row["qty"], row["price"], row["gear_id"],
-        (row["upgrade"] if "upgrade" in row.keys() and row["upgrade"] else 0),
+        get_item(row["item_id"]), row["qty"], row["price"],
     )
 
 
@@ -99,18 +94,18 @@ class MarketService:
             )
             return best
 
-    def price_range(self, item: Item, qty: int = 1, upgrade: int = 0) -> tuple[int, int]:
+    def price_range(self, item: Item, qty: int = 1) -> tuple[int, int]:
         """The cheapest and dearest price a listing of this may ask: half to one and a fifth of its real worth."""
         b = self.ctx.balance
-        worth = item_value(item, upgrade) * qty
+        worth = item_value(item) * qty
         low = max(1, -(-worth * b.market_min_percent // 100))
         high = min(b.market_max_price, max(low, worth * b.market_max_percent // 100))
         return low, high
 
-    def _check_price(self, price: int, item: Item, qty: int = 1, upgrade: int = 0) -> None:
+    def _check_price(self, price: int, item: Item, qty: int = 1) -> None:
         if not 1 <= price <= self.ctx.balance.market_max_price:
             raise GameError(f"بها را درست بنویسید: عددی بین ۱ تا {fa(self.ctx.balance.market_max_price)} سکه.")
-        low, high = self.price_range(item, qty, upgrade)
+        low, high = self.price_range(item, qty)
         if not low <= price <= high:
             raise GameError(
                 f"بهای این آگهی باید میان {fa(low)} تا {fa(high)} سکه باشد "
@@ -121,22 +116,7 @@ class MarketService:
         if await repo.count_active(tx, seller.id) >= self.ctx.balance.market_max_listings:
             raise GameError(f"روی تخته‌ی بازار حداکثر {self.ctx.balance.market_max_listings} آگهی فعال می‌توانید داشته باشید. یکی را لغو کنید یا صبر کنید تا فروخته شود.")
 
-    async def list_gear(self, seller: Player, gear_id: int, price: int) -> Listing:
-        async with self.ctx.db.transaction() as tx:
-            await self._check_slots(tx, seller)
-            piece = await self.inventory.piece(tx, seller.id, gear_id)
-            self._check_price(price, piece.item, 1, piece.upgrade)
-            if piece.slot is not None:
-                raise GameError("اول این تجهیزات را از تن خود دربیاورید؛ با «درآوردن شماره».")
-            if not piece.item.tradable:
-                raise GameError("این آیتم ویژه است و نمی‌شود آن را به دیگران فروخت.")
-            await inv_repo.set_listed(tx, piece.id, True)
-            listing_id = await repo.create(tx, seller.id, piece.item.id, 1, piece.id, price, self.ctx.now())
-            return Listing(listing_id, seller.id, seller.name, piece.item, 1, price, piece.id, piece.upgrade)
-
     async def list_stack(self, seller: Player, item: Item, qty: int, price: int) -> Listing:
-        if item.is_gear:
-            raise GameError("برای سلاح و زره، شماره‌اش را بنویسید: عرضه #شماره قیمت")
         if not item.tradable:
             raise GameError("این آیتم ویژه است و نمی‌شود آن را به دیگران فروخت.")
         if not 1 <= qty <= 10_000:
@@ -146,7 +126,7 @@ class MarketService:
             await self._check_slots(tx, seller)
             await self.inventory.take(tx, seller.id, item.id, qty)
             listing_id = await repo.create(tx, seller.id, item.id, qty, None, price, self.ctx.now())
-            return Listing(listing_id, seller.id, seller.name, item, qty, price, None, 0)
+            return Listing(listing_id, seller.id, seller.name, item, qty, price)
 
     async def browse(
         self, item: Item | None = None, limit: int = 15, offset: int = 0, kinds: set[Kind] | None = None
@@ -178,9 +158,8 @@ class MarketService:
         """One active listing, with the seller's name (``None`` once it is sold or cancelled)."""
         async with self.ctx.db.read() as tx:
             row = await tx.fetchone(
-                "SELECT m.*, p.display_name AS seller_name, g.upgrade AS upgrade FROM market_listings m"
-                " JOIN players p ON p.id = m.seller_id LEFT JOIN gear g ON g.id = m.gear_id"
-                " WHERE m.id = ? AND m.status = 'active'",
+                "SELECT m.*, p.display_name AS seller_name FROM market_listings m"
+                " JOIN players p ON p.id = m.seller_id WHERE m.id = ? AND m.status = 'active'",
                 (listing_id,),
             )
         return _listing(row) if row else None
@@ -209,10 +188,7 @@ class MarketService:
                 tx, row["seller_id"], gold=price - fee, reason="market_sell", now=now,
                 ref=f"market:{listing_id}:sell",
             )
-            if row["gear_id"] is not None:
-                await inv_repo.transfer_gear(tx, row["gear_id"], buyer.id)
-            else:
-                await self.inventory.grant(tx, buyer.id, row["item_id"], row["qty"])
+            await self.inventory.grant(tx, buyer.id, row["item_id"], row["qty"])
             from ..notify import queue
 
             await tx.execute("INSERT INTO market_sales (seller_id, amount, at) VALUES (?, ?, ?)", (row["seller_id"], price, now))
@@ -227,10 +203,7 @@ class MarketService:
                 f"💰 دریافتی شما: {fa(price - fee)} سکه\n\n"
                 "پول به کیف شما رسید؛ آگهی تازه‌ای بگذارید تا بازار گرم بماند.", now,
             )
-            return Listing(
-                listing_id, row["seller_id"], "", get_item(row["item_id"]), row["qty"], price,
-                row["gear_id"], 0,
-            )
+            return Listing(listing_id, row["seller_id"], "", get_item(row["item_id"]), row["qty"], price)
 
     async def cancel(self, seller: Player, listing_id: int) -> Listing:
         now = self.ctx.now()
@@ -240,11 +213,5 @@ class MarketService:
                 raise GameError("چنین آگهی‌ای از شما پیدا نشد. «آگهی‌های من» را بنویسید تا شماره‌ها را ببینید.")
             if not await repo.close(tx, listing_id, "cancelled", None, now):
                 raise GameError("این آگهی دیگر روی تخته نیست.")
-            if row["gear_id"] is not None:
-                await inv_repo.set_listed(tx, row["gear_id"], False)
-            else:
-                await self.inventory.grant(tx, seller.id, row["item_id"], row["qty"])
-            return Listing(
-                listing_id, seller.id, seller.name, get_item(row["item_id"]), row["qty"], row["price"],
-                row["gear_id"], 0,
-            )
+            await self.inventory.grant(tx, seller.id, row["item_id"], row["qty"])
+            return Listing(listing_id, seller.id, seller.name, get_item(row["item_id"]), row["qty"], row["price"])

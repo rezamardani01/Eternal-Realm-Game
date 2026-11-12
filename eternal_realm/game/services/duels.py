@@ -285,7 +285,6 @@ class DuelService:
             from ...db.repos import season as season_repo
 
             await season_repo.add_points(tx, pid, "duel_win" if won else "duel", now)
-            await inv_repo.add_bond(tx, pid, 2)
             payouts[pid] = payout
         return payouts
 

@@ -121,7 +121,6 @@ class HuntService:
             card = None
             found = await self.characters.arms.free_drop(tx, player_id, FREE_CHANCE["hunt"]) if won else None
             await season_repo.add_points(tx, player_id, "hunt", now)
-            await inv_repo.add_bond(tx, player_id)
             if won and self.cards is not None:
                 card = await self.cards.drop_for_monster(tx, player_id, monster.id)
             wait = await self.players.schedule_cooldown(tx, player_id, "hunt")

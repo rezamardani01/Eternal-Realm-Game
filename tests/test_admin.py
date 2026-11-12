@@ -44,10 +44,10 @@ async def test_give_currency_and_item_are_logged(h, services, db):
     await services.players.register(10, "a", "آرش", "elf", "archer")
     await h.say(OWNER, "/givegold آرش 250")
     await h.say(OWNER, "/givecrystal آرش 7")
-    await h.say(OWNER, "/giveitem آرش | شمشیر آهنی | 2")
+    await h.say(OWNER, "/giveitem آرش | سنگ آهن | 2")
     p = await services.players.require(10)
     assert p.gold == services.ctx.balance.start_gold + 250 and p.crystal == 7
-    assert sum(1 for g in (await services.inventory.view(p.id)).gear if g.item.id == "iron_sword") == 2
+    assert (await services.inventory.view(p.id)).stack_qty("iron_ore") == 2
     async with db.read() as tx:
         actions = [r["action"] for r in await tx.fetchall("SELECT action FROM admin_log ORDER BY id")]
     assert actions == ["give_currency", "give_currency", "give_item"]

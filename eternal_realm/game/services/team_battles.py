@@ -311,7 +311,6 @@ class TeamBattleService:
                 "UPDATE team_battle_members SET paid_at = ? WHERE battle_id = ? AND player_id = ?", (now, lobby.id, pid)
             )
             await season_repo.add_points(tx, pid, "duel_win" if won else "duel", now)
-            await inv_repo.add_bond(tx, pid, 2)
             payouts[pid] = payout
         return payouts
 

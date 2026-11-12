@@ -1,4 +1,6 @@
-"""What players own: stackable items, gear pieces, equipping and consumables."""
+"""What players own: stackable items (materials, potions, chests, tickets) and consumables.
+
+War gear is a separate system (``arms.py``)."""
 
 from __future__ import annotations
 
@@ -9,42 +11,17 @@ from ...db.database import Tx
 from ...db.repos import inventory as repo
 from ...shared.errors import GameError
 from ...shared.text import fa
-from ..data.sets import bond_level, set_bonus, set_of, worn_count
-from ..data.items import ITEMS, SLOT_LABELS, STARTER_WEAPON, Item, Kind, get_item, upgraded_stats
-from ..data.stats import Stats
+from ..data.items import ITEMS, Item, Kind, get_item
 from ..models import Player
 from .players import PlayerService
 
 
 @dataclass
-class Piece:
-    """One owned gear piece with its item definition."""
-
-    id: int
-    item: Item
-    upgrade: int
-    slot: str | None
-    origin: str = ""
-    bond_uses: int = 0
-
-    @property
-    def bond(self) -> int:
-        return bond_level(self.bond_uses) if self.slot == "weapon" or self.item.slot == "weapon" else 0
-
-    @property
-    def stats(self) -> Stats:
-        return upgraded_stats(self.item, self.upgrade)
-
-    @property
-    def label(self) -> str:
-        plus = f" +{self.upgrade}" if self.upgrade else ""
-        return f"{self.item.emoji} {self.item.name}{plus}"
-
-
-@dataclass
 class InventoryView:
     stacks: list[tuple[Item, int]]
-    gear: list[Piece]
+
+    def stack_qty(self, item_id: str) -> int:
+        return next((q for item, q in self.stacks if item.id == item_id), 0)
 
 
 class InventoryService:
@@ -53,16 +30,11 @@ class InventoryService:
         self.players = players
 
     # --- granting / removing (inside the caller's transaction) --------------------------------
-    async def grant(self, tx: Tx, player_id: int, item_id: str, qty: int = 1, origin: str = "") -> list[int]:
-        """Give items. Returns the new gear ids (empty for stackable items)."""
-        item = get_item(item_id)
-        if qty <= 0:
-            return []
-        if item.is_gear:
-            now = self.ctx.now()
-            return [await repo.add_gear(tx, player_id, item_id, now, origin=origin) for _ in range(qty)]
-        await repo.add_stack(tx, player_id, item_id, qty)
-        return []
+    async def grant(self, tx: Tx, player_id: int, item_id: str, qty: int = 1, origin: str = "") -> None:
+        """Give items (``origin`` is kept for old callers; stackable items have no history)."""
+        get_item(item_id)
+        if qty > 0:
+            await repo.add_stack(tx, player_id, item_id, qty)
 
     async def take(self, tx: Tx, player_id: int, item_id: str, qty: int = 1) -> None:
         if not await repo.remove_stack(tx, player_id, item_id, qty):
@@ -72,84 +44,15 @@ class InventoryService:
                 f"دارید {fa(have)} · نیاز دارید {fa(qty)} · کمبود {fa(qty - have)}"
             )
 
-    async def piece(self, tx: Tx, player_id: int, gear_id: int) -> Piece:
-        row = await repo.get_gear(tx, gear_id)
-        if row is None or row.player_id != player_id:
-            raise GameError("چنین تجهیزاتی در کوله‌پشتی شما پیدا نشد. «کوله‌پشتی» را بنویسید تا شماره‌ی درست را ببینید.")
-        if row.listed:
-            raise GameError("این تجهیزات روی تخته‌ی بازار برای فروش گذاشته شده است. اگر پشیمان شدید، اول آگهی را «لغو» کنید.")
-        return Piece(row.id, get_item(row.item_id), row.upgrade, row.slot, row.origin, row.bond_uses)
-
     async def on_registered(self, tx: Tx, player: Player) -> None:
-        """Starter kit: a class weapon (equipped) and two energy potions."""
-        balance = self.ctx.balance
-        weapon_id = STARTER_WEAPON[player.class_id]
-        gear_ids = await self.grant(tx, player.id, weapon_id)
-        await repo.set_slot(tx, gear_ids[0], get_item(weapon_id).slot)
-        await self.grant(tx, player.id, "energy_potion", balance.start_energy_potions)
+        """Starter kit: a few energy potions."""
+        await self.grant(tx, player.id, "energy_potion", self.ctx.balance.start_energy_potions)
 
     # --- reading ------------------------------------------------------------------------------
     async def view(self, player_id: int) -> InventoryView:
         async with self.ctx.db.read() as tx:
             stacks = [(get_item(i), q) for i, q in await repo.stacks(tx, player_id) if i in ITEMS]
-            gear = [Piece(g.id, get_item(g.item_id), g.upgrade, g.slot, g.origin, g.bond_uses) for g in await repo.list_gear(tx, player_id)]
-        return InventoryView(stacks, gear)
-
-    async def equipped_stats(self, tx: Tx, player_id: int) -> Stats:
-        total = Stats()
-        worn: list[str] = []
-        for row in await repo.list_gear(tx, player_id):
-            if row.slot:
-                own = upgraded_stats(get_item(row.item_id), row.upgrade)
-                total = total + own
-                if row.slot == "weapon":
-                    total = total + own.scaled(0.05 * bond_level(row.bond_uses))
-                worn.append(row.item_id)
-        return total + set_bonus(worn)
-
-    async def set_lines(self, player_id: int, item_id: str) -> list[str]:
-        """Explain the set an item belongs to: how many pieces are worn and what each tier gives."""
-        gear_set = set_of(item_id)
-        if gear_set is None:
-            return []
-        async with self.ctx.db.read() as tx:
-            worn = [r.item_id for r in await repo.list_gear(tx, player_id) if r.slot]
-        have = worn_count(gear_set, worn)
-        lines = [f"{gear_set.emoji} {gear_set.name} ({fa(have)} از {fa(len(gear_set.pieces))} قطعه)"]
-        for need, stats in gear_set.bonuses:
-            mark = "✅" if have >= need else "🔒"
-            lines.append(f"{mark} با {fa(need)} قطعه:")
-            lines += stats.bonus_lines()
-        return lines
-
-    # --- equipping ----------------------------------------------------------------------------
-    async def equip(self, player: Player, gear_id: int) -> tuple[Piece, Piece | None]:
-        """Equip a piece. Returns ``(equipped, replaced_piece)``."""
-        async with self.ctx.db.transaction() as tx:
-            piece = await self.piece(tx, player.id, gear_id)
-            if piece.slot is not None:
-                raise GameError("این تجهیزات هم‌اکنون بر تن شماست!")
-            if player.level < piece.item.level_req:
-                raise GameError(f"{piece.item.name} هنوز برای شما سنگین است! برای پوشیدنش باید دست‌کم به سطح {piece.item.level_req} برسید.")
-            slot = piece.item.slot
-            assert slot is not None
-            old_row = await repo.equipped_in_slot(tx, player.id, slot)
-            replaced = None
-            if old_row is not None:
-                await repo.set_slot(tx, old_row.id, None)
-                replaced = Piece(old_row.id, get_item(old_row.item_id), old_row.upgrade, None)
-            await repo.set_slot(tx, piece.id, slot)
-            piece.slot = slot
-            return piece, replaced
-
-    async def unequip(self, player: Player, gear_id: int) -> Piece:
-        async with self.ctx.db.transaction() as tx:
-            piece = await self.piece(tx, player.id, gear_id)
-            if piece.slot is None:
-                raise GameError("این تجهیزات الان بر تن شما نیست.")
-            await repo.set_slot(tx, piece.id, None)
-            piece.slot = None
-            return piece
+        return InventoryView(stacks)
 
     # --- consumables --------------------------------------------------------------------------
     async def use(self, player: Player, item: Item) -> str:
@@ -161,7 +64,3 @@ class InventoryService:
             if restored <= 0:
                 raise GameError("انرژی شما پر پر است، فرمانده! معجون را برای وقتی نگه دارید که خسته شدید.")  # raising rolls the transaction back: nothing is used up
         return f"🧪 {item.label} را نوشیدید و {restored} انرژی تازه در رگ‌هایتان دوید! ⚡"
-
-
-def slot_label(slot: str) -> str:
-    return SLOT_LABELS.get(slot, slot)

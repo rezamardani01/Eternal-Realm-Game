@@ -22,7 +22,6 @@ router = Router(name="duels")
 
 ACTIONS = {
     "attack": Action.ATTACK,
-    "skill": Action.SKILL,
     "skill1": Action.SKILL1,
     "skill2": Action.SKILL2,
     "skill3": Action.SKILL3,

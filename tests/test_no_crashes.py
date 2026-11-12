@@ -28,7 +28,7 @@ async def prepared_player(services, db, uid, name):
         await tx.execute("UPDATE players SET level = 8 WHERE id = ?", (p.id,))
         await wallet.apply(tx, p.id, gold=80_000, crystal=300, reason="t", now=services.ctx.now())
         for item_id, qty in [("wooden_chest", 3), ("magic_chest", 1), ("iron_ore", 30), ("energy_potion", 3),
-                             ("herb", 5), ("leather_cap", 2), ("iron_sword", 1), ("chain_mail", 1)]:
+                             ("herb", 5), ("gold_ore", 2), ("crystal_shard", 1)]:
             await services.inventory.grant(tx, p.id, item_id, qty)
     return await services.players.require(uid)
 
@@ -60,8 +60,7 @@ async def test_walking_the_whole_panel_never_crashes(services, db, caplog):
     h = Harness(services)
     me = await prepared_player(services, db, 10, "آرش")
     await prepared_player(services, db, 11, "سارا")
-    gear = [g for g in (await services.inventory.view(me.id)).gear if g.item.id == "leather_cap"]
-    await services.market.list_gear(me, gear[0].id, 100)
+    await services.market.list_stack(me, __import__("eternal_realm.game.data.items", fromlist=["x"]).get_item("energy_potion"), 1, 100)
 
     await h.say(10, "/start")
     pressed_private = await explore(h, 10, group=False)

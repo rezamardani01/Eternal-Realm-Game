@@ -5,7 +5,6 @@ from eternal_realm.config import Settings
 from eternal_realm.context import AppContext
 from eternal_realm.db.repos import wallet
 from eternal_realm.game.data.items import get_item
-from eternal_realm.game.services.shop import UPGRADE_CHANCE, upgrade_quote
 from eternal_realm.shared.errors import GameError
 
 from .harness import Harness
@@ -47,87 +46,23 @@ async def test_buy_and_sell_roundtrip(services):
 async def test_cannot_buy_without_money_or_oversell(services):
     p = await reg(services)
     with pytest.raises(wallet.InsufficientFunds):
-        await services.shop.buy(p, get_item("steel_sword"), 1)
+        await services.shop.buy(p, get_item("grand_energy_potion"), 1)
     with pytest.raises(GameError):
         await services.shop.sell_stack(p, get_item("energy_potion"), 50)
     with pytest.raises(GameError):
-        await services.shop.buy(p, get_item("fire_sword"), 1)  # not sold by NPCs
+        await services.shop.buy(p, get_item("dragon_scale"), 1)  # not sold by NPCs
     with pytest.raises(GameError):
         await services.shop.buy(p, get_item("energy_potion"), 0)
     assert (await services.players.require(10)).gold == p.gold
 
 
-async def test_sell_gear_rules(services, db):
+async def test_potions_can_be_bought_again_and_again(services, db):
     p = await reg(services)
-    worn = (await services.inventory.view(p.id)).gear[0]
-    with pytest.raises(GameError):
-        await services.shop.sell_gear(p, worn.id)  # equipped
-    spare = (await give(services, db, p.id, "leather_cap"))[0]
-    piece, total = await services.shop.sell_gear(p, spare)
-    assert total == piece.item.sell > 0
-    with pytest.raises(GameError):
-        await services.shop.sell_gear(p, spare)  # already sold
-
-
-async def test_upgrade_success_and_materials(services, db):
-    p = await reg(services)
-    gid = (await services.inventory.view(p.id)).gear[0].id
-    quote = upgrade_quote(get_item("wooden_sword"), 0)
-    await fund(services, db, p.id, quote.gold)
-    await give(services, db, p.id, "iron_ore", 5)
-    result = await services.shop.upgrade(p, gid, 1)
-    assert result.success and result.piece.upgrade == 1
-    assert result.piece.stats.atk > get_item("wooden_sword").stats.atk
-
-
-async def test_failed_upgrade_keeps_the_gear(services, db):
-    p = await reg(services)
-    gid = (await services.inventory.view(p.id)).gear[0].id
-    services.ctx.rng.random = lambda: 0.999  # force a failure on any chance < 1
-    await fund(services, db, p.id, 10_000)
-    await give(services, db, p.id, "iron_ore", 40)
-    for level in range(1, 3):
-        assert (await services.shop.upgrade(p, gid, level)).success  # +1 and +2 are guaranteed
-    result = await services.shop.upgrade(p, gid, 3)
-    assert not result.success and result.piece.upgrade == 2
-    assert (await services.inventory.view(p.id)).gear[0].upgrade == 2
-
-
-async def test_upgrade_rejects_stale_level_missing_materials_and_other_owner(services, db):
-    p, q = await reg(services), await reg(services, 11, "سارا")
-    gid = (await services.inventory.view(p.id)).gear[0].id
     await fund(services, db, p.id, 5_000)
-    with pytest.raises(GameError, match="کافی نیست"):
-        await services.shop.upgrade(p, gid, 1)
-    assert (await services.players.require(10)).gold == p.gold + 5_000  # nothing was charged
-    with pytest.raises(GameError):
-        await services.shop.upgrade(p, gid, 3)  # stale confirmation button
-    with pytest.raises(GameError):
-        await services.shop.upgrade(q, gid, 1)  # not the owner
-
-
-def test_upgrade_chances_never_increase():
-    assert list(UPGRADE_CHANCE) == sorted(UPGRADE_CHANCE, reverse=True)
-
-
-async def test_gear_cannot_be_bought_twice_but_potions_can(services, db, h):
-    p = await reg(services)
-    async with db.transaction() as tx:
-        await wallet.apply(tx, p.id, gold=5_000, reason="t", now=services.ctx.now())
     p = await services.players.require(10)
-    sword = get_item("iron_sword")
-    await services.shop.buy(p, sword, 1)
-    gold = (await services.players.require(10)).gold
-    with pytest.raises(GameError, match="از قبل"):
-        await services.shop.buy(p, sword, 1)
-    assert (await services.players.require(10)).gold == gold  # nothing was charged
-    await services.shop.buy(p, get_item("energy_potion"), 3)
-    await services.shop.buy(p, get_item("energy_potion"), 3)
-
-    await h.panel(10, "shopitem", "iron_sword", "gear")
-    assert "از قبل دارید" in h.session.last_text() and not any("خرید" in t for t in h.labels())
-    await h.panel(10, "shopcat", "gear")
-    assert any("دارید ✔" in t for t in h.labels())
+    for _ in range(3):
+        await services.shop.buy(p, get_item("energy_potion"), 3)
+    assert (await services.inventory.view(p.id)).stack_qty("energy_potion") >= 9
 
 
 async def test_selling_a_stack_needs_confirmation(services, db, h):
@@ -143,10 +78,17 @@ async def test_selling_a_stack_needs_confirmation(services, db, h):
 async def test_shop_categories_have_two_columns_name_and_price(h, services):
     await services.players.register(7, "u", "آرش", "elf", "archer")
     await h.say(7, "فروشگاه")
-    for category in ("سلاح و زره", "معجون"):
+    for category in ("معجون",):
         await h.tap(7, category)
         rows = [row for row in h.session.last_markup_rows() if any("shopitem" in b.get("callback_data", "") for b in row)]
         assert rows and all(len(row) == 2 for row in rows)
         assert all(row[0]["callback_data"] == row[1]["callback_data"] for row in rows)  # both buttons open the item
         assert any(("🪙" in row[1]["text"] or "دارید" in row[1]["text"]) for row in rows)
         await h.tap(7, "بازگشت")
+
+
+def test_the_shop_no_longer_sells_any_gear():
+    from eternal_realm.game.data.items import Kind
+    from eternal_realm.game.services.shop import shop_items
+
+    assert shop_items() and all(i.kind in (Kind.CONSUMABLE, Kind.MATERIAL) for i in shop_items())

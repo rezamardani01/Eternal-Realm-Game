@@ -679,11 +679,9 @@ class SoloService:
         notes: list[str] = []
         items: dict[str, int] = {}
         chance = maze_data.TIERS[info["path"]][3] if info["path"] in maze_data.TIERS else 0.0
-        if self.ctx.rng.random() < chance:
-            gear = self._gear_for(player.level)
-            if gear:
-                items[gear] = 1
-                notes.append("سلاح یا زرهی از غول به یغما رفت!")
+        found = await self.characters.arms.free_drop(tx, pid, chance * 0.4)
+        if found:
+            notes.append(f"⚔️ از غول تجهیزات به یغما رفت: {found.label} ({found.rarity_label})")
         crystal = 0
         if floor in maze_data.MILESTONES and not await self._progress(tx, pid, f"maze:milestone:{floor}"):
             await self._set_progress(tx, pid, f"maze:milestone:{floor}", 1)
@@ -715,12 +713,6 @@ class SoloService:
         pay = await self._pay(tx, pid, 0, 0, crystal, items, limited=False)  # a milestone floor: paid once
         pay.notes = notes
         return pay
-
-    def _gear_for(self, level: int) -> str:
-        from ..data.items import ITEMS
-
-        pool = [i.id for i in ITEMS.values() if i.is_gear and i.buy > 0 and i.level_req <= level and i.rarity <= 3]
-        return self.ctx.rng.choice(pool) if pool else ""
 
     async def _finish_run(self, tx: Tx, pid: int, run: MazeRun, share: float) -> Payout:
         await tx.execute("DELETE FROM maze_runs WHERE player_id = ?", (pid,))

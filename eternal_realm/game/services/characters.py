@@ -41,7 +41,7 @@ class CharacterService:
         )
         extra = get_pet(pet["pet_id"]).bonus if pet else Stats()
         loadout = await self.arms.loadout_in(tx, player.id)
-        total = base + await self.inventory.equipped_stats(tx, player.id) + extra + loadout.stats
+        total = base + extra + loadout.stats
         total = total + await self.growth.bonus_in(tx, player)
         from .effects import EffectService
 

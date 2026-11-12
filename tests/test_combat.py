@@ -15,7 +15,7 @@ from .harness import Harness
 
 
 def hero(cls="warrior", level=5, race="human"):
-    return Fighter.for_player(1, "قهرمان", CLASSES[cls], p.base_stats(race, cls, level))
+    return Fighter.for_player(1, "قهرمان", CLASSES[cls], p.base_stats(race, cls, level), race_id=race)
 
 
 def test_battle_always_terminates_with_a_result():

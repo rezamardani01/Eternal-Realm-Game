@@ -14,7 +14,8 @@ from ..context import AppContext
 from ..db.database import Database
 from . import boss, clan_panel, clanwar_panel, group_dungeon, membership, duels, events, maintenance, onboarding, panel, payments, quest_panel  # noqa: F401
 from .lockdown import MaintenanceMiddleware
-from . import academy_panel, arms_panel, growth_panel, growth_panel, solo_panel, habit_panel, raid_ui, notifier, gift_panel, city_panel, wheel_panel, exchange_panel, team_battle, achievement_panel, admin_panel, bet_panel, invite_panel, ascend_panel, altar_panel, card_panel, contest_panel, craft_panel, dungeon_panel, mission_panel, offers, path_panel, pet_panel, transfer_panel, vip_panel  # noqa: F401
+from ..game.services.retire import retire_old_gear
+from . import academy_panel, arms_panel, growth_panel, solo_panel, habit_panel, raid_ui, notifier, gift_panel, city_panel, wheel_panel, exchange_panel, team_battle, achievement_panel, admin_panel, bet_panel, invite_panel, ascend_panel, altar_panel, card_panel, contest_panel, dungeon_panel, mission_panel, offers, path_panel, pet_panel, transfer_panel, vip_panel  # noqa: F401
 from .commands import REGISTRY
 from .commands import router as commands_router
 from .membership import MembershipMiddleware
@@ -50,6 +51,21 @@ def build_dispatcher(services: Services) -> Dispatcher:
     return dp
 
 
+async def _retire_old_gear(bot: Bot, services: Services) -> None:
+    """The old gear system is gone: turn what heroes still hold into coins, and tell them once."""
+    paid = await retire_old_gear(services.ctx.db, services.ctx.now())
+    for player_id, (count, coins) in paid.items():
+        player = await services.players.get(player_id)
+        if player is None:
+            continue
+        with contextlib.suppress(Exception):
+            await bot.send_message(
+                player.platform_user_id,
+                f"🛠️ تجهیزات قدیمی کنار رفت\n\nنسخه‌ی تازه «تجهیزات قهرمان» را دارد. {count} قطعه‌ی قدیمی شما به "
+                f"{coins:,} سکه تبدیل شد و به کیفتان رفت. از «قهرمان من ← تجهیزات و مهارت‌های قهرمان» سر بزنید.",
+            )
+
+
 async def run(settings: Settings) -> None:
     db = Database(settings.db_path)
     await db.connect()
@@ -61,6 +77,7 @@ async def run(settings: Settings) -> None:
         except BaleUnauthorized as error:
             raise ConfigError("توکن ربات نامعتبر است؛ توکن را در config.toml بررسی کنید.") from error
         services.bot_username = me.username or ""
+        await _retire_old_gear(bot, services)
         log.info("Eternal Realm is up as @%s", services.bot_username)
         dp = build_dispatcher(services)
         background = [

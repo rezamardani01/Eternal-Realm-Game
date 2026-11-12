@@ -65,7 +65,7 @@ BLESSINGS: dict[str, tuple[str, float]] = {
 }
 CURSE = ("نفرین! قدرت حمله‌ی شما ۱۰٪ کمتر شد", "atk", -0.10)
 
-#: the kinds of giant: name, strength, share of the floor's reward, chance of a piece of gear
+#: the kinds of giant: name, strength, share of the floor's reward, chance of finding a piece of war gear (scaled down)
 TIERS: dict[str, tuple[str, float, float, float]] = {
     "giant": ("غول طبقه", 1.0, 1.5, 0.12),
     "elite": ("غول سرسخت", 1.14, 2.2, 0.25),

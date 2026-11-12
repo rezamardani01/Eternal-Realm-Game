@@ -58,8 +58,6 @@ def backpack_section(item) -> str:  # noqa: ANN001 - Item
     """Where in «کوله‌پشتی» an item shows up."""
     from ..game.data.items import Kind
 
-    if item.is_gear:
-        return "⚔️ تجهیزات"
     if item.kind is Kind.CHEST:
         return "🎁 صندوقچه‌ها"
     return "📦 آیتم‌ها"
@@ -161,11 +159,11 @@ HELP_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
         ("📜 داستان", "داستان‌های انتخابی با پاداش"),
     ]),
     ("🎒 کوله‌پشتی و بازار", [
-        ("🎒 کوله‌پشتی", "آیتم‌ها و تجهیزات؛ پوشیدن و ارتقا"),
+        ("🎒 کوله‌پشتی", "آیتم‌ها و صندوقچه‌ها"),
+        ("⚔️ تجهیزات", "چهار تجهیزات جنگی، مهارت‌ها، ویژگی‌ها و استعدادها"),
         ("🎁 صندوقچه", "خرید، باز کردن و دیدن شانس‌ها"),
-        ("🛒 فروشگاه", "سلاح، زره و معجون"),
-        ("🏪 بازار", "خرید و فروش با بازیکنان دیگر"),
-        ("🔥 کوره", "ساخت تجهیزات افسانه‌ای"),
+        ("🛒 فروشگاه", "معجون و صندوقچه"),
+        ("🏪 بازار", "خرید و فروش منابع با بازیکنان دیگر"),
         ("💎 خزانه قلمرو", "بسته‌های سکه، کریستال، بوست و تجربه (در پیوی)"),
     ]),
     ("👤 قهرمان", [
@@ -265,15 +263,15 @@ def help_pages(balance) -> dict[str, tuple[str, str]]:  # noqa: ANN001 - Balance
             "🚨 تهاجم هیولاها (همه با هم دفاع می‌کنند) · ☄️ شهاب‌سنگ\n🌧️ باران سکه · 💧 چشمه‌ی برکت · 🎡 چرخ شانس · 🥚 تخم اژدها\n🧠 معما · 🔲 کاشی‌های شانس · 🎟️ قرعه‌کشی بزرگ",
             "👇 هر رویداد دکمه‌ی خودش را دارد؛ فقط همان را بزنید.\n📋 «رویدادها» وضعیت همین گروه را نشان می‌دهد.",
         )),
-        "gear": ("🎒 کوله‌پشتی", page(
-            f"🎒 {bold('کوله‌پشتی و تجهیزات')}",
-            "«کوله‌پشتی» را بنویسید؛ سه بخش دارد:\n⚔️ تجهیزات (سلاح، زره، انگشتر...)\n📦 آیتم‌ها (معجون و منابع)\n🎁 صندوقچه‌ها",
-            "روی هر تجهیزات بزنید تا دکمه‌ی پوشیدن، ارتقا، فروش و عرضه در بازار بیاید.",
-            "🧪 معجون‌ها را همان‌جا مصرف می‌کنید.\n🔥 در «کوره» از منابع، تجهیزات افسانه‌ای می‌سازید.",
+        "gear": ("⚔️ تجهیزات قهرمان", page(
+            f"⚔️ {bold('تجهیزات قهرمان')}",
+            "«تجهیزات» را بنویسید؛ چهار جایگاه دارد و هر قطعه اثر ویژه‌ی خودش را دارد.",
+            "🔁 بیرون از نبرد هر وقت خواستید عوضشان کنید؛ هر قطعه تا +۱۰ ارتقا می‌خورد.\n🎯 ویژگی‌ها و 🧬 استعدادها هم از همین‌جا باز می‌شوند.",
+            "🛒 تجهیزات فقط با پول واقعی از «خزانه قلمرو» خریدنی است؛ تجهیزات کم‌ارزش‌تر را گاهی از شکار، سفر، صندوقچه و باس‌ها پیدا می‌کنید.",
         )),
         "market": ("🏪 بازار و فروشگاه", page(
             f"🏪 {bold('بازار و فروشگاه')}",
-            "🛒 «فروشگاه»: سلاح، زره و معجون از فروشنده‌ی قلمرو؛ قبل از خرید صفحه‌ی تأیید می‌بینید.",
+            "🛒 «فروشگاه»: معجون و صندوقچه از فروشنده‌ی قلمرو؛ قبل از خرید صفحه‌ی تأیید می‌بینید.",
             "🏪 «بازار»: آگهی‌های بازیکنان. دسته و ترتیب را عوض کنید و روی آگهی بزنید تا بخرید.",
             "🏷️ برای فروش، آیتم را باز کنید و «عرضه در بازار» را بزنید؛ قیمت را می‌نویسید و قبل از ثبت ارزش واقعی آیتم را مقایسه می‌کنید.",
         )),
@@ -450,27 +448,7 @@ def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
 
 
 # --- upgrades ----------------------------------------------------------------------------------
-def upgrade_quote(piece, quote) -> str:  # noqa: ANN001
-    from ..game.data.items import get_item
 
-    mats = "، ".join(f"{get_item(i).label} ×{fa(q)}" for i, q in quote.materials.items())
-    return (
-        f"🔨 {bold('کارگاه آهنگری')}\n"
-        f"{piece.item.name} به مرتبه‌ی {bold('+' + fa(quote.next_level))}\n\n"
-        f"💰 دستمزد: {fa(quote.gold)} سکه\n"
-        f"📦 منابع: {mats}\n"
-        f"🎯 شانس موفقیت: {fa(round(quote.chance * 100))}٪\n\n"
-        "اگر نشد، فقط منابع از بین می‌رود؛ تجهیزات سالم می‌ماند."
-    )
-
-
-def upgrade_result(result) -> str:  # noqa: ANN001 - UpgradeResult
-    if result.success:
-        return f"✨ {bold('ارتقا موفق بود')}\n{result.piece.item.name} حالا {bold('+' + fa(result.piece.upgrade))} است."
-    return (
-        f"💥 {bold('این بار نشد')}\n"
-        f"منابع از بین رفت، اما {result.piece.item.name} سالم ماند. دوباره تلاش کنید!"
-    )
 
 
 # --- rankings ----------------------------------------------------------------------------------
@@ -574,10 +552,6 @@ def lucky_odds(theme) -> str:  # noqa: ANN001 - Theme
         lines.append(f"{pct}٪  " + " + ".join(parts))
     lines += [LINE, "هر بسته سکه‌ی تضمینی دارد و جایزه‌ها از همین فهرست انتخاب می‌شوند. فردا تم عوض می‌شود."]
     return "\n".join(lines)
-
-
-def upgrade_working() -> str:
-    return f"🔨 {bold('آهنگر در کار است')}\n\nفلز در کوره سرخ شده و چکش بالا می‌رود... جرقه‌ها می‌پرند ✨"
 
 
 def chest_opened(name: str, opened) -> str:  # noqa: ANN001 - Opened
@@ -841,8 +815,6 @@ def boss_final(v) -> str:  # noqa: ANN001 - BossView
             gains = [f"⚔️ {fa(p.damage)} آسیب ({fa(round(p.share * 100))}٪)"]
             if p.level_up:
                 gains.append(f"🎉 سطح {fa(p.level_up)}")
-            if p.trophy:
-                gains.append(f"🏆 {get_item(p.trophy).name}")
             if p.arm:
                 from ..game.data.arms import ARMS
 
@@ -1188,26 +1160,13 @@ def bet_waiting(bet, challenger, seconds: int) -> str:  # noqa: ANN001 - Bet, Pl
         f"🏆 {fa(challenger.wins)} پیروزی · 💀 {fa(challenger.losses)} شکست",
         "",
     ]
-    if bet.kind == "gear":
-        lines = head + [
-            f"🎁 آیتم شرط: {bold(bet.label)}",
-            f"💎 ارزش آیتم: {fa(bet.value)} سکه",
-            "",
-            f"{bold('برای قبول، یکی از این‌ها را می‌پردازید')}",
-            f"🪙 {fa(bet.pay_gold)} سکه (دو برابر ارزش)",
-            f"💎 {fa(bet.pay_crystal)} کریستال",
-            "🔁 یا همین آیتم را بگذارید (اگر دارید)",
-            "",
-            f"🏅 برنده همه‌چیز را می‌برد؛ از پرداخت سکه یا کریستال {fa(FEE_PERCENT)}٪ کارمزد کم می‌شود.",
-        ]
-    else:
-        prize, fee = prize_for(bet.kind, bet.amount)
-        lines = head + [
-            f"💰 شرط هر نفر: {bold(bet.label)}",
-            f"🏅 جایزه‌ی برنده: {bold(stake_prize(bet.kind, bet.item_id, prize))}",
-        ]
-        if fee:
-            lines.append(f"🏦 کارمزد قلمرو: {fa(FEE_PERCENT)}٪ از جایزه")
+    prize, fee = prize_for(bet.kind, bet.amount)
+    lines = head + [
+        f"💰 شرط هر نفر: {bold(bet.label)}",
+        f"🏅 جایزه‌ی برنده: {bold(stake_prize(bet.kind, bet.item_id, prize))}",
+    ]
+    if fee:
+        lines.append(f"🏦 کارمزد قلمرو: {fa(FEE_PERCENT)}٪ از جایزه")
     lines += [f"⏳ مهلت: {duration(seconds)}", "", "هر کس شرط را قبول کند همان لحظه وارد دوئل می‌شود 👇"]
     return "\n".join(lines)
 
@@ -1223,22 +1182,6 @@ def bet_lines(update) -> list[str]:  # noqa: ANN001 - DuelUpdate
     outcome = update.bet
     if outcome is None:
         return []
-    if outcome.kind == "gear":
-        if outcome.winner_id is None:
-            return ["", f"🎰 {bold('شرط دوئل')}", f"🤝 مساوی شد؛ {outcome.gear} و پرداخت حریف به صاحبانشان برگشت."]
-        winner = next((f for f in update.battle.fighters if f.player_id == outcome.winner_id), None)
-        name = (winner.mention or winner.name) if winner else "برنده"
-        lines = ["", f"🎰 {bold('شرط دوئل')}", f"🏆 {name} جایزه را برد"]
-        if outcome.winner_is_creator:
-            lines.append(f"🎁 آیتم خودش برگشت: {outcome.gear}")
-            if outcome.payment:
-                lines.append(f"💰 از حریف گرفت: {bold(outcome.payment)}")
-            if outcome.fee_label:
-                lines.append(f"🏦 کارمزد قلمرو: {outcome.fee_label}")
-        else:
-            lines.append(f"🎁 آیتم برنده شد: {bold(outcome.gear)}")
-            lines.append("↩️ پرداخت او هم به خودش برگشت.")
-        return lines
     if outcome.winner_id is None:
         return ["", f"🎰 {bold('شرط دوئل')}", f"🤝 مساوی شد؛ شرط {stake_prize(outcome.kind, outcome.item_id, outcome.amount)} به هر دو برگشت."]
     winner = next((f for f in update.battle.fighters if f.player_id == outcome.winner_id), None)

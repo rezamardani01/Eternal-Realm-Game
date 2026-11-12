@@ -15,13 +15,13 @@ DISCOUNTS = (20, 25, 30, 40, 50)
 TEHRAN_OFFSET = 12600  # UTC+3:30
 
 #: what a day's deals are made of: one of each, so the list is varied and always has the valuable things on sale
-#: (a coin pack, an experience pack, crystals, a rare material, a legendary kit or piece of gear, and one other product)
+#: (a coin pack, an experience pack, crystals, a rare material, a valuable chest or material, and one other product)
 SLOTS: tuple[tuple[str, Callable[[Pack], bool]], ...] = (
     ("coins", lambda p: p.section == "coins"),
     ("xp", lambda p: p.section == "xp"),
     ("crystals", lambda p: p.section == "crystals"),
-    ("rare", lambda p: p.section == "rare" and not p.id.startswith("kit_")),
-    ("legendary", lambda p: p.id.startswith("kit_") or p.section == "deal"),
+    ("rare", lambda p: p.section == "rare"),
+    ("legendary", lambda p: p.section == "deal"),
     ("other", lambda p: True),
 )
 DEALS_PER_DAY = len(SLOTS)

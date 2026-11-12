@@ -350,13 +350,10 @@ def test_mythic_gear_and_boss_spoils():
     assert set(boss_data.MYTHIC_DROPS) <= {a.id for a in mythic}
 
 
-async def test_boss_spoils_cannot_be_bought(services, db):
-    p = await hero(services, db)
-    with pytest.raises(GameError, match="باس"):
-        await services.arms.buy(p, "b_fire")
+def test_boss_spoils_are_not_sold():
     from eternal_realm.game.data.packs import PACKS
 
-    assert "arm_b_fire" not in PACKS
+    assert "arm_b_fire" not in PACKS and all(f"arm_{a.id}" in PACKS for a in ARMS.values() if not a.boss)
 
 
 # --- bosses -----------------------------------------------------------------------------------------------------------------------------

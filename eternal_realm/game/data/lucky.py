@@ -30,11 +30,11 @@ THEMES: tuple[Theme, ...] = (
         Prize(30, item_id="iron_ore", qty=(5, 12)),
         Prize(16, item_id="gold_ore", qty=(1, 3)),
         Prize(14, item_id="crystal_shard", qty=(1, 2)),
-        Prize(8, item_id="iron_shield"),
-        Prize(6, item_id="iron_sword"),
-        Prize(4, item_id="chain_mail"),
-        Prize(3, item_id="steel_sword"),
-        Prize(2, item_id="strength_ring"),
+        Prize(8, item_id="iron_ore"),
+        Prize(6, item_id="iron_ore"),
+        Prize(4, item_id="gold_ore"),
+        Prize(3, item_id="gold_ore"),
+        Prize(2, item_id="moon_herb"),
         Prize(1, crystal=(1, 2)),
     )),
     Theme("wild", "🌲", "سرزمین وحشی", (
@@ -55,8 +55,7 @@ THEMES: tuple[Theme, ...] = (
         Prize(14, crystal=(1, 4)),
         Prize(12, item_id="big_energy_potion"),
         Prize(6, item_id="magic_chest"),
-        Prize(4, item_id="luck_ring"),
-        Prize(4, item_id="life_amulet"),
+        Prize(8, item_id="moon_herb"),
     )),
 )
 

@@ -38,7 +38,6 @@ from ..data.bosses import (
     tier_by_id,
 )
 from ..data.classes import CLASSES
-from ..data.sets import BOSS_DROPS
 from ..engine import progression
 from ..engine.boss_fight import Boss, Hero, is_over, run_round
 from ..models import Player
@@ -65,7 +64,6 @@ class Payout:
     xp: int
     chest: str | None = None
     level_up: int | None = None
-    trophy: str | None = None
     card: str | None = None
     #: the war gear the boss dropped for this fighter (see data/arms.py)
     arm: str | None = None
@@ -445,24 +443,13 @@ class BossService:
             from ...db.repos import season as season_repo
 
             await season_repo.add_points(tx, pid, "boss", now)
-            await inv_repo.add_bond(tx, pid, 3)
             if status == "defeated":
                 await season_repo.add_points(tx, pid, "boss_win", now)
-            chest = trophy = None
+            chest = None
             if status == "defeated":
                 chest = "magic_chest" if index == 0 else "wooden_chest" if share >= 0.10 else None
                 if chest:
                     await self.inventory.grant(tx, pid, chest, 1)
-                chance = 0.40 if index == 0 else 0.12
-                if self.ctx.rng.random() < chance:
-                    trophy = self.ctx.rng.choices(
-                        [i for i, _ in BOSS_DROPS], weights=[w for _, w in BOSS_DROPS], k=1
-                    )[0]
-                    kind = boss_by_id(row["boss_type"])
-                    date = describe(now)[0]
-                    await self.inventory.grant(
-                        tx, pid, trophy, 1, origin=f"غنیمت شکست {kind.name} · {date}\nنخستین صاحب: {r['name']}"
-                    )
             arm_id = None
             if status == "defeated":
                 tier = state.get("tier") or "normal"
@@ -485,7 +472,7 @@ class BossService:
                 card_name = f"{dropped.emoji} {dropped.name}" if dropped else None
             payouts.append(
                 Payout(r["name"], f"[{r['name']}](uid:{r['platform_user_id']})", r["damage"], share, gold, xp, chest,
-                       level_up.new_level if level_up else None, trophy, card_name, arm_id)
+                       level_up.new_level if level_up else None, card_name, arm_id)
             )
         return payouts
 

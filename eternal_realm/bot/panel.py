@@ -21,10 +21,10 @@ from baleropy.types.markup import _build_inline_markup
 
 from ..game import item_info
 from ..game.data.chests import CHESTS
-from ..game.data.items import GEAR_KINDS, Item, Kind, get_item, item_value
+from ..game.data.items import Item, Kind, get_item, item_value
 from ..game.data.stats import STAT_HELP, STAT_LABELS
 from ..game.models import Player
-from ..game.services.inventory import InventoryView, Piece
+from ..game.services.inventory import InventoryView
 from ..game.services.shop import shop_items
 from ..shared.errors import GameError
 from ..shared.text import bar, bold, duration, fa, headline, to_int
@@ -159,11 +159,11 @@ async def trade_menu(c: Ctx) -> Screen:
         "",
         f"🪙 {fa(p.gold)} سکه · 💎 {fa(p.crystal)} کریستال",
         "",
-        "بخرید، بفروشید، سکه و کریستال را مبادله کنید یا سلاح افسانه‌ای بسازید 👇",
+        "بخرید، بفروشید و سکه و کریستال را مبادله کنید 👇",
     ])
     rows = [
         [c.btn("🛒 فروشگاه آیتم", "shop"), c.btn("🏪 بازارچه", "market")],
-        [c.btn("🏦 مرکز مبادله", "exch"), c.btn("🔥 کوره آهنگری", "craft")],
+        [c.btn("🏦 مرکز مبادله", "exch")],
         c.back("home"),
     ]
     return Screen(text, rows)
@@ -345,7 +345,7 @@ async def profile(c: Ctx) -> Screen:
             rows.append(keyboards.open_panel_button(c.services.bot_username))
     elif target is me:
         rows += [
-            [c.btn("🎒 کوله‌پشتی", "inv"), c.btn("🧰 تجهیزات", "gear")],
+            [c.btn("🎒 کوله‌پشتی", "inv")],
             [c.btn("⚔️ تجهیزات و مهارت‌های قهرمان", "arms", style="primary")],
             [c.btn("🐱 حیوان خانگی", "pets"), c.btn("🃏 آلبوم کارت", "album")],
             [c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")],
@@ -446,134 +446,18 @@ def _split(view: InventoryView) -> tuple[list[tuple[Item, int]], list[tuple[Item
 async def inventory(c: Ctx) -> Screen:
     view = await c.services.inventory.view(c.player.id)
     others, chests = _split(view)
-    worn = sum(1 for p in view.gear if p.slot)
     text = (
         f"🎒 {bold('کوله‌پشتی')}\n\n"
-        f"⚔️ تجهیزات: {fa(len(view.gear))} ({fa(worn)} پوشیده)\n"
         f"📦 آیتم‌ها: {fa(sum(q for _, q in others))}\n"
         f"🎁 صندوقچه‌ها: {fa(sum(q for _, q in chests))}\n\n"
         "یک بخش را انتخاب کنید 👇"
     )
     rows = [
-        [c.btn("⚔️ تجهیزات", "gear"), c.btn("📦 آیتم‌ها", "items")],
-        [c.btn("🎁 صندوقچه‌ها", "chests")],
+        [c.btn("📦 آیتم‌ها", "items"), c.btn("🎁 صندوقچه‌ها", "chests")],
+        [c.btn("⚔️ تجهیزات قهرمان", "arms")],
         c.back("profile", "🔙 بازگشت"),
     ]
     return Screen(text, rows)
-
-
-@screen("gear")
-async def gear(c: Ctx) -> Screen:
-    view = await c.services.inventory.view(c.player.id)
-    pieces = sorted(view.gear, key=lambda p: (p.slot is None, p.id))
-    if not pieces:
-        text = f"⚔️ {bold('تجهیزات')}\n\nهنوز تجهیزاتی ندارید. از «فروشگاه» بخرید یا از هیولاها غنیمت بگیرید."
-        return Screen(text, [[c.btn("🛒 فروشگاه", "shop")], c.back("inv")])
-    page = _int(c.a or "0", "صفحه")
-    chunk, prev, nxt = _page(pieces, page)
-    rows = [[c.btn(f"{p.label}{' ✅' if p.slot else ''}", "piece", p.id)] for p in chunk]
-    if nav := _nav(c, "gear", page, prev, nxt):
-        rows.append(nav)
-    rows.append(c.back("inv"))
-    return Screen(f"⚔️ {bold('تجهیزات')}\n✅ یعنی پوشیده است. یکی را انتخاب کنید 👇", rows)
-
-
-async def _piece(c: Ctx, gear_id: int) -> Piece:
-    view = await c.services.inventory.view(c.player.id)
-    for p in view.gear:
-        if p.id == gear_id:
-            return p
-    raise GameError("این تجهیزات دیگر در کوله‌پشتی شما نیست.")
-
-
-def _sell_price(piece: Piece) -> int:
-    return round(piece.item.sell * (1 + 0.5 * piece.upgrade)) if piece.item.sell > 0 else 0
-
-
-async def _piece_screen(c: Ctx, gear_id: int, toast: str | None = None) -> Screen:
-    p = await _piece(c, gear_id)
-    lines = [
-        f"{p.item.emoji} {bold(p.item.name + (f' +{fa(p.upgrade)}' if p.upgrade else ''))}",
-        f"{p.item.rarity_label} · سطح لازم {fa(p.item.level_req)}",
-        "",
-        *p.stats.bonus_lines(),
-    ]
-    if p.slot:
-        lines += ["", "✅ الان بر تن شماست"]
-    if p.item.slot == "weapon":
-        from ..game.data.sets import BOND_NAMES, BOND_STEPS
-
-        level = p.bond
-        nxt = f" · تا سطح بعد {fa(BOND_STEPS[level] - p.bond_uses)} نبرد" if level < len(BOND_STEPS) else " · به اوج رسیده"
-        lines += ["", f"🔗 پیوند با صاحب: {BOND_NAMES[level]} ({fa(level)}){nxt}"]
-        if level:
-            lines.append(f"هر نبرد سلاح را به شما نزدیک‌تر می‌کند؛ الان {fa(5 * level)}٪ توان سلاح بیشتر می‌دهد.")
-    set_lines = await c.services.inventory.set_lines(c.player.id, p.item.id)
-    if set_lines:
-        lines += ["", *set_lines]
-    lines += item_info.info_lines(p.item)
-    if p.origin:
-        lines += ["", "📜 تاریخچه‌ی این تجهیزات", *p.origin.split("\n")]
-    rows = [[c.btn("↩️ درآوردن" if p.slot else "🛡️ پوشیدن", "unequip" if p.slot else "equip", p.id,
-                   style=None if p.slot else "success")]]
-    second = [c.btn("🔨 ارتقا", "upq", p.id)]
-    if not p.slot and (price := _sell_price(p)):
-        second.append(c.btn(f"💰 فروش {fa(price)}🪙", "sellq", p.id))
-    rows.append(second)
-    if not p.slot and p.item.tradable:
-        rows.append([c.btn("🏷️ عرضه در بازار", "listask", "g", p.id)])
-    rows.append(c.back("gear", "🔙 بازگشت"))
-    return Screen("\n".join(lines), rows, toast=toast)
-
-
-@screen("piece")
-async def piece(c: Ctx) -> Screen:
-    return await _piece_screen(c, _int(c.a))
-
-
-@screen("equip")
-async def equip(c: Ctx) -> Screen:
-    worn, replaced = await c.services.inventory.equip(c.player, _int(c.a))
-    note = f" و {replaced.item.name} را کنار گذاشتید" if replaced else ""
-    return await _piece_screen(c, worn.id, f"🛡️ {worn.item.name} را پوشیدید{note}")
-
-
-@screen("unequip")
-async def unequip(c: Ctx) -> Screen:
-    taken = await c.services.inventory.unequip(c.player, _int(c.a))
-    return await _piece_screen(c, taken.id, f"↩️ {taken.item.name} را درآوردید")
-
-
-@screen("sellq")
-async def sell_confirm(c: Ctx) -> Screen:
-    p = await _piece(c, _int(c.a))
-    text = f"💰 {bold('فروش به بازارچه')}\n\n{p.label} را می‌فروشید و {bold(fa(_sell_price(p)))} سکه می‌گیرید.\nمطمئنید؟"
-    return Screen(text, [[c.btn("✅ بله، بفروش", "sell", p.id, style="danger"), c.btn("↩️ نه", "piece", p.id)]])
-
-
-@screen("sell")
-async def sell_gear(c: Ctx) -> Screen:
-    sold, total = await c.services.shop.sell_gear(c.player, _int(c.a))
-    shown = await gear(replace(c, a="0", b=""))  # «a» held the gear id, not a page number
-    shown.toast = f"💰 {sold.item.name} فروخته شد: {fa(total)} سکه"
-    return shown
-
-
-@screen("upq")
-async def upgrade_ask(c: Ctx) -> Screen:
-    p, quote = await c.services.shop.quote(c.player, _int(c.a))
-    rows = [[c.btn(f"🔨 ارتقا به +{fa(quote.next_level)}", "up", p.id, quote.next_level, style="success")],
-            c.back("piece", "🔙 بازگشت", p.id)]
-    return Screen(views.upgrade_quote(p, quote), rows)
-
-
-@screen("up")
-async def upgrade(c: Ctx) -> Screen:
-    result = await c.services.shop.upgrade(c.player, _int(c.a), _int(c.b))
-    await c.show(views.upgrade_working())
-    rows = [[c.btn("🔨 دوباره ارتقا", "upq", result.piece.id)], c.back("piece", "🔙 بازگشت", result.piece.id)]
-    return Screen(views.upgrade_result(result), rows,
-                  toast="✨ ارتقا موفق بود" if result.success else "💥 این بار نشد")
 
 
 # --- items and chests -------------------------------------------------------------------------
@@ -583,8 +467,6 @@ def _describe(item: Item) -> list[str]:
         head = [f"⚡ {fa(item.energy)} انرژی بازمی‌گرداند"]
     elif item.kind is Kind.CHEST:
         head = ["🎁 درونش گنجی پنهان است"]
-    elif item.is_gear:
-        head = item.stats.bonus_lines()
     else:
         head = ["📦 منبع"]
     return head + item_info.info_lines(item)
@@ -753,8 +635,9 @@ async def shop(c: Ctx) -> Screen:
     p = await c.refresh()
     text = f"🛒 {bold('فروشگاه')}\n«بفرمایید فرمانده!»\n\n🪙 سکه‌ی شما: {fa(p.gold)}"
     rows = [
-        [c.btn("⚔️ سلاح و زره", "shopcat", "gear"), c.btn("🧪 معجون‌ها", "shopcat", "pot")],
-        [c.btn("🎁 صندوقچه‌ها", "chestshop"), c.btn("💰 فروش آیتم‌ها", "items")],
+        [c.btn("🧪 معجون‌ها", "shopcat", "pot"), c.btn("🎁 صندوقچه‌ها", "chestshop")],
+        [c.btn("💰 فروش آیتم‌ها", "items")],
+        [c.btn("⚔️ تجهیزات جنگی (خزانه قلمرو)", "armshop")],
         c.back("trade", "🔙 بازگشت"),
     ]
     return Screen(text, rows)
@@ -762,13 +645,11 @@ async def shop(c: Ctx) -> Screen:
 
 @screen("shopcat")
 async def shop_category(c: Ctx) -> Screen:
-    want_gear = c.a == "gear"
-    goods = [i for i in shop_items() if i.is_gear == want_gear]
+    goods = shop_items()
     page = _int(c.b or "0", "صفحه")
     chunk, prev, nxt = _page(goods, page)
-    owned = {p_.item.id for p_ in (await c.services.inventory.view(c.player.id)).gear} if want_gear else set()
-    rows = [  # two columns: the item, then its price (or «owned»); both open the item
-        [c.btn(i.label, "shopitem", i.id, c.a), c.btn("دارید ✔" if i.id in owned else f"🪙 {fa(i.buy)}", "shopitem", i.id, c.a)]
+    rows = [  # two columns: the item, then its price; both open the item
+        [c.btn(i.label, "shopitem", i.id, c.a), c.btn(f"🪙 {fa(i.buy)}", "shopitem", i.id, c.a)]
         for i in chunk
     ]
     # paging keeps the category in `a` and the page in `b`
@@ -778,32 +659,22 @@ async def shop_category(c: Ctx) -> Screen:
     if nav:
         rows.append(nav)
     rows.append(c.back("shop"))
-    title = "⚔️ سلاح و زره" if want_gear else "🧪 معجون‌ها"
-    return Screen(f"{title.split(' ', 1)[0]} {bold(title.split(' ', 1)[1])}\nیکی را انتخاب کنید 👇", rows)
+    return Screen(f"🧪 {bold('معجون‌ها')}\nیکی را انتخاب کنید 👇", rows)
 
 
 async def _shop_item_screen(c: Ctx, item_id: str, cat: str, toast: str | None = None) -> Screen:
     item = get_item(item_id)
     p = await c.refresh()
     lines = [f"{item.emoji} {bold(item.name)}", item.rarity_label, "", *_describe(item)]
-    if item.is_gear and item.level_req > 1:
-        lines.append(f"🎚️ سطح لازم: {fa(item.level_req)}")
     lines += ["", f"🪙 بها: {bold(fa(item.buy))} سکه", f"کیسه‌ی شما: {fa(p.gold)} سکه"]
-    owned = item.is_gear and any(p_.item.id == item.id for p_ in (await c.services.inventory.view(p.id)).gear)
-    if owned:
-        lines += ["", "✅ این تجهیزات را از قبل دارید؛ خرید دوباره لازم نیست."]
-        rows = []
-    elif item.is_gear:
-        rows = [[c.btn("🛍️ خرید", "buyq", item.id, "1", style="success")]]
-    else:
-        rows = [[c.btn(f"🛍️ ×{fa(n)}", "buyq", item.id, str(n), style="success") for n in (1, 5, 10)]]
+    rows = [[c.btn(f"🛍️ ×{fa(n)}", "buyq", item.id, str(n), style="success") for n in (1, 5, 10)]]
     rows.append(c.back("shopcat", "🔙 بازگشت", cat))
     return Screen("\n".join(lines), rows, toast=toast)
 
 
 @screen("shopitem")
 async def shop_item(c: Ctx) -> Screen:
-    return await _shop_item_screen(c, c.a, c.b or "gear")
+    return await _shop_item_screen(c, c.a, c.b or "pot")
 
 
 async def _confirm(
@@ -836,9 +707,7 @@ async def buy_confirm(c: Ctx) -> Screen:
     item, qty = get_item(c.a), _int(c.b)
     if item.buy <= 0:
         raise GameError("این کالا در بازارچه فروخته نمی‌شود.")
-    cat = "gear" if item.is_gear else "pot"
-    if item.is_gear and any(p_.item.id == item.id for p_ in (await c.services.inventory.view(c.player.id)).gear):
-        raise GameError(f"شما از قبل {item.label} را دارید؛ خرید دوباره لازم نیست.")
+    cat = "pot"
     return await _confirm(c, f"{item.label} ×{fa(qty)}", "gold", item.buy * qty, "buy", item.id, str(qty),
                           ("shopitem", item.id, cat))
 
@@ -859,14 +728,13 @@ async def chest_confirm(c: Ctx) -> Screen:
 async def buy(c: Ctx) -> Screen:
     item, qty = get_item(c.a), _int(c.b)
     paid = await c.services.shop.buy(c.player, item, qty)
-    cat = "gear" if item.is_gear else "pot"
+    cat = "pot"
     return await _shop_item_screen(c, item.id, cat, f"🛍️ {item.name} ×{fa(qty)} خریدید ({fa(paid)} سکه)")
 
 
 # --- market -----------------------------------------------------------------------------------
 MARKET_TABS = {
     "all": ("🧺 همه", None),
-    "gear": ("⚔️ سلاح و زره", GEAR_KINDS),
     "pot": ("🧪 معجون", {Kind.CONSUMABLE}),
     "mat": ("📦 منابع", {Kind.MATERIAL}),
     "chest": ("🎁 صندوقچه", {Kind.CHEST}),
@@ -952,10 +820,9 @@ async def market_filter(c: Ctx) -> Screen:
 async def market_sell(c: Ctx) -> Screen:
     """Pick what to sell: every tradable piece and stack you own, one button each."""
     view = await c.services.inventory.view(c.player.id)
-    entries = [(p.label, "listask", "g", str(p.id)) for p in view.gear if p.slot is None and p.item.tradable]
-    entries += [(f"{i.label} ×{fa(q)}", "lqty", i.id, "") for i, q in view.stacks if i.tradable]
+    entries = [(f"{i.label} ×{fa(q)}", "lqty", i.id, "") for i, q in view.stacks if i.tradable]
     if not entries:
-        text = f"🏷️ {bold('فروش کالای من')}\n\nچیزی برای فروش ندارید. تجهیزات پوشیده را اول درآورید."
+        text = f"🏷️ {bold('فروش کالای من')}\n\nچیزی برای فروش ندارید."
         return Screen(text, [c.back("market")])
     page = _int(c.a or "0", "صفحه")
     chunk, prev, nxt = _page(entries, page)
@@ -998,7 +865,7 @@ async def listing(c: Ctx) -> Screen:
         return shown
     own = lst.seller_id == c.player.id
     lines = [
-        f"{lst.item.emoji} {bold(lst.item.name + (f' +{fa(lst.upgrade)}' if lst.upgrade else ''))}",
+        f"{lst.item.emoji} {bold(lst.item.name)}",
         f"{lst.item.rarity_label}" + (f" · تعداد {fa(lst.qty)}" if lst.qty > 1 else ""),
         "",
         *_describe(lst.item),
@@ -1041,11 +908,8 @@ async def listing_confirm(c: Ctx) -> Screen:
     """Create the listing the player just priced."""
     ref, _, price_text = c.b.rpartition("~")
     price = _int(price_text)
-    if c.a == "g":
-        made = await c.services.market.list_gear(c.player, _int(ref), price)
-    else:
-        item_id, _, qty = ref.partition(".")
-        made = await c.services.market.list_stack(c.player, get_item(item_id), _int(qty), price)
+    item_id, _, qty = ref.partition(".")
+    made = await c.services.market.list_stack(c.player, get_item(item_id), _int(qty), price)
     fee = c.services.market.fee_for(made.price)
     text = (
         f"🏷️ {bold('آگهی شما نصب شد')}\n\n{made.label}\nبها: {fa(made.price)} سکه\n\n"
@@ -1068,15 +932,10 @@ async def listing_ask(c: Ctx) -> Screen:
     if c.state is None:
         raise GameError("برای عرضه در بازار از «فروش کالای من» در بازار شروع کنید.")
     kind, ref = c.a, c.b
-    if kind == "g":
-        piece_ = await _piece(c, _int(ref))
-        what, back = piece_.label, c.btn("❌ انصراف", "piece", piece_.id)
-        low, high = c.services.market.price_range(piece_.item, 1, piece_.upgrade)
-    else:
-        item_id, _, qty = ref.partition(".")
-        item = get_item(item_id)
-        what, back = f"{item.label} ×{fa(_int(qty))}", c.btn("❌ انصراف", "lqty", item.id)
-        low, high = c.services.market.price_range(item, _int(qty))
+    item_id, _, qty = ref.partition(".")
+    item = get_item(item_id)
+    what, back = f"{item.label} ×{fa(_int(qty))}", c.btn("❌ انصراف", "lqty", item.id)
+    low, high = c.services.market.price_range(item, _int(qty))
     await c.state.set_state(ListingFlow.waiting)
     await c.state.update_data(kind=kind, ref=ref)
     text = (
@@ -1141,8 +1000,8 @@ PREMIUM_SECTIONS = {
     "coins": ("🪙", "خرید سکه", "با سکه تجهیزات و معجون می‌خرید و سلاح‌هایتان را ارتقا می‌دهید."),
     "crystals": ("💎", "خرید کریستال", "کریستال ارز کمیاب قلمرو است؛ با آن صندوقچه‌های جادویی و سلطنتی می‌خرید."),
     "bundles": ("🎁", "خرید بسته", "چند چیز با هم و به‌صرفه‌تر."),
-    "materials": ("⛓️", "خرید منابع", "سنگ آهن برای ارتقای تجهیزات؛ هر مرتبه‌ی آهنگری به آن نیاز دارد."),
-    "rare": ("💠", "منابع کمیاب", "فلس اژدها، پاره‌کریستال و بقیه‌ی منابعی که کوره‌ی آهنگری برای ساخت سلاح و زره افسانه‌ای می‌خواهد. «کیت»‌ها همه‌ی منابع یک دستور ساخت‌اند."),
+    "materials": ("⛓️", "خرید منابع", "سنگ آهن برای ارتقای تجهیزات قهرمان؛ هر ارتقا به آن نیاز دارد."),
+    "rare": ("💠", "منابع کمیاب", "فلس اژدها، پاره‌کریستال، سنگ طلا و بقیه‌ی منابع کمیابی که ارتقاهای بالای تجهیزات قهرمان می‌خواهند."),
     "services": ("🎫", "خدمات قهرمان", "تغییر نام، نژاد یا کلاس قهرمان؛ بعد از خرید از «قهرمان من ← ارتقای قهرمان ← خدمات» مصرفش کنید."),
     "vip": ("💠", "اشتراک VIP", "راحتی بیشتر برای ۳۰ روز، بدون هیچ قدرت رزمی."),
     "path": ("🎟️", "بلیط مسیر قهرمانی", "جایزه‌های ویژه‌ی ۱۰۰ مرحله‌ی این فصل را باز می‌کند. کاملاً اختیاری است؛ جایزه‌های رایگان برای همه هست."),
@@ -1458,18 +1317,10 @@ async def got_listing_price(message: Message, state: FSMContext, services: Servi
     player = await services.players.require(message.from_user.id)  # type: ignore[union-attr]
     data = await state.get_data()
     kind, ref = str(data.get("kind")), str(data["ref"])
-    if kind == "g":
-        piece_ = await services.inventory.view(player.id)
-        owned = next((p_ for p_ in piece_.gear if p_.id == int(ref)), None)
-        what = owned.label if owned else "تجهیزات"
-        worth = item_value(owned.item, owned.upgrade) if owned else 0
-        if owned:
-            services.market._check_price(price, owned.item, 1, owned.upgrade)  # a price outside the fair range is refused here
-    else:
-        item_id, _, qty = ref.partition(".")
-        what = f"{get_item(item_id).label} ×{fa(int(qty))}"
-        services.market._check_price(price, get_item(item_id), int(qty))
-        worth = item_value(get_item(item_id)) * int(qty)
+    item_id, _, qty = ref.partition(".")
+    what = f"{get_item(item_id).label} ×{fa(int(qty))}"
+    services.market._check_price(price, get_item(item_id), int(qty))  # a price outside the fair range is refused here
+    worth = item_value(get_item(item_id)) * int(qty)
     await state.clear()  # the price passed the checks above; a refused one keeps the prompt open
     fee = services.market.fee_for(price)
     owner = player.platform_user_id

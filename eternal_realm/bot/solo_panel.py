@@ -108,18 +108,10 @@ def _fight_screen(c: Ctx, fight: SoloFight, lines: list[str]) -> Screen:
     if warn and foe.skill_ready:
         text += ["", f"⚠️ {warn}؛ بهتر است دفاع کنید!"]
     text += ["", f"🎯 نوبت شماست · دور {fa(battle.round)} از {fa(battle.max_rounds)}"]
-    if hero.has_skills:
-        rows = keyboards.hero_battle_rows(
-            hero, lambda action, label, style: c.btn(label, "sact", action, style=style),
-            [c.btn("🛡️ دفاع", "sact", "defend"), c.btn("🏳️ فرار", "sfleeq", style="danger")],
-        )
-        return Screen("\n".join(text), rows)
-    wait = hero.skill_ready_in - 1
-    skill = f"{hero.skill_emoji} {hero.skill_name}" + (f" ({fa(wait)})" if wait > 0 else "")
-    rows = [
-        [c.btn("⚔️ حمله", "sact", "attack", style="primary"), c.btn(skill, "sact", "skill", style="success" if wait <= 0 else None)],
+    rows = keyboards.hero_battle_rows(
+        hero, lambda action, label, style: c.btn(label, "sact", action, style=style),
         [c.btn("🛡️ دفاع", "sact", "defend"), c.btn("🏳️ فرار", "sfleeq", style="danger")],
-    ]
+    )
     return Screen("\n".join(text), rows)
 
 
@@ -153,7 +145,7 @@ async def fight_view(c: Ctx) -> Screen:
 
 
 ACTIONS = {
-    "attack": Action.ATTACK, "skill": Action.SKILL, "skill1": Action.SKILL1, "skill2": Action.SKILL2,
+    "attack": Action.ATTACK, "skill1": Action.SKILL1, "skill2": Action.SKILL2,
     "skill3": Action.SKILL3, "defend": Action.DEFEND,
 }
 

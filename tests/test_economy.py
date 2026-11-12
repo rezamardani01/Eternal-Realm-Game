@@ -99,12 +99,11 @@ async def test_transfer_panel_cancel_and_other_users_cannot_press(h, services, d
     assert "لغو شد" in h.session.last_text() and (await services.players.require(10)).gold == before
 
 
-async def test_transfer_crystals_items_and_gear(services, db):
+async def test_transfer_crystals_and_items(services, db):
     a, b = await pair(services, db)
     async with db.transaction() as tx:
         await wallet.apply(tx, a.id, crystal=30, reason="t", now=services.ctx.now())
         await services.inventory.grant(tx, a.id, "iron_ore", 5)
-        gid = (await services.inventory.grant(tx, a.id, "leather_cap", 1))[0]
     me = await services.players.require(10)
     receipt = await services.economy.send(me, b, "crystal", 12)
     assert receipt.left == CRYSTAL_DAILY_LIMIT - 12 and (await services.players.require(11)).crystal == 12
@@ -113,8 +112,6 @@ async def test_transfer_crystals_items_and_gear(services, db):
     assert stacks["iron_ore"] == 3
     with pytest.raises(GameError):
         await services.economy.send(me, b, "iron_ore", 50)
-    await services.economy.send(me, b, f"g{gid}", 1)
-    assert any(g.id == gid for g in (await services.inventory.view(b.id)).gear)
     with pytest.raises(GameError):
         await services.economy.send(me, b, "rename_ticket", 1)  # tickets cannot be traded
 
