@@ -13,6 +13,7 @@ from ...context import AppContext
 from ...db.database import Tx
 from ...db.repos import titles, wallet
 from ..data import academy as data
+from ...shared.errors import GameError
 from ..models import Player
 from .inventory import InventoryService
 from .players import LevelUp, PlayerService
@@ -61,15 +62,32 @@ class AcademyState:
     skipped: set[str] = field(default_factory=set)
     graduated: bool = False
 
+    def _passed(self, lesson: data.Lesson) -> bool:
+        """Learned, or (a lesson that may wait) put off: the lessons after it may open."""
+        return lesson.id in self.done or (lesson.skippable and lesson.id in self.skipped)
+
     @property
     def current(self) -> data.Lesson | None:
         """The next lesson to learn: the first one neither learned nor put off."""
-        return next((x for x in data.LESSONS if x.id not in self.done and x.id not in self.skipped), None)
+        return next((x for x in data.LESSONS if not self._passed(x)), None)
 
     @property
     def next_open(self) -> data.Lesson | None:
         """The first lesson not learned yet, put off or not (the way back to a skipped one)."""
         return next((x for x in data.LESSONS if x.id not in self.done), None)
+
+    def unlocked(self, lesson: data.Lesson) -> bool:
+        """A lesson opens once every lesson before it is learned (or, for those that may wait, put off)."""
+        for earlier in data.LESSONS:
+            if earlier.id == lesson.id:
+                return True
+            if not self._passed(earlier):
+                return False
+        return False
+
+    def open_lessons(self) -> list[data.Lesson]:
+        """The lessons that can be learned right now: the current one and the ones put off before it."""
+        return [x for x in data.LESSONS if x.id not in self.done and self.unlocked(x)]
 
     def chapter_done(self, number: int) -> int:
         return sum(1 for x in data.lessons_of(number) if x.id in self.done)
@@ -139,51 +157,56 @@ class AcademyService:
             state.graduated = done.graduated = True
         return done
 
+    async def _learn_open(self, tx: Tx, player_id: int, state: AcademyState, screen: str, command: str) -> list[Completion]:
+        """Learn the open lessons the hero just did; finishing one opens the next, which is looked at too."""
+        out: list[Completion] = []
+        for _ in range(len(data.LESSONS)):
+            learned = None
+            for lesson in state.open_lessons():
+                if (screen and screen in lesson.visit) or (command and command in lesson.commands) or await self._fact(tx, player_id, lesson):
+                    learned = await self._complete(tx, player_id, lesson, state)
+                    break
+            if learned is None:
+                break
+            out.append(learned)
+        return out
+
     async def after(self, player: Player, *, screen: str = "", command: str = "") -> list[Completion]:
-        """Called after the hero did something: the lessons it taught, if the hero is in the academy."""
+        """Called after the hero did something: the lessons it taught, if the hero is in the academy.
+
+        Only open lessons are learned: a locked lesson waits for the ones before it, even if the hero already did it
+        (it is ticked as soon as it opens).
+        """
         async with self.ctx.db.transaction() as tx:
             state = await self._state(tx, player.id)
             if not state.started or state.graduated:
                 return []
-            out: list[Completion] = []
-            for lesson in data.LESSONS:  # a screen or a word teaches its lessons at once, in any order
-                if lesson.id in state.done:
-                    continue
-                if (screen and screen in lesson.visit) or (command and command in lesson.commands):
-                    if (done := await self._complete(tx, player.id, lesson, state)) is not None:
-                        out.append(done)
-            for _ in range(len(data.LESSONS)):  # the current lesson (and the ones after it already done) by its deed
-                lesson = state.current
-                if lesson is None or not await self._fact(tx, player.id, lesson):
-                    break
-                if (done := await self._complete(tx, player.id, lesson, state)) is not None:
-                    out.append(done)
-            return out
+            return await self._learn_open(tx, player.id, state, screen, command)
 
     async def sync(self, player: Player) -> list[Completion]:
-        """Opening the academy: every lesson whose deed is already in the database is learned (the hero starts it too)."""
+        """Opening the academy (it starts here too): the open lessons whose deed is already done are learned, in order."""
         async with self.ctx.db.transaction() as tx:
             await self._mark(tx, player.id, "acad:on")
             state = await self._state(tx, player.id)
-            out = []
-            for lesson in data.LESSONS:
-                if lesson.id not in state.done and await self._fact(tx, player.id, lesson):
-                    if (done := await self._complete(tx, player.id, lesson, state)) is not None:
-                        out.append(done)
-            return out
+            return await self._learn_open(tx, player.id, state, "", "")
 
     async def check(self, player: Player, lesson_id: str) -> Completion | None:
-        """«I did it, check»: the lesson's deed, looked up now."""
+        """«I did it, check»: the lesson's deed, looked up now (a locked lesson cannot be learned yet)."""
         lesson = data.LESSON_BY_ID[lesson_id]
         async with self.ctx.db.transaction() as tx:
             state = await self._state(tx, player.id)
-            if lesson.id in state.done or not await self._fact(tx, player.id, lesson):
+            if lesson.id in state.done or not state.unlocked(lesson) or not await self._fact(tx, player.id, lesson):
                 return None
             return await self._complete(tx, player.id, lesson, state)
 
     async def skip(self, player_id: int, lesson_id: str) -> None:
-        """Put a lesson off (a group lesson without a group, say); it can still be learned later."""
+        """Put off a lesson that may wait (it needs a group, or a level the hero may not have yet); learned later."""
         lesson = data.LESSON_BY_ID[lesson_id]
         async with self.ctx.db.transaction() as tx:
+            state = await self._state(tx, player_id)
+            if not lesson.skippable:
+                raise GameError("این درس را نمی‌شود رد کرد؛ کارش را انجام بده تا درس بعدی باز شود 🙂")
+            if not state.unlocked(lesson):
+                raise GameError("این درس هنوز قفل است؛ اول درس‌های قبلی را تمام کن.")
             await self._mark(tx, player_id, "acad:on")
             await self._mark(tx, player_id, f"acad:skip:{lesson.id}")

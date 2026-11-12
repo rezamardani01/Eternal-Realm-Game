@@ -30,7 +30,21 @@ def _mark(state: AcademyState, lesson: data.Lesson) -> str:
         return "▶️"
     if lesson.id in state.skipped:
         return "⏭️"
-    return "▫️"
+    return "▫️" if state.unlocked(lesson) else "🔒"
+
+
+def _chapter_mark(state: AcademyState, chapter: data.Chapter) -> str:
+    lessons = data.lessons_of(chapter.number)
+    if state.chapter_done(chapter.number) == len(lessons):
+        return "✅"
+    if not state.unlocked(lessons[0]):
+        return "🔒"
+    return "▶️"
+
+
+def _chapter_label(state: AcademyState, chapter: data.Chapter) -> str:
+    """«✅ ۱. 🌱 قدم اول»: the mark, the chapter's number and its name."""
+    return f"{_chapter_mark(state, chapter)} {fa(chapter.number)}. {chapter.emoji} {chapter.name}"
 
 
 def _reward(lesson: data.Lesson) -> str:
@@ -108,8 +122,8 @@ async def academy(c: Ctx) -> Screen:
     ]
     for chapter in data.CHAPTERS:
         have, size = state.chapter_done(chapter.number), len(data.lessons_of(chapter.number))
-        mark = "✅" if have == size else "▶️" if state.current and state.current.chapter == chapter.number else "📘"
-        lines.append(f"{mark} فصل {fa(chapter.number)}: {chapter.emoji} {chapter.name} ({fa(have)}/{fa(size)})")
+        lines.append(f"{_chapter_label(state, chapter)} ({fa(have)}/{fa(size)} درس)")
+    lines += ["", "🔒 هر فصل وقتی باز می‌شود که درس‌های قبلی را تمام کرده باشی."]
     if learned:
         lines += ["", f"✨ {fa(len(learned))} درس را از قبل بلد بودی و تیک خوردند؛ جایزه‌شان هم به کیفت آمد!"]
     if state.graduated:
@@ -118,7 +132,7 @@ async def academy(c: Ctx) -> Screen:
     nxt = state.current or state.next_open
     if nxt is not None:
         rows.append([c.btn(f"▶️ ادامه: {nxt.emoji} {nxt.title}", "aclesson", nxt.id, style="success")])
-    chapter_buttons = [c.btn(f"{ch.emoji} {ch.name}", "acchap", ch.number) for ch in data.CHAPTERS]
+    chapter_buttons = [c.btn(_chapter_label(state, ch), "acchap", ch.number) for ch in data.CHAPTERS]
     rows += [chapter_buttons[i:i + 2] for i in range(0, len(chapter_buttons), 2)]
     rows.append([c.btn("📖 فهرست همه‌ی دستورها", "help")])
     rows.append(c.back("home"))
@@ -134,14 +148,16 @@ async def chapter_view(c: Ctx) -> Screen:
     state = await c.services.academy.state(c.player.id)
     lessons = data.lessons_of(chapter.number)
     lines = [
-        f"{chapter.emoji} {bold('فصل ' + fa(chapter.number) + ': ' + chapter.name)}",
+        f"{chapter.emoji} {bold('فصل ' + fa(chapter.number) + '. ' + chapter.name)}",
         chapter.about,
         "",
         f"📚 {fa(state.chapter_done(chapter.number))} از {fa(len(lessons))} درس · جایزه‌ی فصل: {get_item(chapter.chest).label}",
         "",
     ]
-    lines += [f"{_mark(state, x)} {x.emoji} {x.title}" for x in lessons]
-    rows = [[c.btn(f"{_mark(state, x)} {x.title}", "aclesson", x.id)] for x in lessons]
+    lines += [f"{_mark(state, x)} {fa(i)}. {x.emoji} {x.title}" for i, x in enumerate(lessons, 1)]
+    if not state.unlocked(lessons[0]):
+        lines += ["", "🔒 این فصل هنوز قفل است؛ اول درس‌های فصل‌های قبل را تمام کن."]
+    rows = [[c.btn(f"{_mark(state, x)} {fa(i)}. {x.emoji} {x.title}", "aclesson", x.id)] for i, x in enumerate(lessons, 1)]
     rows.append(c.back("academy", "🎓 آکادمی"))
     return Screen("\n".join(lines), rows)
 
@@ -159,6 +175,17 @@ def lesson_screen(c: Ctx, state: AcademyState, lesson: data.Lesson) -> Screen:
         "",
     ]
     rows = []
+    if lesson.id not in state.done and not state.unlocked(lesson):
+        before = state.current
+        lines = lines[:4] + [
+            "🔒 این درس هنوز قفل است!",
+            "",
+            f"درس‌ها یکی‌یکی باز می‌شوند. اول درس {bold('«' + before.title + '»')} را تمام کن." if before else "اول درس‌های قبلی را تمام کن.",
+        ]
+        if before is not None:
+            rows.append([c.btn(f"▶️ برو به درس «{before.title}»", "aclesson", before.id, style="success")])
+        rows.append([c.btn(f"{chapter.emoji} فصل {chapter.name}", "acchap", chapter.number), c.btn("🎓 آکادمی", "academy")])
+        return Screen("\n".join(lines), rows)
     if lesson.id in state.done:
         lines += [f"✅ {bold('این درس را یاد گرفتی!')}", lesson.after]
     else:
@@ -174,7 +201,12 @@ def lesson_screen(c: Ctx, state: AcademyState, lesson: data.Lesson) -> Screen:
             rows.append([Button.copy_text(f"📋 کپی کلمه‌ی «{lesson.say}»", lesson.say)])
         if lesson.check:
             rows.append([c.btn("🔍 انجام دادم، بررسی کن", "accheck", lesson.id, style="success")])
-        rows.append([c.btn("⏭️ بعداً یاد می‌گیرم", "acskip", lesson.id)])
+        if lesson.skippable:
+            rows.append([c.btn("⏭️ بعداً یاد می‌گیرم", "acskip", lesson.id)])
+    if lesson.faq:
+        lines += ["", f"❓ {bold('سؤال‌هایی که شاید داشته باشی')}"]
+        for question, answer in lesson.faq:
+            lines += [f"🔸 {bold(question)}", answer]
     nxt = next((x for x in data.LESSONS[data.LESSONS.index(lesson) + 1:] if x.id not in state.done), None)
     if lesson.id in state.done and nxt is not None:
         rows.append([c.btn(f"➡️ درس بعدی: {nxt.title}", "aclesson", nxt.id, style="success")])
