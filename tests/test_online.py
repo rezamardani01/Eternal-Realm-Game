@@ -316,3 +316,15 @@ async def test_the_search_message_is_deleted_and_a_fresh_fight_message_is_sent_t
         fight = [p for p in sent_to(h, uid) if "مبارزه‌ی آنلاین" in p["text"]]
         assert fight, uid  # and each player got a brand new message with the fight
     assert not h.session.sent("editMessageText") or all("جستجوی حریف" not in p["text"] for p in h.session.sent("editMessageText"))
+
+
+async def test_the_main_menu_starts_with_a_single_online_button_and_its_page_has_one_button(h, services, db):
+    await hero(services, db, 10, "آرش")
+    await h.say(10, "/start")
+    first_row = h.session.last_markup_rows()[0]
+    assert [b["text"] for b in first_row] == ["🌐 مبارزه آنلاین"]  # the top row, alone
+    await h.panel(10, "online")
+    assert h.labels() == ["🔎 جستجوی حریف"] and "لیگ" in h.session.last_text()
+    await h.panel(10, "onsearch")
+    await h.panel(10, "online")
+    assert h.labels() == ["❌ لغو جستجو"]  # while searching the one button cancels

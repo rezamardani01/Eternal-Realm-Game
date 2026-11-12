@@ -124,7 +124,7 @@ async def test_start_shows_the_home_panel_with_glass_buttons(h, services):
     labels = h.labels()
     for name in ("قهرمان من", "دهکده من", "نبرد و چالش", "بازار و تجارت", "خاندان", "خزانه قلمرو", "ماجراجویی"):
         assert any(name in t for t in labels), name
-    assert len(labels) <= 12  # categories, not a wall of buttons
+    assert len(labels) <= 13  # categories, not a wall of buttons
 
 
 async def test_group_words_open_panels_and_personal_panel_goes_private(h, services):

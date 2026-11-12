@@ -188,8 +188,6 @@ async def online_home(c: Ctx) -> Screen:
         rows.append([c.btn("❌ لغو جستجو", "onleave", style="danger")])
     else:
         rows.append([c.btn("🔎 جستجوی حریف", "onsearch", style="success")])
-    rows.append([c.btn("🏆 تالار بزرگان", "top"), c.btn("🥊 میدان بات‌ها", "arena")])
-    rows.append(c.back("fight"))
     return Screen("\n".join(lines), rows)
 
 

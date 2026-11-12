@@ -236,6 +236,7 @@ async def home(c: Ctx) -> Screen:
     streak, savable = c.services.players.streak_status(p)
     if savable:
         rows.insert(0, [c.btn(f"🛟 نجات زنجیره‌ی {fa(streak)} روزه", "rescue", style="danger")])
+    rows.insert(0, [c.btn("🌐 مبارزه آنلاین", "online", style="success")])  # the top row, alone
     shown = await c.services.admin.links()
     links = [Button.url(shown[key]["text"], shown[key]["url"]) for key in ("group", "channel") if shown[key]["url"]]
     if links:
