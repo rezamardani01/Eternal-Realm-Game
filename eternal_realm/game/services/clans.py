@@ -45,6 +45,33 @@ def capacity_for(level: int) -> int:
 
 
 @dataclass
+class Withdrawal:
+    """A member's request for gold out of the clan treasury."""
+
+    id: int
+    clan_id: int
+    clan_name: str
+    player_id: int
+    player_name: str
+    player_level: int
+    #: Bale ids to message: the member who asked and the clan's owner
+    member_user_id: int
+    leader_user_id: int
+    amount: int
+    status: str
+    created_at: int
+    treasury: int = 0
+    #: the owner's own withdrawal: no one to ask, paid at once
+    instant: bool = False
+    #: the member left the clan before the answer, so nothing was paid
+    left: bool = False
+
+
+#: how long a withdrawal request waits for the owner's answer before it lapses
+WITHDRAW_TTL = 3 * 86400
+
+
+@dataclass
 class ClanView:
     id: int
     name: str
@@ -373,6 +400,132 @@ class ClanService:
                     crystal=offer.qty if offer.kind == "crystal" else 0, reason="khan_shop", now=self.ctx.now(),
                 )
         return offer
+
+    # --- withdrawals from the treasury: a member asks, the owner answers ---------------------------------------
+    _WITHDRAWAL_SQL = (
+        "SELECT w.id, w.clan_id, w.player_id, w.amount, w.status, w.created_at, c.name AS clan_name, c.treasury AS treasury,"
+        " p.display_name AS pname, p.level AS plevel, p.platform_user_id AS puid,"
+        " (SELECT pl.platform_user_id FROM clan_members m JOIN players pl ON pl.id = m.player_id"
+        "  WHERE m.clan_id = w.clan_id AND m.role = 'leader') AS luid"
+        " FROM clan_withdrawals w JOIN clans c ON c.id = w.clan_id JOIN players p ON p.id = w.player_id"
+    )
+
+    @staticmethod
+    def _as_withdrawal(row: Row, **extra: bool) -> Withdrawal:
+        return Withdrawal(
+            row["id"], row["clan_id"], row["clan_name"], row["player_id"], row["pname"], row["plevel"], row["puid"],
+            row["luid"] or 0, row["amount"], row["status"], row["created_at"], row["treasury"], **extra,
+        )
+
+    async def _withdrawal(self, tx: Tx, withdrawal_id: int, **extra: bool) -> Withdrawal | None:
+        row = await tx.fetchone(self._WITHDRAWAL_SQL + " WHERE w.id = ?", (withdrawal_id,))
+        return self._as_withdrawal(row, **extra) if row else None
+
+    async def withdrawal(self, withdrawal_id: int) -> Withdrawal | None:
+        async with self.ctx.db.read() as tx:
+            return await self._withdrawal(tx, withdrawal_id)
+
+    async def my_withdrawal(self, player: Player) -> Withdrawal | None:
+        """The member's open request, if the owner has not answered it yet."""
+        async with self.ctx.db.read() as tx:
+            row = await tx.fetchone(
+                self._WITHDRAWAL_SQL + " WHERE w.player_id = ? AND w.status = 'pending' AND w.created_at > ?"
+                " ORDER BY w.id DESC LIMIT 1", (player.id, self.ctx.now() - WITHDRAW_TTL),
+            )
+            return self._as_withdrawal(row) if row else None
+
+    async def pending_withdrawals(self, leader: Player) -> list[Withdrawal]:
+        """The requests waiting for this clan's owner (those of members who left, or that lapsed, are not shown)."""
+        async with self.ctx.db.read() as tx:
+            member = await repo.membership(tx, leader.id)
+            if member is None or member["role"] != "leader":
+                return []
+            rows = await tx.fetchall(
+                self._WITHDRAWAL_SQL + " JOIN clan_members cm ON cm.player_id = w.player_id AND cm.clan_id = w.clan_id"
+                " WHERE w.clan_id = ? AND w.status = 'pending' AND w.created_at > ? ORDER BY w.id",
+                (member["clan_id"], self.ctx.now() - WITHDRAW_TTL),
+            )
+            return [self._as_withdrawal(r) for r in rows]
+
+    async def request_withdrawal(self, player: Player, amount: int) -> Withdrawal:
+        """Ask the owner for ``amount`` gold from the treasury (the owner's own request is paid at once)."""
+        if amount <= 0:
+            raise GameError("مقدار برداشت باید بیشتر از صفر باشد.")
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            member, clan = await self._mine(tx, player.id)
+            if amount > clan["treasury"]:
+                raise GameError(f"خزانه‌ی خاندان فقط {fa(clan['treasury'])} سکه دارد؛ مقدار کمتری بنویسید.")
+            leader = member["role"] == "leader"
+            if not leader and await tx.scalar(
+                "SELECT 1 FROM clan_withdrawals WHERE player_id = ? AND clan_id = ? AND status = 'pending' AND created_at > ?",
+                (player.id, clan["id"], now - WITHDRAW_TTL), 0,
+            ):
+                raise GameError("یک درخواست برداشت بی‌پاسخ دارید؛ منتظر جواب مالک بمانید یا آن را لغو کنید.")
+            withdrawal_id = await tx.execute(
+                "INSERT INTO clan_withdrawals (clan_id, player_id, amount, status, created_at) VALUES (?, ?, ?, 'pending', ?)",
+                (clan["id"], player.id, amount, now),
+            )
+            if leader:
+                await self._pay_withdrawal(tx, withdrawal_id, now)
+            made = await self._withdrawal(tx, withdrawal_id, instant=leader)
+            assert made is not None
+            return made
+
+    async def _pay_withdrawal(self, tx: Tx, withdrawal_id: int, now: int) -> None:
+        """Approve a pending request: the status flip is the gate that makes it pay exactly once."""
+        row = await tx.fetchone("SELECT clan_id, player_id, amount FROM clan_withdrawals WHERE id = ?", (withdrawal_id,))
+        assert row is not None
+        await tx.execute(
+            "UPDATE clan_withdrawals SET status = 'approved', decided_at = ? WHERE id = ? AND status = 'pending'", (now, withdrawal_id)
+        )
+        if tx.rowcount != 1:
+            raise GameError("این درخواست قبلاً جواب داده شده است.")
+        await tx.execute(
+            "UPDATE clans SET treasury = treasury - ? WHERE id = ? AND treasury >= ?", (row["amount"], row["clan_id"], row["amount"])
+        )
+        if tx.rowcount != 1:  # the treasury was spent meanwhile: nothing changes (the transaction is undone)
+            clan = await repo.get(tx, row["clan_id"])
+            have = clan["treasury"] if clan else 0
+            raise GameError(f"خزانه‌ی خاندان الان فقط {fa(have)} سکه دارد؛ برای این برداشت کافی نیست.")
+        await wallet.apply(tx, row["player_id"], gold=row["amount"], reason="clan_withdraw", now=now, ref=f"clanwd:{withdrawal_id}")
+
+    async def decide_withdrawal(self, actor: Player, withdrawal_id: int, approve: bool) -> Withdrawal:
+        """The owner's answer. Approved: gold leaves the treasury and reaches the member. Rejected: nothing moves."""
+        now = self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            made = await self._withdrawal(tx, withdrawal_id)
+            if made is None:
+                raise GameError("این درخواست پیدا نشد.")
+            member, clan = await self._mine(tx, actor.id)
+            if member["role"] != "leader" or clan["id"] != made.clan_id:
+                raise GameError("فقط مالک این خاندان می‌تواند به درخواست برداشت جواب بدهد.")
+            if made.status != "pending":
+                raise GameError("این درخواست قبلاً جواب داده شده است.")
+            if now - made.created_at > WITHDRAW_TTL:
+                raise GameError("این درخواست قدیمی شده و دیگر معتبر نیست؛ از عضو بخواهید دوباره بنویسد.")
+            asker = await repo.membership(tx, made.player_id)
+            if asker is None or asker["clan_id"] != made.clan_id:  # left the clan since: nothing to pay
+                await tx.execute("UPDATE clan_withdrawals SET status = 'cancelled', decided_at = ? WHERE id = ?", (now, withdrawal_id))
+                gone = await self._withdrawal(tx, withdrawal_id, left=True)
+                assert gone is not None
+                return gone
+            if approve:
+                await self._pay_withdrawal(tx, withdrawal_id, now)
+            else:
+                await tx.execute("UPDATE clan_withdrawals SET status = 'rejected', decided_at = ? WHERE id = ?", (now, withdrawal_id))
+            done = await self._withdrawal(tx, withdrawal_id)
+            assert done is not None
+            return done
+
+    async def cancel_withdrawal(self, player: Player, withdrawal_id: int) -> None:
+        async with self.ctx.db.transaction() as tx:
+            await tx.execute(
+                "UPDATE clan_withdrawals SET status = 'cancelled', decided_at = ? WHERE id = ? AND player_id = ? AND status = 'pending'",
+                (self.ctx.now(), withdrawal_id, player.id),
+            )
+            if tx.rowcount != 1:
+                raise GameError("درخواست بی‌پاسخی برای لغو کردن نیست.")
 
     async def donate(self, player: Player, amount: int) -> ClanView:
         if amount <= 0:

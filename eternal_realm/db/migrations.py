@@ -961,6 +961,20 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_clan_gift_boxes_player ON clan_gift_boxes (player_id, created_at);
     """,
+    # 58: a member asks the clan's owner for gold out of the clan treasury; the owner approves or rejects it
+    """
+    CREATE TABLE clan_withdrawals (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        clan_id    INTEGER NOT NULL,
+        player_id  INTEGER NOT NULL REFERENCES players (id),
+        amount     INTEGER NOT NULL CHECK (amount > 0),
+        status     TEXT    NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
+        created_at INTEGER NOT NULL,
+        decided_at INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX idx_clan_withdrawals_clan ON clan_withdrawals (clan_id, status, created_at);
+    CREATE INDEX idx_clan_withdrawals_player ON clan_withdrawals (player_id, status);
+    """,
 ]
 
 

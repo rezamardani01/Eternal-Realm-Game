@@ -117,7 +117,7 @@ async def got_class(
     await panel.send(query.message, services, player, "home")
     await services.academy.start(player.id)
     await query.message.answer(
-        "🎓 تازه‌واردی؟ نگران نباش!\nدر «آکادمی» قدم به قدم همه‌چیز بازی را یادت می‌دهیم و برای هر درس هم جایزه می‌گیری 🎁",
+        "🎓 قدم بعدی: آکادمی\n\nقهرمانت آماده است! برای یاد گرفتن بازی برو به «آکادمی»؛ آنجا قدم به قدم و با انجام دادن همه‌چیز را یاد می‌گیری و برای هر درس جایزه هم می‌گیری 🎁",
         buttons=[[Button.inline("🎓 شروع آکادمی", PanelCb(s="aclesson", a="hero", b=None, o=user.id), style="success")]],
     )
     if data.get("ref"):

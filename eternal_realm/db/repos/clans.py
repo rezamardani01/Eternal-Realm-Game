@@ -73,6 +73,7 @@ async def donate(tx: Tx, clan_id: int, player_id: int, amount: int) -> None:
 async def delete(tx: Tx, clan_id: int) -> None:
     await tx.execute("DELETE FROM clan_members WHERE clan_id = ?", (clan_id,))
     await tx.execute("DELETE FROM clan_war WHERE clan_id = ?", (clan_id,))
+    await tx.execute("DELETE FROM clan_withdrawals WHERE clan_id = ?", (clan_id,))
     await tx.execute("DELETE FROM clans WHERE id = ?", (clan_id,))
 
 

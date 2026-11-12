@@ -248,7 +248,7 @@ async def test_a_new_hero_is_invited_to_the_academy(h, services):
     await h.say(7, "نگار")
     await h.click(7, RaceCb(id="elf").pack())
     await h.click(7, ClassCb(id="archer").pack())
-    invite = next(m for m in h.session.sent() if "آکادمی" in m.get("text", "") and "تازه‌واردی" in m["text"])
+    invite = next(m for m in h.session.sent() if "آکادمی" in m.get("text", "") and "قدم بعدی: آکادمی" in m["text"])
     assert "شروع آکادمی" in str(invite)
     p = await services.players.find(7)
     assert (await services.academy.state(p.id)).started

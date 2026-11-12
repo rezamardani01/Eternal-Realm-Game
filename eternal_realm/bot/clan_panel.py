@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import replace
 
 from baleropy import F, Router
+from baleropy.exceptions import SkipHandler
 from baleropy.fsm import FSMContext, State, StatesGroup
 from baleropy.types import CallbackQuery, Message
 from baleropy.types.markup import _build_inline_markup
 
-from ..game.services.clans import DONATION_STEPS, ROLES, ClanView, role_power
+from ..game.services.clans import DONATION_STEPS, ROLES, ClanView, Withdrawal, role_power
 from ..shared.errors import GameError
-from ..shared.text import bold, duration, fa
+from ..shared.text import bold, duration, fa, to_int
 from . import keyboards
 from .callbacks import ClanCb
-from .panel import PER_PAGE, Ctx, Screen, _int, _nav, _page, screen
+from .panel import PER_PAGE, Ctx, Screen, _int, _is_group, _nav, _page, screen
 from .services import Services
 
 router = Router(name="clans")
@@ -24,6 +26,7 @@ FINE_STEPS = (500, 5_000)
 
 class ClanFlow(StatesGroup):
     photo = State()
+    amount = State()
 
 
 #: the picture waiting for the leader's «yes»: player id -> Bale file id
@@ -415,8 +418,151 @@ async def clan_donate(c: Ctx) -> Screen:
         + "هر سطح، جای بیشتری برای عضو تازه باز می‌کند. چقدر کمک می‌کنید؟"
     )
     rows = keyboards.grid([c.btn(f"🪙 {fa(n)}", "clangiveq", n) for n in DONATION_STEPS], 2)
+    if not c.is_group:  # the amount is typed, which only works in the private chat
+        rows.append([c.btn("📤 برداشت از خزانه", "clanwd")])
+    if mine.my_role == "leader":
+        waiting = len(await c.services.clans.pending_withdrawals(c.player))
+        if waiting:
+            rows.append([c.btn(f"📥 درخواست‌های برداشت ({fa(waiting)})", "clanwdlist", style="primary")])
     rows.append(c.back("clan"))
     return Screen(text, rows)
+
+
+# --- withdrawing from the treasury: a member asks, the owner answers ------------------------------------------
+async def _tell(bot, user_id: int, text: str, rows=None) -> None:  # noqa: ANN001, ANN202 - Bot
+    """Message a player in the private chat; one who never opened it cannot be told, and that is all."""
+    if not user_id:
+        return
+    with contextlib.suppress(Exception):
+        await bot.send_message(user_id, text, buttons=rows) if rows else await bot.send_message(user_id, text)
+
+
+def _ask_owner(w: Withdrawal) -> tuple[str, list]:
+    text = (
+        f"📥 {bold('درخواست برداشت از خزانه')}\n\n"
+        f"🙋 {bold(w.player_name)} (سطح {fa(w.player_level)}) از خزانه‌ی خاندان {bold(w.clan_name)} "
+        f"{bold(fa(w.amount))} سکه می‌خواهد.\n"
+        f"🪙 موجودی خزانه: {fa(w.treasury)} سکه\n\n"
+        "تأیید کنید تا سکه به او داده شود و از خزانه کم شود؛ یا رد کنید."
+    )
+    rows = [[
+        keyboards.panel_button("✅ تأیید", "clanwdok", w.leader_user_id, str(w.id)),
+        keyboards.panel_button("❌ رد", "clanwdno", w.leader_user_id, str(w.id)),
+    ]]
+    return text, rows
+
+
+@screen("clanwd")
+async def clan_withdraw(c: Ctx) -> Screen:
+    mine = await c.services.clans.of(c.player.id)
+    if mine is None:
+        raise GameError("شما عضو هیچ خاندانی نیستید.")
+    waiting = await c.services.clans.my_withdrawal(c.player)
+    if waiting is not None:
+        text = (
+            f"⏳ {bold('درخواست شما منتظر مالک است')}\n\n"
+            f"مبلغ: {bold(fa(waiting.amount))} سکه\n"
+            "وقتی مالک جواب بدهد، همین‌جا خبر می‌گیرید. می‌توانید آن را لغو کنید."
+        )
+        return Screen(text, [[c.btn("🗑️ لغو درخواست", "clanwdcancel", waiting.id, style="danger")], c.back("clandonate")])
+    if c.state is None or c.is_group:
+        raise GameError("برای نوشتن مقدار، در پیوی ربات به همین بخش بیایید.")
+    await c.state.set_state(ClanFlow.amount)
+    owner = mine.my_role == "leader"
+    text = (
+        f"📤 {bold('برداشت از خزانه')}\n\n"
+        f"🪙 موجودی خزانه: {fa(mine.treasury)} سکه\n\n"
+        "چند سکه لازم دارید؟ فقط یک عدد بنویسید؛ مثلاً: ۵۰۰۰\n"
+        + ("به‌عنوان مالک، سکه همان لحظه به کیفتان می‌آید." if owner else "درخواستتان برای مالک خاندان می‌رود؛ اگر تأیید کند سکه به کیفتان می‌آید.")
+    )
+    return Screen(text, [[c.btn("❌ انصراف", "clandonate")]])
+
+
+@router.message(ClanFlow.amount, F.text)
+async def got_withdraw_amount(message: Message, state: FSMContext, services: Services) -> None:
+    amount = to_int((message.text or "").strip())
+    if amount is None:
+        if _is_group(message):
+            raise SkipHandler  # ordinary chat or a game word: let the command router see it
+        raise GameError("فقط یک عدد بنویسید؛ مثلاً: ۵۰۰۰")
+    user = message.from_user
+    assert user is not None
+    player = await services.players.require(user.id)
+    made = await services.clans.request_withdrawal(player, amount)
+    await state.clear()
+    back = [[keyboards.panel_button("💰 خزانه‌ی خاندان", "clandonate", user.id)]]
+    if made.instant:
+        await message.answer(
+            f"✅ {bold(fa(amount))} سکه از خزانه‌ی خاندان برداشته شد و به کیف شما رفت.\n🪙 خزانه: {fa(made.treasury - amount)} سکه",
+            buttons=back,
+        )
+        return
+    await message.answer(
+        f"📨 {bold('درخواست برداشت فرستاده شد')}\n\n{bold(fa(amount))} سکه از خزانه‌ی خاندان.\n"
+        "وقتی مالک جواب بدهد، همین‌جا خبر می‌گیرید.",
+        buttons=back,
+    )
+    text, rows = _ask_owner(made)
+    await _tell(message.bot, made.leader_user_id, text, rows)
+
+
+@screen("clanwdcancel")
+async def clan_withdraw_cancel(c: Ctx) -> Screen:
+    await c.services.clans.cancel_withdrawal(c.player, _int(c.a))
+    shown = await clan_donate(c)
+    shown.toast = "🗑️ درخواست برداشت لغو شد"
+    return shown
+
+
+@screen("clanwdlist")
+async def clan_withdraw_list(c: Ctx) -> Screen:
+    waiting = await c.services.clans.pending_withdrawals(c.player)
+    if not waiting:
+        return Screen(f"📥 {bold('درخواست‌های برداشت')}\n\nدرخواستی منتظر شما نیست.", [c.back("clandonate")])
+    lines = [f"📥 {bold('درخواست‌های برداشت')}", "", f"🪙 موجودی خزانه: {fa(waiting[0].treasury)} سکه", ""]
+    rows = []
+    for w in waiting:
+        lines.append(f"🙋 {bold(w.player_name)} (سطح {fa(w.player_level)}) — {bold(fa(w.amount))} سکه")
+        rows.append([
+            c.btn(f"✅ {w.player_name} · {fa(w.amount)}", "clanwdok", w.id, style="success"),
+            c.btn("❌ رد", "clanwdno", w.id, style="danger"),
+        ])
+    rows.append(c.back("clandonate"))
+    return Screen("\n".join(lines), rows)
+
+
+async def _answer(c: Ctx, approve: bool) -> Screen:
+    w = await c.services.clans.decide_withdrawal(c.player, _int(c.a), approve)
+    bot = c.message.bot if c.message is not None else None
+    if w.left:
+        toast = f"{w.player_name} دیگر در خاندان نیست؛ درخواستش بسته شد."
+    elif approve:
+        toast = f"✅ {fa(w.amount)} سکه به {w.player_name} داده شد"
+        if bot is not None:
+            await _tell(
+                bot, w.member_user_id,
+                f"✅ {bold('درخواست برداشت شما تأیید شد')}\n\n{bold(fa(w.amount))} سکه از خزانه‌ی خاندان {bold(w.clan_name)} به کیف شما رفت.",
+            )
+    else:
+        toast = f"❌ درخواست {w.player_name} رد شد"
+        if bot is not None:
+            await _tell(
+                bot, w.member_user_id,
+                f"❌ {bold('درخواست برداشت شما رد شد')}\n\nمالک خاندان {bold(w.clan_name)} درخواست برداشت {fa(w.amount)} سکه را رد کرد.",
+            )
+    shown = await clan_withdraw_list(c)
+    shown.toast = toast
+    return shown
+
+
+@screen("clanwdok")
+async def clan_withdraw_ok(c: Ctx) -> Screen:
+    return await _answer(c, True)
+
+
+@screen("clanwdno")
+async def clan_withdraw_no(c: Ctx) -> Screen:
+    return await _answer(c, False)
 
 
 @screen("clangiveq")
