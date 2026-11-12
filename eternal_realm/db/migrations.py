@@ -1043,6 +1043,10 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_online_matches_a ON online_matches (a_player);
     CREATE INDEX idx_online_matches_b ON online_matches (b_player);
     """,
+    # 63: the matchmaker pairs by power range, so the queue remembers each hero's power
+    """
+    ALTER TABLE online_queue ADD COLUMN power INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

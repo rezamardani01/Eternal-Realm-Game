@@ -1,4 +1,4 @@
-"""Realm rule (فرمانروایی): every hero may found a city, raise buildings, train an army and march on other cities.
+"""Realm rule (دهکده): every hero may found a city, raise buildings, train an army and march on other cities.
 
 All numbers live here so they can be tuned without touching the logic.
 """

@@ -15,7 +15,7 @@ from baleropy.exceptions import BaleAPIError, BaleNetworkError
 
 from ..game.data.leagues import league_of, next_league
 from ..game.services.duels import DuelUpdate
-from ..game.services.online import ANYONE_AFTER, QUEUE_TIMEOUT, OnlineMatch, Waiting
+from ..game.services.online import ANYONE_AFTER, QUEUE_TIMEOUT, OnlineMatch, Waiting, bracket_label, bracket_of
 from ..shared.errors import GameError
 from ..shared.text import bold, duration, fa, headline
 from . import keyboards, views
@@ -49,16 +49,17 @@ def result_rows(owner: int) -> list:
     ]
 
 
-def searching_text(level: int, rating: int, waiting: int) -> str:
+def searching_text(power: int, rating: int, waiting: int) -> str:
     league = league_of(rating)
     return "\n".join([
         f"🌐 {bold('مبارزه‌ی آنلاین')}", LINE, "",
-        "🔎 در حال جستجوی حریف هم‌تراز شما...", "",
-        f"⭐ سطح شما: {fa(level)}",
+        "🔎 در حال جستجوی حریف هم‌قدرت شما...", "",
+        f"💪 قدرت شما: {fa(power)}",
+        f"🎯 بازه‌ی قدرت: {bracket_label(bracket_of(power))}",
         f"{league.emoji} لیگ {league.name} · {fa(rating)} امتیاز",
         f"👥 الان در صف: {fa(waiting)} نفر", "",
-        "هر چه بیشتر صبر کنید، جستجو گسترده‌تر می‌شود و بالاخره یک حریف پیدا می‌شود. "
-        f"اگر تا {duration(QUEUE_TIMEOUT)} کسی نیامد، خودتان خبر می‌گیرید.", "",
+        "اول حریفی در همین بازه پیدا می‌شود؛ هر چه بیشتر صبر کنید، جستجو به بازه‌های نزدیک هم گسترده می‌شود. "
+        f"اگر تا {duration(QUEUE_TIMEOUT)} کسی نیامد، جستجو بسته می‌شود و می‌توانید دوباره امتحان کنید.", "",
         "می‌توانید ربات را ببندید؛ به‌محض پیدا شدن حریف پیام می‌فرستم 🔔",
     ])
 
@@ -75,8 +76,11 @@ async def _drop(bot: Bot, chat_id: int, message_id: int | None) -> None:
             await bot.delete_message(chat_id, message_id)
 
 
-async def push(bot: Bot, services: Services, match: OnlineMatch, update: DuelUpdate) -> None:
-    """Show the new state of an online fight to both players (the fight ended, started or moved on one turn)."""
+async def push(bot: Bot, services: Services, match: OnlineMatch, update: DuelUpdate, *, fresh: bool = False) -> None:
+    """Show the new state of an online fight to both players (the fight ended, started or moved on one turn).
+
+    ``fresh``: the fight has just begun, so the «searching» message of each player is deleted and a brand new message with
+    the fight is sent to both (the one who moves first gets the buttons)."""
     turn_seconds = services.ctx.balance.duel_turn_seconds
     messages: dict[int, int | None] = {}
     for seat in match.seats:
@@ -89,7 +93,7 @@ async def push(bot: Bot, services: Services, match: OnlineMatch, update: DuelUpd
             text = battle_text(seat.player_id, update, turn_seconds)
             mine = update.battle.current.player_id == seat.player_id
             rows = keyboards.duel_actions(update.duel.id, update.battle.current) if mine else None
-            if mine or not seat.message_id:
+            if mine or fresh or not seat.message_id:
                 await _drop(bot, seat.chat_id, seat.message_id)  # a fresh message: it is what makes the phone ring
                 messages[seat.player_id] = await _send(bot, seat.chat_id, text, rows)
             else:
@@ -104,8 +108,8 @@ async def push(bot: Bot, services: Services, match: OnlineMatch, update: DuelUpd
 
 async def push_no_one_came(bot: Bot, w: Waiting) -> None:
     text = (
-        f"⌛ {bold('حریفی پیدا نشد')}\n\nدر این مدت قهرمان هم‌ترازی در صف نبود. چند دقیقه‌ی دیگر دوباره امتحان کنید، "
-        "یا تا آن موقع در میدان بات‌ها تمرین کنید."
+        f"⌛ {bold('حریفی پیدا نشد')}\n\nتا {duration(QUEUE_TIMEOUT)} هیچ قهرمان هم‌قدرتی در صف نیامد و درخواست جستجو بسته شد. "
+        "دوباره جستجو کنید، یا تا آن موقع در میدان بات‌ها تمرین کنید."
     )
     rows = [
         [keyboards.panel_button("🔁 دوباره جستجو", "onsearch", w.platform_user_id)],
@@ -125,7 +129,7 @@ async def processor(bot: Bot, services: Services, interval: float = 3.0) -> None
             result = await services.online.sweep()
             for match in result.matches:
                 assert match.update is not None
-                await push(bot, services, match, match.update)
+                await push(bot, services, match, match.update, fresh=True)
             for waiter in result.expired:
                 await push_no_one_came(bot, waiter)
             for match, actor, left in await services.online.due_warnings():
@@ -169,7 +173,7 @@ async def online_home(c: Ctx) -> Screen:
         f"⚔️ مبارزه‌های آنلاین شما: {fa(fights)} · 🏆 پیروزی: {fa(wins)}",
         f"👥 الان در صف: {fa(waiting)} نفر", "",
         f"{bold('چطور کار می‌کند؟')}",
-        "• دکمه‌ی جستجو را بزنید؛ حریفی با سطح نزدیک به شما پیدا می‌شود.",
+        "• دکمه‌ی جستجو را بزنید؛ حریفی هم‌قدرت با شما (در همان بازه‌ی قدرت) پیدا می‌شود.",
         "• هر دو نفر نوبتی حرکت می‌کنید؛ هر نوبت ۹۰ ثانیه وقت دارید.",
         "• قدرت برتر محدود می‌شود تا نبرد هم‌شأن بماند.",
         "• برنده امتیاز لیگ، سکه و تجربه می‌گیرد.",
@@ -197,14 +201,14 @@ async def online_search(c: Ctx) -> Screen:
     result = await c.services.online.join(c.player, c.message.chat.id, c.message.message_id)
     if result.match is not None:
         assert result.match.update is not None
-        await push(c.message.bot, c.services, result.match, result.match.update)
+        await push(c.message.bot, c.services, result.match, result.match.update, fresh=True)
         return Screen(None, toast="⚔️ حریف پیدا شد!")
     p = await c.refresh()
     async with c.services.ctx.db.read() as tx:
         rating = int(await tx.scalar("SELECT rating FROM players WHERE id = ?", (p.id,), 1000))
     rows = [[c.btn("❌ لغو جستجو", "onleave", style="danger")]]
     note = "🔎 جستجو ادامه دارد" if result.already else "🔎 جستجو شروع شد"
-    return Screen(searching_text(p.level, rating, result.waiting), rows, toast=note)
+    return Screen(searching_text(result.power, rating, result.waiting), rows, toast=note)
 
 
 @screen("onleave")

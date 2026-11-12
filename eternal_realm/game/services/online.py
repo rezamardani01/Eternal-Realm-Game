@@ -16,26 +16,50 @@ from ...context import AppContext
 from ...db.repos import duels as duel_repo
 from ...db.repos import players as player_repo
 from ...shared.errors import GameError
+from ..engine import combat
 from ..engine.combat import Battle
 from ..models import Player
 from .duels import Duel, DuelService, DuelUpdate
 
-#: a search ends without an opponent after this many seconds
-QUEUE_TIMEOUT = 150
-#: the level gap the matchmaker accepts: it starts at ``BAND_START`` and grows by one level every ``BAND_STEP`` seconds
-BAND_START = 4
-BAND_STEP = 6
+#: a search ends without an opponent after this many seconds (five minutes)
+QUEUE_TIMEOUT = 300
 #: the player whose turn it is gets a warning when this many seconds are left
 WARN_SECONDS = 30
 #: after this long anybody is a fair opponent (a quiet hour must not leave two players waiting for ever)
-ANYONE_AFTER = 90
+ANYONE_AFTER = 150
+#: the power ranges players are sorted into (a hero's power is the number the duel engine uses to compare fighters)
+POWER_EDGES = (0, 200, 400, 700, 1100, 1700, 2600, 4000, 6000, 9000, 14000)
+#: how long the longest waiter has waited -> how many neighbouring ranges are acceptable (0 = the same range only)
+REACH = ((15, 0), (45, 1), (90, 2))
 
 
-def band(waited: int) -> int | None:
-    """How many levels apart two players may be, given how long the one who waited longest has waited."""
+def bracket_of(power: int) -> int:
+    """The index of the power range a hero belongs to."""
+    index = 0
+    for i, edge in enumerate(POWER_EDGES):
+        if power >= edge:
+            index = i
+    return index
+
+
+def bracket_label(index: int) -> str:
+    """The range as text, e.g. ``۴۰۰ تا ۷۰۰`` (the last one is open-ended)."""
+    from ...shared.text import fa
+
+    low = POWER_EDGES[index]
+    if index + 1 >= len(POWER_EDGES):
+        return f"{fa(low)} به بالا"
+    return f"{fa(low)} تا {fa(POWER_EDGES[index + 1])}"
+
+
+def reach(waited: int) -> int | None:
+    """How many ranges apart two players may be, given how long the one who waited longest has waited (``None`` = anyone)."""
     if waited >= ANYONE_AFTER:
         return None
-    return BAND_START + max(0, waited) // BAND_STEP
+    for limit, ranges in REACH:
+        if waited < limit:
+            return ranges
+    return REACH[-1][1] + 1
 
 
 @dataclass
@@ -47,6 +71,11 @@ class Waiting:
     chat_id: int
     message_id: int
     joined_at: int
+    power: int = 0
+
+    @property
+    def bracket(self) -> int:
+        return bracket_of(self.power)
 
 
 @dataclass
@@ -84,6 +113,8 @@ class JoinResult:
     waiting: int
     #: the player was already searching (the search message was only refreshed)
     already: bool = False
+    #: the hero's power, which decides the range he is matched in
+    power: int = 0
 
 
 class OnlineService:
@@ -97,10 +128,10 @@ class OnlineService:
     # --- the queue ------------------------------------------------------------------------------------------------
     async def _rows(self, tx) -> list[Waiting]:  # noqa: ANN001 - Tx
         rows = await tx.fetchall(
-            "SELECT q.player_id, p.platform_user_id, q.level, q.rating, q.chat_id, q.message_id, q.joined_at"
+            "SELECT q.player_id, p.platform_user_id, q.level, q.rating, q.chat_id, q.message_id, q.joined_at, q.power"
             " FROM online_queue q JOIN players p ON p.id = q.player_id ORDER BY q.joined_at, q.player_id"
         )
-        return [Waiting(r["player_id"], r["platform_user_id"], r["level"], r["rating"], r["chat_id"], r["message_id"], r["joined_at"]) for r in rows]
+        return [Waiting(r["player_id"], r["platform_user_id"], r["level"], r["rating"], r["chat_id"], r["message_id"], r["joined_at"], r["power"]) for r in rows]
 
     async def waiting(self) -> int:
         async with self.ctx.db.read() as tx:
@@ -172,16 +203,17 @@ class OnlineService:
                 if await duel_repo.open_for(tx, (player.id, player.id)) is not None:
                     raise GameError("هم‌اکنون در یک نبرد هستید؛ اول آن را تمام کنید.")
                 rating = int(await tx.scalar("SELECT rating FROM players WHERE id = ?", (player.id,), 1000))
+                power = round(combat.power_of(await self.duels._fighter(tx, fresh)))
                 already = await tx.scalar("SELECT 1 FROM online_queue WHERE player_id = ?", (player.id,), 0)
                 if already:
                     await tx.execute(
-                        "UPDATE online_queue SET chat_id = ?, message_id = ?, level = ?, rating = ? WHERE player_id = ?",
-                        (chat_id, message_id, fresh.level, rating, player.id),
+                        "UPDATE online_queue SET chat_id = ?, message_id = ?, level = ?, rating = ?, power = ? WHERE player_id = ?",
+                        (chat_id, message_id, fresh.level, rating, power, player.id),
                     )
                 else:
                     await tx.execute(
-                        "INSERT INTO online_queue (player_id, level, rating, chat_id, message_id, joined_at) VALUES (?, ?, ?, ?, ?, ?)",
-                        (player.id, fresh.level, rating, chat_id, message_id, now),
+                        "INSERT INTO online_queue (player_id, level, rating, chat_id, message_id, joined_at, power)"
+                        " VALUES (?, ?, ?, ?, ?, ?, ?)", (player.id, fresh.level, rating, chat_id, message_id, now, power),
                     )
             if not already:
                 try:
@@ -190,7 +222,7 @@ class OnlineService:
                     made = None
                 if made is not None:
                     return JoinResult(made, 0)
-        return JoinResult(None, await self.waiting(), already=bool(already))
+        return JoinResult(None, await self.waiting(), already=bool(already), power=power)
 
     async def leave(self, player_id: int) -> bool:
         async with self.ctx.db.transaction() as tx:
@@ -199,7 +231,7 @@ class OnlineService:
 
     # --- the matchmaker -------------------------------------------------------------------------------------------
     async def _match_for(self, player_id: int, now: int) -> OnlineMatch | None:
-        """Try to pair one waiting player with the best partner (the closest in level, then in rating)."""
+        """Try to pair one waiting player with the best partner (the closest in power, then in rating)."""
         async with self.ctx.db.read() as tx:
             rows = await self._rows(tx)
         mine = next((w for w in rows if w.player_id == player_id), None)
@@ -209,10 +241,10 @@ class OnlineService:
         for other in rows:
             if other.player_id == player_id:
                 continue
-            gap = band(now - min(mine.joined_at, other.joined_at))
-            if gap is not None and abs(other.level - mine.level) > gap:
+            gap = reach(now - min(mine.joined_at, other.joined_at))
+            if gap is not None and abs(other.bracket - mine.bracket) > gap:
                 continue
-            candidates.append((abs(other.level - mine.level), abs(other.rating - mine.rating), other.joined_at, other))
+            candidates.append((abs(other.bracket - mine.bracket), abs(other.power - mine.power), other.joined_at, other))
         for *_, other in sorted(candidates, key=lambda c: c[:3]):
             first, second = (mine, other) if mine.joined_at <= other.joined_at else (other, mine)
             made = await self._make_match(first, second)
@@ -256,8 +288,8 @@ class OnlineService:
         async with self.ctx.db.transaction() as tx:
             for w in waiters:
                 await tx.execute(
-                    "INSERT OR IGNORE INTO online_queue (player_id, level, rating, chat_id, message_id, joined_at) VALUES (?, ?, ?, ?, ?, ?)",
-                    (w.player_id, w.level, w.rating, w.chat_id, w.message_id, w.joined_at),
+                    "INSERT OR IGNORE INTO online_queue (player_id, level, rating, chat_id, message_id, joined_at, power)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)", (w.player_id, w.level, w.rating, w.chat_id, w.message_id, w.joined_at, w.power),
                 )
 
     async def sweep(self) -> Sweep:

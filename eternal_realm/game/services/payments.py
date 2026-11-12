@@ -95,7 +95,7 @@ class PaymentService:
             async with self.ctx.db.read() as tx:
                 have_city = await tx.scalar("SELECT 1 FROM cities WHERE player_id = ?", (player.id,), 0)
             if not have_city:
-                raise GameError("اول در «فرمانروایی» شهرتان را بنا کنید؛ این بسته مخصوص شهر است و پولی از شما کسر نشد.")
+                raise GameError("اول در «دهکده من» شهرتان را بنا کنید؛ این بسته مخصوص شهر است و پولی از شما کسر نشد.")
         if pack.pet:
             async with self.ctx.db.read() as tx:
                 have = await tx.fetchone(
@@ -143,7 +143,7 @@ class PaymentService:
         if has_ticket:
             raise GameError(f"{target.name} بلیط این فصل را دارد؛ چیز دیگری هدیه بدهید. پولی کسر نشد.")
         if (pack.city or pack.city_shield_hours) and not has_city:
-            raise GameError(f"{target.name} هنوز شهری در فرمانروایی ندارد و این بسته به کارش نمی‌آید. پولی کسر نشد.")
+            raise GameError(f"{target.name} هنوز شهری در دهکده ندارد و این بسته به کارش نمی‌آید. پولی کسر نشد.")
         if pack.xp and target.level >= self.ctx.balance.max_level:
             raise GameError(f"{target.name} به بالاترین سطح رسیده و تجربه‌ی بیشتری نمی‌گیرد. پولی کسر نشد.")
         amount = pack.price_rial * qty

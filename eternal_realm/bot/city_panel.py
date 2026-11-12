@@ -1,4 +1,4 @@
-"""Realm rule (فرمانروایی) in the private chat: found a city, build, train, defend and march on other cities."""
+"""Realm rule (دهکده) in the private chat: found a city, build, train, defend and march on other cities."""
 
 from __future__ import annotations
 
@@ -75,20 +75,20 @@ def _advice(city: City) -> str:
 
 
 def _need_city_text() -> str:
-    return "شما هنوز شهری ندارید. از «فرمانروایی» شهرتان را بنا کنید."
+    return "شما هنوز شهری ندارید. از «دهکده من» شهرتان را بنا کنید."
 
 
 # --- entrance and founding ----------------------------------------------------------------------------
 @screen("city")
 async def realm(c: Ctx) -> Screen:
     if c.is_group:
-        raise GameError("فرمانروایی در پیام خصوصی ربات باز می‌شود؛ آنجا بیایید.")
+        raise GameError("دهکده در پیام خصوصی ربات باز می‌شود؛ آنجا بیایید.")
     p = await c.refresh()
     city = await c.services.city.mine(p)
     if city is None:
         b = c.services.ctx.balance
         text = [
-            f"🏰 {bold('فرمانروایی')}",
+            f"🏰 {bold('دهکده من')}",
             "",
             "هر فرمانده‌ای می‌تواند برای خودش شهری بسازد؛ مزرعه و معدن برپا کند، لشکر بپروراند و به سرزمین دشمنان بتازد.",
             "",
@@ -108,7 +108,7 @@ async def realm(c: Ctx) -> Screen:
     league = d.league_of(city.trophies)
     working = len(city.builds) + len(city.training)
     text = [
-        f"🏰 {bold('فرمانروایی')}",
+        f"🏰 {bold('دهکده من')}",
         LINE,
         f"{city.flag} {bold('شهر ' + city.name)} · قلعه‌ی سطح {fa(city.castle)}",
         f"{league[0]} لیگ {league[1]} · {fa(city.trophies)} جام",
@@ -1012,7 +1012,7 @@ async def processor(bot, services: Services, interval: float = 120.0) -> None:  
             for alert in await services.city.collect_alerts():
                 with contextlib.suppress(BaleAPIError):
                     await bot.send_message(
-                        alert.uid, alert.text, buttons=[[keyboards.panel_button("🏰 رفتن به فرمانروایی", "city", alert.uid)]]
+                        alert.uid, alert.text, buttons=[[keyboards.panel_button("🏰 رفتن به دهکده من", "city", alert.uid)]]
                     )
         except asyncio.CancelledError:
             raise
@@ -1124,7 +1124,7 @@ async def city_flag_set(c: Ctx) -> Screen:
     return shown
 
 
-# --- the full city card, for the «فرمانروایی» word in a group ------------------------------------------------------------------------
+# --- the full city card, for the «دهکده من» word in a group ------------------------------------------------------------------------
 def city_card_text(city: City, now: int) -> str:
     """Everything about a city on one page: ruler, people, food, soldiers, power, shield and buildings."""
     league = d.league_of(city.trophies)

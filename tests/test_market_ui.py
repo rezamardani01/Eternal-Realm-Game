@@ -157,7 +157,7 @@ async def test_home_menu_uses_the_new_names(h, services, db):
     assert len(h.labels()) == 4  # a short menu in groups
     await h.say(11, "/start")  # the private menu is made of categories
     labels = " ".join(h.labels())
-    for name in ("قهرمان من", "فرمانروایی", "نبرد و چالش", "بازار و تجارت", "خاندان", "خزانه قلمرو", "جایزه روزانه", "آکادمی"):
+    for name in ("قهرمان من", "دهکده من", "نبرد و چالش", "بازار و تجارت", "خاندان", "خزانه قلمرو", "جایزه روزانه", "آکادمی"):
         assert name in labels
     assert "🗺️ ماجراجویی" in h.labels()
     await h.panel(11, "trade")

@@ -404,7 +404,7 @@ class CityService:
     async def _need(self, tx: Tx, player: Player, now: int) -> City:
         city = await self._by_player(tx, player.id)
         if city is None:
-            raise GameError("شما هنوز شهری ندارید. از «فرمانروایی» شهرتان را بنا کنید.")
+            raise GameError("شما هنوز شهری ندارید. از «دهکده من» شهرتان را بنا کنید.")
         await self._tick(tx, city, now, owner_visit=True)
         return city
 

@@ -606,7 +606,7 @@ def pack_description(pack, now: int | None = None) -> str:  # noqa: ANN001 - Pac
         parts = [f"{RES_INFO[r][1]} {fa(pack.city[r])}" for r in RES if pack.city.get(r)]
         if pack.city_shield_hours:
             parts.append(f"سپر دفاعی {fa(pack.city_shield_hours)} ساعته")
-        return "شامل (مستقیم به شهر فرمانروایی شما می‌رسد): " + "، ".join(parts)
+        return "شامل (مستقیم به شهر دهکده شما می‌رسد): " + "، ".join(parts)
     if pack.spins:
         return f"شامل: {fa(pack.spins)} فرصت چرخش گردونه شانس با جایزه‌های ارزشمند"
     parts = []
@@ -662,7 +662,7 @@ def delivery(order, granted: str = "") -> str:  # noqa: ANN001 - Order
 SECTION_NAMES = {
     "coins": "بسته‌ی سکه", "crystals": "بسته‌ی کریستال", "bundles": "بسته‌ی ویژه",
     "materials": "منابع", "lucky": "بسته‌ی شانسی روزانه", "deal": "تخفیف روز", "boost": "بوست دو برابر",
-    "xp": "بسته‌ی تجربه", "wheel": "گردونه شانس", "city": "منابع فرمانروایی", "rare": "منابع کمیاب",
+    "xp": "بسته‌ی تجربه", "wheel": "گردونه شانس", "city": "منابع دهکده", "rare": "منابع کمیاب",
 }
 
 

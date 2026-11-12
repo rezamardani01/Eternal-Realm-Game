@@ -1,4 +1,4 @@
-"""The word «فرمانروایی»: in a group it shows a whole city (yours, or the hero you reply to)."""
+"""The word «دهکده من» (and the old «دهکده»): in a group it shows a whole city (yours, or the hero you reply to)."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ from .registry import command
 
 
 @command(
-    "city_card", ["فرمانروایی", "شهر من", "شهر"],
-    "فرمانروایی: مشخصات کامل شهر شما (یا شهر کسی که روی پیامش ریپلای کنید)؛ مردم، رضایت، آذوقه، منابع و سربازان",
-    category="🏰 فرمانروایی", points=0, toggleable=True,
+    "city_card", ["دهکده من", "دهکده", "فرمانروایی", "شهر من", "شهر"],
+    "دهکده من: مشخصات کامل شهر شما (یا شهر کسی که روی پیامش ریپلای کنید)؛ مردم، رضایت، آذوقه، منابع و سربازان",
+    category="🏰 دهکده", points=0, toggleable=True,
 )
 async def city_card(ctx: CommandContext) -> None:
     if not ctx.is_group and ctx.message.reply_to_message is None:
@@ -21,8 +21,8 @@ async def city_card(ctx: CommandContext) -> None:
     city = await ctx.services.city.mine(target, visit=target.id == ctx.me.id)
     if city is None:
         if target.id == ctx.me.id:
-            raise GameError("شما هنوز شهری ندارید. در پیام خصوصی ربات «فرمانروایی» را بزنید و شهرتان را بنا کنید.")
-        raise GameError(f"{target.name} هنوز شهری در فرمانروایی ندارد.")
+            raise GameError("شما هنوز شهری ندارید. در پیام خصوصی ربات «دهکده من» را بزنید و شهرتان را بنا کنید.")
+        raise GameError(f"{target.name} هنوز شهری در دهکده ندارد.")
     buttons = None
     if target.id == ctx.me.id and ctx.services.bot_username:
         buttons = [keyboards.open_panel_button(ctx.services.bot_username)]

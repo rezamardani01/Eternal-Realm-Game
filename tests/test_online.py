@@ -73,7 +73,7 @@ async def test_two_players_in_the_queue_are_matched_and_both_see_the_fight(h, se
     seat_actor = match.seat_of(actor)
     other = next(s for s in match.seats if s.player_id != actor)
     mine = [p for p in sent_to(h, seat_actor.platform_user_id) if "مبارزه‌ی آنلاین" in p["text"]]
-    theirs = [p for p in sent_to(h, other.platform_user_id) + sent_to(h, other.platform_user_id, "editMessageText") if "مبارزه‌ی آنلاین" in p["text"]]
+    theirs = [p for p in sent_to(h, other.platform_user_id) + sent_to(h, other.platform_user_id, "editMessageText") if "نوبت" in p["text"]]
     assert mine and "نوبت شماست" in mine[-1]["text"]
     labels = [b["text"] for b in buttons_of(mine[-1])]
     assert "⚔️ حمله عادی" in labels and len(labels) == 6  # attack, three skills, defend, surrender
@@ -124,9 +124,9 @@ async def test_a_turn_moves_the_fight_on_and_the_next_player_gets_a_fresh_messag
 
 
 # --- the matchmaker -------------------------------------------------------------------------------------------------------------------
-async def test_the_level_gap_must_be_small_at_first_and_widens_while_waiting(h, services, db, clock):
+async def test_the_power_ranges_must_be_close_at_first_and_widen_while_waiting(h, services, db, clock):
     await hero(services, db, 10, "آرش", level=10)
-    await hero(services, db, 11, "سارا", level=40)
+    await hero(services, db, 11, "سارا", level=120)
     await h.panel(10, "onsearch")
     await h.panel(11, "onsearch")
     assert await services.online.match_of_player(1) is None and await services.online.waiting() == 2
@@ -139,10 +139,15 @@ async def test_the_level_gap_must_be_small_at_first_and_widens_while_waiting(h, 
     assert await services.online.waiting() == 0
 
 
-async def test_the_band_grows_with_time():
-    assert online_data.band(0) == online_data.BAND_START
-    assert online_data.band(60) > online_data.band(10) > online_data.band(0)
-    assert online_data.band(online_data.ANYONE_AFTER) is None
+async def test_power_ranges_and_how_far_the_search_reaches():
+    edges = online_data.POWER_EDGES
+    assert list(edges) == sorted(edges) and edges[0] == 0
+    assert online_data.bracket_of(0) == 0 and online_data.bracket_of(199) == 0 and online_data.bracket_of(200) == 1
+    assert online_data.bracket_of(450) == 2 and online_data.bracket_of(10**6) == len(edges) - 1
+    assert online_data.bracket_label(2) == "۴۰۰ تا ۷۰۰" and "به بالا" in online_data.bracket_label(len(edges) - 1)
+    assert online_data.reach(0) == 0  # at first only the same range
+    assert online_data.reach(30) == 1 and online_data.reach(60) == 2 and online_data.reach(online_data.ANYONE_AFTER) is None
+    assert online_data.QUEUE_TIMEOUT == 300 and online_data.ANYONE_AFTER < online_data.QUEUE_TIMEOUT
 
 
 async def test_the_closest_opponent_is_chosen(h, services, db):
@@ -286,3 +291,28 @@ async def test_the_heartbeat_sends_the_warning_to_the_right_chat(h, services, db
     task.cancel()
     warned = [p for p in sent_to(h, seat.platform_user_id) if "ثانیه مانده" in p["text"]]
     assert len(warned) == 1
+
+
+async def test_neighbouring_ranges_meet_after_a_short_wait(h, services, db, clock):
+    await hero(services, db, 10, "آرش", level=10)  # power ~250: the 200-400 range
+    await hero(services, db, 11, "سارا", level=30)  # power ~550: the 400-700 range
+    await h.panel(10, "onsearch")
+    await h.panel(11, "onsearch")
+    assert await services.online.match_of_player(1) is None  # different ranges: they wait
+    assert (await services.online.sweep()).matches == []
+    clock.advance(20)  # the longest wait is over 15 seconds: neighbouring ranges are fine now
+    assert len((await services.online.sweep()).matches) == 1
+
+
+async def test_the_search_message_is_deleted_and_a_fresh_fight_message_is_sent_to_both(h, services, db):
+    await hero(services, db, 10, "آرش")
+    await hero(services, db, 11, "سارا", cls="mage")
+    await h.click(10, __import__("eternal_realm.bot.callbacks", fromlist=["x"]).PanelCb(s="onsearch", o=10).pack(), message_id=701)
+    h.session.reset()
+    await h.click(11, __import__("eternal_realm.bot.callbacks", fromlist=["x"]).PanelCb(s="onsearch", o=11).pack(), message_id=702)
+    deleted = {(str(p["chat_id"]), p["message_id"]) for p in h.session.sent("deleteMessage")}
+    assert ("10", 701) in deleted and ("11", 702) in deleted  # both «searching» messages are gone
+    for uid in (10, 11):
+        fight = [p for p in sent_to(h, uid) if "مبارزه‌ی آنلاین" in p["text"]]
+        assert fight, uid  # and each player got a brand new message with the fight
+    assert not h.session.sent("editMessageText") or all("جستجوی حریف" not in p["text"] for p in h.session.sent("editMessageText"))

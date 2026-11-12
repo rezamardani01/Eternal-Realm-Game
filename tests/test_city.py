@@ -282,7 +282,7 @@ async def test_the_daily_cap_and_repeat_limit(services, db, clock):
 async def test_the_screens_and_a_whole_game_through_buttons(h, services, db, clock):
     p = await hero(services, db, 7, "آرش‌خان")
     await h.panel(7, "home")
-    assert any("فرمانروایی" in label for label in h.labels())
+    assert any("دهکده" in label for label in h.labels())
     await h.panel(7, "city")
     assert "بنای شهر" in " ".join(h.labels()) and "۵۰۰۰" not in h.session.last_text()
     await h.panel(7, "cityfound")

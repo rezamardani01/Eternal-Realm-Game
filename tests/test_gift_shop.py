@@ -40,7 +40,7 @@ async def test_the_gift_word_needs_somebody_to_gift(h, services):
     await h.say(1, "گیفت", group=True, reply_to=h.message_of(2))
     assert "گیفت از خزانه قلمرو" in h.session.last_text()
     labels = " ".join(h.labels())
-    assert "بسته‌های سکه" in labels and "گردونه شانس" in labels and "منابع فرمانروایی" in labels
+    assert "بسته‌های سکه" in labels and "گردونه شانس" in labels and "منابع دهکده" in labels
 
 
 async def test_the_whole_gift_flow_from_the_group_to_the_invoice_to_the_message(h, services):
