@@ -248,3 +248,146 @@ async def test_a_new_hero_is_invited_to_the_academy(h, services):
     assert "شروع آکادمی" in str(invite)
     p = await services.players.find(7)
     assert (await services.academy.state(p.id)).started
+
+
+# --- never stuck, never broken midway ---------------------------------------------------------------------------------
+async def test_a_refused_rest_still_teaches_lesson_3_of_chapter_1_with_a_note(h, services, db):
+    p = await hero(services, db)
+    await h.panel(1, "academy")
+    await h.panel(1, "profile")
+    await h.say(1, "جایزه")
+    assert (await services.academy.state(p.id)).current.id == "energy"
+    assert (await services.players.require(1)).energy == (await services.players.require(1)).energy  # a hero with full energy
+    h.session.reset()
+    await h.say(1, "استراحت")  # the game answers «سرشار از انرژی هستید» ...
+    assert any("سرشار از انرژی" in t for t in h.session.texts())
+    note = next(n for n in notes(h))  # ... and the academy still says well done
+    assert "درس ۳ فصل ۱ تکمیل شد" in note and "انرژی و استراحت" in note and "۳ از ۳۹" in note
+    assert "energy" in (await services.academy.state(p.id)).done
+    assert "مأموریت‌های روزانه" in note  # and points to the next lesson
+
+
+async def test_a_refused_rest_button_teaches_it_too_but_other_refused_tries_do_not(h, services, db):
+    p = await hero(services, db)
+    await learn_before(services, db, p, "energy")
+    h.session.reset()
+    await h.panel(1, "rest")  # the button: refused (full energy), still learned
+    assert any("درس ۳ فصل ۱" in n for n in notes(h))
+    # a refused try of a lesson that is about doing (the hunt, with no energy) teaches nothing
+    await learn_before(services, db, p, "hunt")
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET energy = 0 WHERE id = ?", (p.id,))
+    h.session.reset()
+    await h.say(1, "شکار")
+    assert notes(h) == [] and "hunt" not in (await services.academy.state(p.id)).done
+
+
+async def test_a_level_up_from_a_lesson_reward_never_breaks_the_note(h, services, db):
+    p = await hero(services, db, level=1)
+    await services.academy.start(p.id)
+    async with db.transaction() as tx:  # one xp short of the next level
+        await tx.execute("UPDATE players SET xp = ? WHERE id = ?", (services.characters.xp_needed(p) - 1, p.id))
+    h.session.reset()
+    await h.panel(1, "profile")
+    assert any("به سطح" in n and "رسیدی" in n for n in notes(h))
+    assert (await services.players.require(1)).level == 2
+
+
+async def test_winning_a_fight_that_levels_the_hero_up_shows_the_result(h, services, db):
+    p = await hero(services, db, level=1)
+    await learn_before(services, db, p, "fight")
+    await h.panel(1, "acfight")
+    fresh = await services.players.require(1)  # the lessons before it already raised the level
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET xp = ? WHERE id = ?", (services.characters.xp_needed(fresh) - 1, p.id))
+    for _ in range(40):
+        if await services.solo.active(p.id) is None:
+            break
+        await h.panel(1, "sact", "attack")
+    shown = [payload.get("text", "") for name, payload in h.session.calls if name in ("sendMessage", "editMessageText")]
+    assert any("به سطح" in t and "رسیدید" in t for t in shown)  # the fight's result screen, level-up line included
+    assert (await services.players.require(1)).level >= 2
+    assert "fight" in (await services.academy.state(p.id)).done
+
+
+async def test_a_bug_inside_the_academy_never_breaks_the_game(h, services, db, monkeypatch):
+    p = await hero(services, db)
+    await services.academy.start(p.id)
+
+    async def broken(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(services.academy, "after", broken)
+    h.session.reset()
+    await h.say(1, "ماهیگیری")  # the work is done and answered as usual
+    assert any("ماهیگیر" in t or "🎣" in t for t in h.session.texts())
+    await h.panel(1, "profile")
+    assert "قهرمان" in h.session.last_text()
+
+
+async def test_every_lesson_screen_opens_for_a_brand_new_hero(h, services, db):
+    p = await hero(services, db, level=1)
+    ctxs = []
+    for lesson in data.LESSONS:
+        if lesson.go and lesson.go[1] not in {"citybuild", "citytroops"}:  # those need a city (the lessons may be put off)
+            await h.panel(1, lesson.go[1], lesson.go[2])
+            ctxs.append(lesson.id)
+            assert h.session.last_text(), lesson.id
+            assert not any("قدیمی است" in str(a) for a in h.session.callback_answers()), lesson.id  # no dead button
+    assert len(ctxs) >= 30
+
+
+async def test_lessons_that_need_something_the_hero_may_lack_can_be_put_off(services, db):
+    p = await hero(services, db)
+    skippable = {x.id for x in data.LESSONS if x.skippable}
+    assert {"shop", "upgrade", "sell", "group", "duel", "boss", "city", "build", "troops"} == skippable
+    assert all(x.go for x in data.LESSONS if x.id in {"activity", "hunt", "shop", "upgrade", "sell"})  # a button, not only a word
+    # nothing else can trap a hero: the only lessons without a way to be learned are the group ones, which can wait
+    assert all(x.skippable for x in data.LESSONS if x.in_group)
+
+
+async def test_a_lost_story_stage_still_teaches_the_story_lesson(services, db):
+    p = await hero(services, db)
+    await learn_before(services, db, p, "story")
+    async with db.transaction() as tx:  # the day's use of the story was spent on a lost stage
+        await tx.execute(
+            "INSERT INTO solo_fights (player_id, kind, status, state, info, created_at, updated_at) VALUES (?, 'story', 'lost', '{}', '{}', 0, 0)",
+            (p.id,),
+        )
+    assert (await services.academy.check(p, "story")).lesson.id == "story"
+
+
+async def test_a_hero_who_already_claimed_the_daily_gift_has_learned_it(services, db):
+    p = await hero(services, db)
+    await learn_before(services, db, p, "daily")
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET daily_at = ? WHERE id = ?", (services.ctx.now(), p.id))
+    assert (await services.academy.check(p, "daily")).lesson.id == "daily"
+
+
+async def test_the_first_chapter_can_be_walked_from_start_to_finish_with_a_note_at_every_step(h, services, db):
+    p = await hero(services, db)
+    await h.panel(1, "academy")
+    steps = [
+        ("hero", lambda: h.panel(1, "profile")),
+        ("daily", lambda: h.say(1, "جایزه")),
+        ("energy", lambda: h.say(1, "استراحت")),  # refused by the game (full energy), learned anyway
+        ("missions", lambda: h.panel(1, "missions")),
+    ]
+    for lesson_id, act in steps:
+        before = len(notes(h))
+        await act()
+        assert lesson_id in (await services.academy.state(p.id)).done, lesson_id
+        assert len(notes(h)) == before + 1, lesson_id  # exactly one well done per lesson, never two, never none
+    state = await services.academy.state(p.id)
+    assert state.current.id == "activity" and state.chapter_done(1) == 4
+    assert any("فصل «قدم اول» تمام شد" in n for n in notes(h))  # the chapter is finished, its chest paid
+    view = dict((i.id, q) for i, q in (await services.inventory.view(p.id)).stacks)
+    assert view.get("wooden_chest") == 1
+    # a second try of anything already learned says nothing more and pays nothing more
+    gold = (await services.players.require(1)).gold
+    h.session.reset()
+    await h.say(1, "استراحت")
+    await h.panel(1, "missions")
+    assert notes(h) == [] and (await services.players.require(1)).gold == gold
+

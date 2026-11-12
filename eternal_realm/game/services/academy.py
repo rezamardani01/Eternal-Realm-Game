@@ -21,7 +21,10 @@ from .players import LevelUp, PlayerService
 #: what each ``check`` looks for (``?`` is the player's id)
 CHECKS: dict[str, str] = {
     "academy_fight": "SELECT 1 FROM solo_fights WHERE player_id = ? AND kind = 'academy' AND status = 'won'",
-    "story": "SELECT 1 FROM solo_progress WHERE player_id = ? AND key = 'story' AND n >= 1",
+    "daily": "SELECT 1 FROM players WHERE id = ? AND daily_at > 0",
+    # a story stage was played (a lost one too: the day's use of the story is spent either way)
+    "story": "SELECT 1 FROM solo_progress WHERE player_id = ? AND key = 'story' AND n >= 1"
+    " UNION SELECT 1 FROM solo_fights WHERE player_id = ? AND kind = 'story' AND status IN ('won', 'lost')",
     "arena": "SELECT 1 FROM solo_fights WHERE player_id = ? AND kind = 'arena' AND status IN ('won', 'lost')",
     "sold": "SELECT 1 FROM transactions WHERE player_id = ? AND reason IN ('shop_sell', 'market_sell')",
     "wheel": "SELECT 1 FROM wheel_log WHERE player_id = ?",
@@ -50,6 +53,11 @@ class Completion:
     gold: int
     xp: int
     level_up: LevelUp | None = None
+    #: the lesson's place: number in its chapter, size of the chapter, lessons learned so far, lessons in all
+    number: int = 0
+    of: int = 0
+    learned: int = 0
+    total: int = 0
     #: the chapter this lesson finished (its chest was paid)
     chapter: data.Chapter | None = None
     graduated: bool = False
@@ -143,7 +151,11 @@ class AcademyService:
         state.done.add(lesson.id)
         now = self.ctx.now()
         await wallet.apply(tx, player_id, gold=lesson.gold, reason="academy", now=now, ref=f"academy:{player_id}:{lesson.id}")
-        done = Completion(lesson, lesson.gold, lesson.xp, await self.players.grant_xp(tx, player_id, lesson.xp))
+        in_chapter = data.lessons_of(lesson.chapter)
+        done = Completion(
+            lesson, lesson.gold, lesson.xp, await self.players.grant_xp(tx, player_id, lesson.xp),
+            number=in_chapter.index(lesson) + 1, of=len(in_chapter), learned=len(state.done), total=len(data.LESSONS),
+        )
         chapter = data.CHAPTER_BY_NUMBER[lesson.chapter]
         if state.chapter_done(chapter.number) == len(data.lessons_of(chapter.number)) and await self._mark(
             tx, player_id, f"acad:chap:{chapter.number}"
@@ -157,13 +169,20 @@ class AcademyService:
             state.graduated = done.graduated = True
         return done
 
-    async def _learn_open(self, tx: Tx, player_id: int, state: AcademyState, screen: str, command: str) -> list[Completion]:
-        """Learn the open lessons the hero just did; finishing one opens the next, which is looked at too."""
+    async def _learn_open(
+        self, tx: Tx, player_id: int, state: AcademyState, screen: str, command: str, attempted: bool = False
+    ) -> list[Completion]:
+        """Learn the open lessons the hero just did; finishing one opens the next, which is looked at too.
+
+        ``attempted``: the game refused what the hero tried (full energy, a wait). Only a lesson that is about knowing
+        the thing (``attempt``) counts a refused try; every lesson still looks at what is already in the database.
+        """
         out: list[Completion] = []
         for _ in range(len(data.LESSONS)):
             learned = None
             for lesson in state.open_lessons():
-                if (screen and screen in lesson.visit) or (command and command in lesson.commands) or await self._fact(tx, player_id, lesson):
+                tried = (screen and screen in lesson.visit) or (command and command in lesson.commands)
+                if (tried and (lesson.attempt or not attempted)) or await self._fact(tx, player_id, lesson):
                     learned = await self._complete(tx, player_id, lesson, state)
                     break
             if learned is None:
@@ -171,17 +190,22 @@ class AcademyService:
             out.append(learned)
         return out
 
-    async def after(self, player: Player, *, screen: str = "", command: str = "") -> list[Completion]:
-        """Called after the hero did something: the lessons it taught, if the hero is in the academy.
+    async def after(
+        self, player: Player, *, screen: str = "", command: str = "", attempted: bool = False
+    ) -> list[Completion]:
+        """Called after the hero did (or tried) something: the lessons it taught, if the hero is in the academy.
 
         Only open lessons are learned: a locked lesson waits for the ones before it, even if the hero already did it
-        (it is ticked as soon as it opens).
+        (it is ticked as soon as it opens). Heroes outside the academy cost one read and no write.
         """
+        state = await self.state(player.id)
+        if not state.started or state.graduated:
+            return []
         async with self.ctx.db.transaction() as tx:
-            state = await self._state(tx, player.id)
-            if not state.started or state.graduated:
+            state = await self._state(tx, player.id)  # again, inside the write: another event may have just learned one
+            if state.graduated:
                 return []
-            return await self._learn_open(tx, player.id, state, screen, command)
+            return await self._learn_open(tx, player.id, state, screen, command, attempted)
 
     async def sync(self, player: Player) -> list[Completion]:
         """Opening the academy (it starts here too): the open lessons whose deed is already done are learned, in order."""

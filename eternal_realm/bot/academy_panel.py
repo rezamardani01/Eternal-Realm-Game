@@ -53,10 +53,18 @@ def _reward(lesson: data.Lesson) -> str:
 
 def done_lines(done: Completion) -> list[str]:
     """What a learned lesson says: the praise, what just happened, the reward, a finished chapter, the graduation."""
-    lines = [f"🎓 {bold('آفرین! درس «' + done.lesson.title + '» را یاد گرفتی')} ✅", "", done.lesson.after, "",
-             f"🎁 جایزه: {_reward(done.lesson)}"]
+    chapter = data.CHAPTER_BY_NUMBER[done.lesson.chapter]
+    lines = [
+        f"🎓 {bold('آفرین! درس ' + fa(done.number) + ' فصل ' + fa(chapter.number) + ' تکمیل شد')} ✅",
+        f"{done.lesson.emoji} «{done.lesson.title}»",
+        "",
+        done.lesson.after,
+        "",
+        f"🎁 جایزه: {_reward(done.lesson)}",
+        f"📚 پیشرفت تو: {fa(done.learned)} از {fa(done.total)} درس",
+    ]
     if done.level_up:
-        lines.append(f"🎉 به سطح {fa(done.level_up.new)} رسیدی!")
+        lines.append(f"🎉 به سطح {fa(done.level_up.new_level)} رسیدی!")
     if done.chapter:
         lines += ["", f"🏅 {bold('فصل «' + done.chapter.name + '» تمام شد!')}", f"جایزه‌ی فصل: {get_item(done.chapter.chest).label} 📦"]
     if done.graduated:
@@ -73,6 +81,7 @@ async def notify(bot, services: Services, player: Player, chat_id: int, completi
     if not completions:
         return
     state = await services.academy.state(player.id)
+    completions = sorted(completions, key=lambda x: data.LESSONS.index(x.lesson))
     lines: list[str] = []
     for done in completions:
         lines += [*done_lines(done), ""]
@@ -87,16 +96,20 @@ async def notify(bot, services: Services, player: Player, chat_id: int, completi
         await bot.send_message(chat_id, "\n".join(lines).strip(), buttons=rows)
 
 
-async def after(bot, services: Services, player: Player, chat_id: int, *, screen: str = "", command: str = "") -> None:  # noqa: ANN001
-    """The academy's look after anything the hero did; quiet unless a lesson was learned."""
+async def after(  # noqa: ANN001 - Bot
+    bot, services: Services, player: Player, chat_id: int, *, screen: str = "", command: str = "", attempted: bool = False
+) -> None:
+    """The academy's look after anything the hero did or tried; quiet unless a lesson was learned.
+
+    It never raises: whatever goes wrong in here is logged and the game goes on as if the academy were not there.
+    """
     if screen in SCREENS:
         return
     try:
-        completions = await services.academy.after(player, screen=screen, command=command)
+        completions = await services.academy.after(player, screen=screen, command=command, attempted=attempted)
+        await notify(bot, services, player, chat_id, completions)
     except Exception:  # the academy must never break the game it teaches
         log.exception("academy check failed")
-        return
-    await notify(bot, services, player, chat_id, completions)
 
 
 # --- the screens ------------------------------------------------------------------------------------------------------

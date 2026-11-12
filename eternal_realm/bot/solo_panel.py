@@ -186,7 +186,7 @@ def _after(c: Ctx, update: SoloUpdate) -> Screen:
     if update.won or update.payout.xp:
         text += [f"🎁 {bold('پاداش')}", *_reward_lines(update.payout)]
     if update.payout.level_up:
-        text.append(f"🎉 به سطح {fa(update.payout.level_up.new)} رسیدید!")
+        text.append(f"🎉 به سطح {fa(update.payout.level_up.new_level)} رسیدید!")
     if update.won and update.payout.grade:
         text.append(f"🏅 درجه‌ی این مرحله: {data.GRADES[update.payout.grade]}")
     text += [f"✨ {n}" for n in update.payout.notes]
@@ -644,7 +644,7 @@ async def maze_out(c: Ctx) -> Screen:
     pay = await c.services.solo.maze_retreat(c.player)
     text = [f"🚪 {bold('از هزارتو بیرون آمدید')}", LINE, f"🎁 {bold('غنیمت')}", *_reward_lines(pay)]
     if pay.level_up:
-        text.append(f"🎉 به سطح {fa(pay.level_up.new)} رسیدید!")
+        text.append(f"🎉 به سطح {fa(pay.level_up.new_level)} رسیدید!")
     return Screen("\n".join(text), [[c.btn("♾️ هزارتو", "maze")], c.back("trip", "🧭 سفر قهرمان")])
 
 
@@ -810,7 +810,7 @@ async def expedition_claim(c: Ctx) -> Screen:
     if report.crystal:
         lines.append(f"💎 {fa(report.crystal)} کریستال هم یافت")
     if report.level_up:
-        lines.append(f"🎉 به سطح {fa(report.level_up.new)} رسیدید!")
+        lines.append(f"🎉 به سطح {fa(report.level_up.new_level)} رسیدید!")
     return Screen("\n".join(lines), [[c.btn("🏕️ اعزام دوباره", "expd", style="success")], c.back("trip", "🧭 سفر قهرمان")])
 
 

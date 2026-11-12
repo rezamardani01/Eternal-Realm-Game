@@ -71,10 +71,15 @@ async def on_text(message: Message, bot: Bot, services: Services) -> None:
             raise GameError("⛔ نگهبانان قلمرو درهای شهر را به روی شما بسته‌اند. اگر فکر می‌کنید اشتباهی شده، با مدیر ربات صحبت کنید.")
 
     ctx = CommandContext(message, bot, services, cmd, match.args, match.raw_args, player)
-    await cmd.handler(ctx)
-    if player is not None:  # the academy notices lessons learned by words (sent here or in a group); quiet otherwise
-        from ..academy_panel import after as academy_after
+    from ..academy_panel import after as academy_after
 
+    try:
+        await cmd.handler(ctx)
+    except GameError:
+        if player is not None:  # a refused try (full energy, a wait) still teaches the lessons that are about knowing it
+            await academy_after(bot, services, player, player.platform_user_id, command=cmd.name, attempted=True)
+        raise
+    if player is not None:  # the academy notices lessons learned by words (sent here or in a group); quiet otherwise
         await academy_after(bot, services, player, player.platform_user_id, command=cmd.name)
     if not private and player is not None and cmd.points:
         await services.groups.add_points(message.chat.id, player.id, cmd.points)

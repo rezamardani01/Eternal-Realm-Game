@@ -1420,6 +1420,10 @@ async def on_panel(
         if ctx.dimmed:  # a progress frame took the buttons away: never leave the player on a dead message
             rescue = Screen("⚠️ لحظه‌ای مشکلی پیش آمد، ولی چیزی از دست نرفت. از دکمه‌ی زیر ادامه بدهید 👇", [ctx.back(ctx.recover_to, "↩️ ادامه")])
             await _show(message, rescue)
+        if isinstance(error, GameError):  # a refused try (full energy, a wait) still teaches the lessons about knowing it
+            from .academy_panel import after as academy_after
+
+            await academy_after(message.bot, services, player, player.platform_user_id, screen=callback_data.s, attempted=True)
         if not isinstance(error, KeyError):
             raise
         shown = None
