@@ -1019,6 +1019,30 @@ MIGRATIONS: list[str] = [
         created_at           INTEGER NOT NULL
     );
     """,
+    # 62: online duels - who is searching for an opponent, and the two private messages that show a match
+    """
+    CREATE TABLE online_queue (
+        player_id  INTEGER PRIMARY KEY REFERENCES players (id),
+        level      INTEGER NOT NULL,
+        rating     INTEGER NOT NULL,
+        chat_id    INTEGER NOT NULL,
+        message_id INTEGER NOT NULL,
+        joined_at  INTEGER NOT NULL
+    );
+    CREATE TABLE online_matches (
+        duel_id    INTEGER PRIMARY KEY REFERENCES duels (id),
+        a_player   INTEGER NOT NULL REFERENCES players (id),
+        a_chat     INTEGER NOT NULL,
+        a_msg      INTEGER,
+        b_player   INTEGER NOT NULL REFERENCES players (id),
+        b_chat     INTEGER NOT NULL,
+        b_msg      INTEGER,
+        created_at INTEGER NOT NULL,
+        warned_for INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX idx_online_matches_a ON online_matches (a_player);
+    CREATE INDEX idx_online_matches_b ON online_matches (b_player);
+    """,
 ]
 
 

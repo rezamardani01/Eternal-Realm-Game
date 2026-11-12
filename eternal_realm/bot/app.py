@@ -15,7 +15,7 @@ from ..db.database import Database
 from . import boss, clan_panel, clanwar_panel, group_dungeon, membership, duels, events, maintenance, onboarding, panel, payments, quest_panel  # noqa: F401
 from .lockdown import MaintenanceMiddleware
 from ..game.services.retire import retire_old_gear
-from . import academy_panel, arms_panel, growth_panel, solo_panel, habit_panel, raid_ui, notifier, gift_panel, city_panel, wheel_panel, exchange_panel, team_battle, achievement_panel, admin_panel, bet_panel, invite_panel, ascend_panel, altar_panel, card_panel, contest_panel, dungeon_panel, mission_panel, offers, path_panel, pet_panel, transfer_panel, vip_panel  # noqa: F401
+from . import academy_panel, arms_panel, growth_panel, online_panel, solo_panel, habit_panel, raid_ui, notifier, gift_panel, city_panel, wheel_panel, exchange_panel, team_battle, achievement_panel, admin_panel, bet_panel, invite_panel, ascend_panel, altar_panel, card_panel, contest_panel, dungeon_panel, mission_panel, offers, path_panel, pet_panel, transfer_panel, vip_panel  # noqa: F401
 from .commands import REGISTRY
 from .commands import router as commands_router
 from .membership import MembershipMiddleware
@@ -82,6 +82,7 @@ async def run(settings: Settings) -> None:
         dp = build_dispatcher(services)
         background = [
             asyncio.create_task(duels.janitor(bot, services), name="janitor"),
+            asyncio.create_task(online_panel.processor(bot, services), name="online-matchmaker"),
             asyncio.create_task(maintenance.backup_loop(db), name="backup"),
             asyncio.create_task(boss.processor(bot, services), name="boss-processor"),
             asyncio.create_task(events.processor(bot, services), name="event-processor"),

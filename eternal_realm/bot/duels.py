@@ -72,6 +72,13 @@ async def on_duel_button(query: CallbackQuery, callback_data: DuelCb, services: 
         return
     elif action in ACTIONS:
         update = await services.duels.act(duel_id, player, ACTIONS[action])
+        online = await services.online.match_of(duel_id)
+        if online is not None:  # an online fight: both players' private messages move on together
+            from . import online_panel
+
+            await online_panel.push(message.bot, services, online, update)
+            await query.answer()
+            return
         text, buttons = render(update, turn_seconds)
         if update.finished:  # the fight message goes away and the result arrives as a fresh one
             with contextlib.suppress(BaleAPIError):
@@ -87,6 +94,13 @@ async def on_duel_button(query: CallbackQuery, callback_data: DuelCb, services: 
 
 async def _announce(bot: Bot, services: Services, item: DuelUpdate | Duel) -> None:
     duel = item.duel if isinstance(item, DuelUpdate) else item
+    online = await services.online.match_of(duel.id)
+    if online is not None:
+        if isinstance(item, DuelUpdate):  # somebody ran out of time in an online fight
+            from . import online_panel
+
+            await online_panel.push(bot, services, online, item)
+        return
     if duel.message_id is None:
         return
     if isinstance(item, DuelUpdate):

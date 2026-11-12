@@ -17,6 +17,7 @@ def _opener(name: str, screen: str, aliases: list[str], description: str, catego
 _opener("open_realm", "home", ["قلمرو", "realm"], "منوی اصلی قهرمان با دکمه‌ها", "👤 قهرمان")
 _opener("open_inventory", "inv", ["کوله‌پشتی", "کیف", "کوله", "inventory"], "کوله‌پشتی (آیتم‌ها و صندوقچه‌ها)", "🎒 کوله‌پشتی")
 _opener("open_gear", "arms", ["تجهیزات", "تجهیزات من", "تجهیزات قهرمان", "equipment"], "تجهیزات جنگی و مهارت‌های قهرمان", "🎒 کوله‌پشتی")
+_opener("open_online", "online", ["مبارزه آنلاین", "مبارزه انلاین", "آنلاین", "online"], "جستجوی حریف و مبارزه‌ی آنلاین (پیوی)", "⚔️ نبرد")
 _opener("open_chests", "chests", ["صندوقچه", "صندوقچه‌ها", "chests"], "صندوقچه‌ها", "🎒 کوله‌پشتی")
 _opener("open_shop", "shop", ["فروشگاه", "shop"], "فروشگاه", "🛒 بازار و فروشگاه")
 _opener("open_market", "market", ["بازار", "بازارچه", "market"], "بازار بازیکنان", "🛒 بازار و فروشگاه")
