@@ -72,5 +72,9 @@ async def on_text(message: Message, bot: Bot, services: Services) -> None:
 
     ctx = CommandContext(message, bot, services, cmd, match.args, match.raw_args, player)
     await cmd.handler(ctx)
+    if player is not None:  # the academy notices lessons learned by words (sent here or in a group); quiet otherwise
+        from ..academy_panel import after as academy_after
+
+        await academy_after(bot, services, player, player.platform_user_id, command=cmd.name)
     if not private and player is not None and cmd.points:
         await services.groups.add_points(message.chat.id, player.id, cmd.points)

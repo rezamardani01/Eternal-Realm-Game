@@ -230,7 +230,7 @@ async def home(c: Ctx) -> Screen:
         [c.btn("⚔️ نبرد و چالش", "fight"), c.btn("🛒 بازار و تجارت", "trade")],
         [c.btn("🏯 خاندان", "clan"), c.btn("💎 خزانه قلمرو", "premium")],
         [c.btn("🎁 جایزه روزانه", "daily"), c.btn("😴 استراحت", "rest")],
-        [c.btn("❓ راهنمایی", "help"), c.btn("🤝 دعوت از دوستان", "invite", style="success")],
+        [c.btn("🎓 آکادمی", "academy", style="primary"), c.btn("🤝 دعوت از دوستان", "invite", style="success")],
     ]
     streak, savable = c.services.players.streak_status(p)
     if savable:
@@ -1431,6 +1431,9 @@ async def on_panel(
     if shown.text is not None:
         await _show(message, shown)
     await query.answer((shown.toast or "")[:190] or None, show_alert=shown.alert)
+    from .academy_panel import after as academy_after
+
+    await academy_after(message.bot, services, player, player.platform_user_id, screen=callback_data.s)
 
 
 # --- text prompt: price of a market listing ---------------------------------------------------

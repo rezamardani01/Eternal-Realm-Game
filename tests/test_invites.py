@@ -35,14 +35,14 @@ async def join(h, uid, name, payload="1"):
     await h.click(uid, h.button_data("کماندار"))
 
 
-async def test_the_main_menu_has_an_invite_button_between_help_and_the_links(h, services):
+async def test_the_main_menu_has_an_invite_button_between_the_academy_and_the_links(h, services):
     await hero(services, 5, "آرش")
     await h.say(5, "/start")
     rows = h.session.last_markup_rows()
     labels = [[b["text"] for b in row] for row in rows]
     flat = [t for row in labels for t in row]
-    i_help = next(i for i, row in enumerate(labels) if any("راهنمایی" in t for t in row))
-    assert labels[i_help] == ["❓ راهنمایی", "🤝 دعوت از دوستان"]
+    i_help = next(i for i, row in enumerate(labels) if any("آکادمی" in t for t in row))
+    assert labels[i_help] == ["🎓 آکادمی", "🤝 دعوت از دوستان"]
     assert any("گروه ما" in t for t in labels[i_help + 1])  # the links row comes after
     assert "👥 گروه ما" in flat
 

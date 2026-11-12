@@ -218,6 +218,11 @@ def _next_rows(c: Ctx, kind: str, info: dict, won: bool) -> list:
         if won:
             rows.append([c.btn("⬆️ طبقه‌ی بعد", "towergo", style="success")])
         rows.append([c.btn("🗼 برج بی‌پایان", "tower")])
+    elif kind == "academy":
+        if not won:
+            rows.append([c.btn("🔁 دوباره امتحان کن", "acfight", style="success")])
+        rows.append([c.btn("🎓 برگرد به آکادمی", "aclesson", "fight", style="primary")])
+        return rows
     elif kind == "maze":
         if won and info["floor"] < maze_data.chapter_end(info["floor"]):
             rows.append([c.btn("➡️ ادامه‌ی هزارتو", "maze", style="success")])

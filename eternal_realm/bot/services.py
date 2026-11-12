@@ -27,6 +27,7 @@ from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
 from ..game.services.invites import InviteService
 from ..game.services.market import MarketService
+from ..game.services.academy import AcademyService
 from ..game.services.achievements import AchievementService
 from ..game.services.advisor import AdvisorService
 from ..game.services.alerts import AlertService
@@ -105,6 +106,7 @@ class Services:
     bets: BetService
     characters: CharacterService
     groups: GroupService
+    academy: AcademyService
     throttle: Throttle
     bot_username: str = ""
 
@@ -175,6 +177,7 @@ class Services:
             bets=BetService(ctx, duels),
             characters=characters,
             groups=GroupService(ctx),
+            academy=AcademyService(ctx, players, inventory),
             throttle=Throttle(
                 balance.command_gap_seconds, balance.group_flood_window, balance.group_flood_max
             ),

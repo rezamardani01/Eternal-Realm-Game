@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 
-from baleropy import F, Router
+from baleropy import Button, F, Router
 from baleropy.exceptions import BaleAPIError
 from baleropy.filters import ChatTypeFilter, CommandStart
 from baleropy.fsm import FSMContext, State, StatesGroup
@@ -15,7 +15,7 @@ from ..game.data.races import RACES
 from ..shared.errors import GameError
 from ..shared.text import bold, fa, headline
 from . import keyboards, panel, raid_ui, views
-from .callbacks import ClassCb, RaceCb
+from .callbacks import ClassCb, PanelCb, RaceCb
 from .services import Services
 
 router = Router(name="onboarding")
@@ -115,6 +115,11 @@ async def got_class(
     await services.players.grant_welcome_boost(player.id)
     await query.message.edit_text(views.created(player) + "\n\n🚀 هدیه‌ی خوش‌آمد: ۳ روز بوست دو برابر برای شروع سریع‌تر!")
     await panel.send(query.message, services, player, "home")
+    await services.academy.start(player.id)
+    await query.message.answer(
+        "🎓 تازه‌واردی؟ نگران نباش!\nدر «آکادمی» قدم به قدم همه‌چیز بازی را یادت می‌دهیم و برای هر درس هم جایزه می‌گیری 🎁",
+        buttons=[[Button.inline("🎓 شروع آکادمی", PanelCb(s="aclesson", a="hero", b=None, o=user.id), style="success")]],
+    )
     if data.get("ref"):
         await _pay_inviter(query.message.bot, services, player, int(data["ref"]))
     if data.get("raid"):

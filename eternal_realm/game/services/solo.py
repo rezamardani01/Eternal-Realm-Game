@@ -244,6 +244,15 @@ class SoloService:
             info = {"title": f"میدان بات‌ها · {name}", "tier": tier_id, "gold": gold, "xp": xp, "foe": bot_id, "region": world_data.ARENA_REGION}
             return await self._begin(tx, player, "arena", foe, info, data.ENERGY["arena"])
 
+    async def start_academy(self, player: Player) -> SoloFight:
+        """The academy's practice fight: a weak training goblin, no energy and no daily limit (a lost one is just tried again)."""
+        async with self.ctx.db.transaction() as tx:
+            foe = data.get_foe("dark_goblin").fighter(player.level, 0.45)
+            foe.name = "گابلین تمرینی"
+            gold, xp = self._scale(player.level, 20, 30)
+            info = {"title": "آکادمی · نبرد تمرینی", "gold": gold, "xp": xp, "foe": "dark_goblin"}
+            return await self._begin(tx, player, "academy", foe, info, 0)
+
     async def start_stage(self, player: Player, number: int, style: str) -> SoloFight:
         try:
             stage = data.get_stage(number)

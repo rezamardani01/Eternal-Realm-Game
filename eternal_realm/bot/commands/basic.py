@@ -36,8 +36,8 @@ async def my_panel(ctx: CommandContext) -> None:
 @command("help", ["راهنما", "دستورات", "help"], "فهرست دستورها", category="👤 شخصیت", needs_player=False, points=0)
 async def help_(ctx: CommandContext) -> None:
     player = await ctx.services.players.find(ctx.user.id)
-    if player is not None:
-        await panel.send(ctx.message, ctx.services, player, "help", reply=True)
+    if player is not None:  # in the private chat «راهنما» opens the academy, which also holds the command list
+        await panel.send(ctx.message, ctx.services, player, "help" if ctx.is_group else "academy", reply=True)
         return
     await ctx.reply(views.command_help(REGISTRY, ctx.is_group))
 
