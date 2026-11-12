@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from baleropy import Button
 
-from ..game.data.arms import CATEGORIES, MAX_EQUIPPED, MAX_UPGRADE, RARITIES, Arm, arms_of, get_arm, pack_id, plus, trait_text
-from ..game.data.growth import SLOT_LEVELS, slots_open
+from ..game.data.arms import CATEGORIES, CATEGORY_SHORT, MAX_EQUIPPED, MAX_UPGRADE, RARITIES, Arm, arms_of, get_arm, pack_id, plus, trait_text
+from ..game.data.growth import SKILL_LEVELS, SLOT_LEVELS, slots_open
 from ..game.data.classes import CLASSES
 from ..game.data.races import RACES
 from ..game.data.skills import skills_for
@@ -25,16 +25,15 @@ def _private(c: Ctx) -> None:
         raise GameError("تجهیزات قهرمان را در پیام خصوصی ربات تنظیم کنید.")
 
 
-def _summary(worn: list[Arm]) -> list[str]:
-    """What the whole loadout does, in a few lines."""
-    lines = sum_stats(worn).bonus_lines() or ["هنوز تجهیزاتی ندارید"]
+def _traits(worn: list[Arm]) -> list[str]:
+    """The special abilities of the worn pieces, each told once."""
     seen: list[str] = []
     for arm in worn:
         for trait in arm.traits:
             text = trait_text(trait)
             if text and text not in seen:
                 seen.append(text)
-    return lines + seen
+    return seen
 
 
 def sum_stats(worn: list[Arm]):  # noqa: ANN201
@@ -51,7 +50,11 @@ def sum_stats(worn: list[Arm]):  # noqa: ANN201
 async def arms(c: Ctx) -> Screen:
     _private(c)
     loadout = await c.services.arms.loadout(c.player.id)
-    lines = [f"⚔️ {bold('تجهیزات قهرمان')}", LINE, f"{c.player.char_class.emoji} {c.player.name} · سطح {fa(c.player.level)}", ""]
+    lines = [
+        f"⚔️ {bold('تجهیزات قهرمان')}", LINE, "",
+        f"{c.player.char_class.emoji} {bold(c.player.name)} · سطح {fa(c.player.level)}", "",
+        f"🧰 {bold('جایگاه‌ها')}",
+    ]
     rows = []
     plus_of = loadout.plus or {}
     open_slots = slots_open(c.player.level)
@@ -63,10 +66,16 @@ async def arms(c: Ctx) -> Screen:
         tag = f" {plus(plus_of.get(arm.id, 0))}" if arm and plus_of.get(arm.id) else ""
         lines.append(f"{CIRCLED[i]} {arm.label + tag if arm else '— جای خالی —'}")
         rows.append(c.btn(f"{CIRCLED[i]} {arm.label + tag if arm else 'جای خالی'}", "armslot", f"{i + 1}.0"))
-    lines += ["", f"📊 {bold('اثر تجهیزات')}", *_summary(loadout.worn), "", "🔁 بیرون از نبرد هر وقت خواستید تجهیزات را عوض کنید و بیلد تازه بسازید."]
+    stats = sum_stats(loadout.worn).bonus_lines()
+    traits = _traits(loadout.worn)
+    lines += ["", f"📊 {bold('مجموع آمار')}", *(stats or ["هنوز قطعه‌ای نپوشیده‌اید"])]
+    if traits:
+        lines += ["", f"✨ {bold('اثرهای ویژه')}", *traits]
+    lines += ["", "🔁 بیرون از نبرد هر وقت خواستید قطعه‌ها را عوض کنید و بیلد تازه بسازید."]
     grid = keyboards.grid(rows, 2)
     grid.append([c.btn("🛒 خرید تجهیزات", "armshop", style="primary"), c.btn("🌟 مهارت‌های من", "skills")])
-    grid.append([c.btn("🎯 ویژگی‌ها", "attrs"), c.btn("🧬 استعدادها", "talents"), c.btn("📈 پیشرفت", "progress")])
+    grid.append([c.btn("🎯 ویژگی‌ها", "attrs"), c.btn("🧬 استعدادها", "talents")])
+    grid.append([c.btn("📈 راه پیشرفت", "progress")])
     grid.append(c.back("profile"))
     return Screen("\n".join(lines), grid)
 
@@ -132,11 +141,14 @@ async def skills(c: Ctx) -> Screen:
     p = c.player
     race, cls = RACES[p.race_id], CLASSES[p.class_id]
     lines = [
-        f"🌟 {bold('مهارت‌های ' + p.name)}", LINE, f"{race.emoji} {race.name} · {cls.emoji} {cls.name}", "",
+        f"🌟 {bold('مهارت‌های ' + p.name)}", LINE, "",
+        f"{race.emoji} {race.name} · {cls.emoji} {cls.name}", "",
         "هر مهارت کار خودش را می‌کند؛ نوبت‌های انتظارشان را هنگام نبرد روی دکمه‌ها می‌بینید.", "",
     ]
     for sk in skills_for(p.race_id, p.class_id):
-        lines += [f"{sk.emoji} {bold(f'مهارت {fa(sk.slot)}: {sk.name}')}", *[f"   {line}" for line in sk.describe()], ""]
+        need = SKILL_LEVELS[sk.slot - 1]
+        state = f"🔒 از سطح {fa(need)}" if p.level < need else "✅ باز است"
+        lines += [f"{sk.emoji} {bold(f'مهارت {fa(sk.slot)}: {sk.name}')}", state, *sk.describe(), ""]
     lines.append("🧠 ترکیب مهارت‌ها و چهار تجهیزات شما تعیین می‌کند نبرد چطور پیش برود.")
     rows = [[c.btn("⚔️ تجهیزات قهرمان", "arms")] if not c.is_group else [], c.back("profile")]
     return Screen("\n".join(lines), [r for r in rows if r])
@@ -149,14 +161,14 @@ async def arm_shop(c: Ctx) -> Screen:
     p = await c.refresh()
     owned = await c.services.arms.owned(p.id)
     lines = [
-        f"🛒 {bold('تجهیزات جنگی')}", LINE,
-        "تجهیزات جنگی فقط با پول واقعی خریدنی است و با سکه نمی‌شود خرید.",
-        "🍀 بازیکن رایگان هم جا نمی‌ماند: تجهیزات معمولی و غیرمعمول را گاهی از شکار، سفر، صندوقچه و باس‌ها پیدا می‌کند.",
+        f"🛒 {bold('تجهیزات جنگی')}", LINE, "",
+        "💳 تجهیزات جنگی فقط با پول واقعی خریدنی است و با سکه نمی‌شود خرید.", "",
+        "🍀 بازیکن رایگان هم جا نمی‌ماند: تجهیزات معمولی و غیرمعمول را گاهی از شکار، سفر، صندوقچه و باس‌ها پیدا می‌کند.", "",
         "هر تعداد که بخواهید می‌توانید داشته باشید، اما فقط ۴ تا را هم‌زمان روی قهرمان می‌گذارید. 👇",
     ]
     rows = [
-        c.btn(f"{emoji} {title}", "armcat", cat)
-        for cat, (emoji, title) in CATEGORIES.items()
+        c.btn(f"{emoji} {CATEGORY_SHORT[cat]}", "armcat", cat)
+        for cat, (emoji, _) in CATEGORIES.items()
     ]
     grid = keyboards.grid(rows, 2)
     grid.append([c.btn(f"🎒 تجهیزات من ({fa(sum(owned.values()))})", "arms")])

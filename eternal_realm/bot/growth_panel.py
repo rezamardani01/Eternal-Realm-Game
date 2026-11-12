@@ -28,16 +28,21 @@ async def progress(c: Ctx) -> Screen:
     p = await c.refresh()
     need = c.services.characters.xp_needed(p)
     free = await c.services.growth.free_points(p)
-    lines = [f"📈 {bold('راه پیشرفت')}", LINE, f"⭐ سطح {fa(p.level)}", f"{bar(p.xp, need, 12)} {fa(p.xp)} / {fa(need)} تجربه"]
-    gap = max(0, need - p.xp)
-    lines.append(f"🎯 {fa(gap)} تجربه تا سطح {fa(p.level + 1)}")
-    lines += ["", "💡 تجربه از نبرد، شکار، باس‌ها، سفر قهرمان و مأموریت‌ها می‌آید.", "",
-              f"🎁 هر سطح {fa(POINTS_PER_LEVEL)} امتیاز ویژگی می‌دهد؛ الان {bold(fa(free))} امتیاز آماده دارید."]
+    lines = [
+        f"📈 {bold('راه پیشرفت')}", LINE, "",
+        f"⭐ سطح {fa(p.level)}",
+        f"{bar(p.xp, need, 12)}",
+        f"{fa(p.xp)} / {fa(need)} تجربه",
+        f"🎯 {fa(max(0, need - p.xp))} تجربه تا سطح {fa(p.level + 1)}", "",
+        "💡 تجربه از نبرد، شکار، باس‌ها، سفر قهرمان و مأموریت‌ها می‌آید.", "",
+        f"🎁 {bold('امتیاز ویژگی')}",
+        f"هر سطح {fa(POINTS_PER_LEVEL)} امتیاز می‌دهد؛ الان {bold(fa(free))} امتیاز آماده دارید.", "",
+    ]
     nxt = next_unlock(p.level)
     if nxt:
-        lines.append(f"🔓 بعدی: سطح {fa(nxt[0])} — {nxt[1]} {nxt[2]}")
-    lines += ["", f"🗺️ {bold('بازشدن‌ها')}"]
-    for need_level, emoji, title, text in UNLOCKS:
+        lines += [f"🔓 {bold('بازشدن بعدی')}", f"سطح {fa(nxt[0])} · {nxt[1]} {nxt[2]}", ""]
+    lines.append(f"🗺️ {bold('همه‌ی بازشدن‌ها')}")
+    for need_level, emoji, title, _ in UNLOCKS:
         mark = "✅" if p.level >= need_level else "🔒"
         lines.append(f"{mark} سطح {fa(need_level)} · {emoji} {title}")
     rows = [[c.btn("🎯 ویژگی‌ها", "attrs", style="primary"), c.btn("🧬 استعدادها", "talents")], c.back("arms")]
@@ -52,18 +57,22 @@ async def attrs(c: Ctx) -> Screen:
     mine = await c.services.growth.attrs(p.id)
     free = max(0, points_earned(p.level) - sum(mine.values()))
     lines = [
-        f"🎯 {bold('ویژگی‌های قهرمان')}", LINE,
-        f"🎁 امتیاز آماده: {bold(fa(free))} (هر سطح {fa(POINTS_PER_LEVEL)} امتیاز)", "",
+        f"🎯 {bold('ویژگی‌های قهرمان')}", LINE, "",
+        f"🎁 امتیاز آماده: {bold(fa(free))}", f"هر سطح {fa(POINTS_PER_LEVEL)} امتیاز می‌دهد.", "",
         "امتیازها را خودتان خرج می‌کنید؛ پس دو قهرمانِ هم‌کلاس می‌توانند کاملاً متفاوت شوند.", "",
     ]
     rows = []
     for attr in ATTRS.values():
-        lines.append(f"{attr.emoji} {bold(attr.name)}: {fa(mine.get(attr.id, 0))}")
-        lines.append(f"   {attr.blurb} · هر امتیاز: {attr_effect_text(attr)}")
+        lines += [
+            f"{attr.emoji} {bold(attr.name)} · {fa(mine.get(attr.id, 0))} امتیاز",
+            attr.blurb,
+            f"هر امتیاز: {attr_effect_text(attr)}", "",
+        ]
         rows.append([
             c.btn(f"{attr.emoji} {attr.name} · {fa(mine.get(attr.id, 0))}  ➕", "attradd", attr.id, "1", style="success" if free else None),
             c.btn("➕۵", "attradd", attr.id, "5"),
         ])
+    lines.pop()
     if sum(mine.values()):
         rows.append([c.btn(f"♻️ بازتقسیم ({fa(c.services.growth.reset_price(p))} سکه)", "attrresetq", style="danger")])
     rows.append(c.back("progress"))
@@ -106,17 +115,18 @@ async def talents(c: Ctx) -> Screen:
     p = await c.refresh()
     chosen = await c.services.growth.talents(p)
     places = talent_places(p.level)
-    lines = [f"🧬 {bold('استعدادهای ' + p.char_class.name)}", LINE]
+    lines = [f"🧬 {bold('استعدادهای ' + p.char_class.name)}", LINE, ""]
     if places:
-        lines.append(f"جای استعداد: {fa(len(chosen))} از {fa(places)} پر است")
+        lines.append(f"جای استعداد: {bold(fa(len(chosen)) + ' از ' + fa(places))} پر است")
     else:
         lines.append(f"🔒 استعدادها از سطح {fa(TALENT_LEVELS[0])} باز می‌شوند")
     lines += ["همه را نمی‌شود هم‌زمان داشت؛ انتخاب کنید و هر وقت خواستید (بیرون از نبرد) عوضشان کنید.", ""]
     rows = []
     for t in c.services.growth.available(p):
         on = t.id in chosen
-        lines += [f"{'✅' if on else '▫️'} {t.label}: {t.blurb}", *[f"     {line}" for line in t.lines()]]
+        lines += [f"{'✅' if on else '▫️'} {bold(t.label)}", t.blurb, *t.lines(), ""]
         rows.append(c.btn(f"{'✅ ' if on else ''}{t.label}", "talent", t.id))
+    lines.pop()
     grid = keyboards.grid(rows, 2)
     grid.append(c.back("progress"))
     return Screen("\n".join(lines), grid)

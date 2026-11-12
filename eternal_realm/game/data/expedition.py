@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-HOURS = (1, 4, 8)
+HOURS = (1, 4, 8, 12)
 DAILY_LIMIT = 1
 #: the gold and experience of a report are multiplied by this
 REWARD_SHARE = 0.4
@@ -38,6 +38,16 @@ KINDS: tuple[Kind, ...] = (
     Kind("treasure", "🧭", "جستجوی گنج", "سکه و گاهی صندوقچه", gold=70, items=(("wooden_chest", 0.12, 1.0),),
          finds=(("غار ناشناخته‌ای کشف شد", 0.25),)),
     Kind("guard", "🛡️", "نگهبانی از منطقه", "سکه و تجربه برای دفع خطر", gold=40, xp=30, finds=(("راهزنان از ترس گریختند", 0.3),)),
+    Kind("fish", "🎣", "ماهیگیری در دریا", "ماهی و گاهی ماهی طلایی", gold=15, items=(("small_fish", 5, 1.0), ("trout", 2, 0.8), ("golden_fish", 0.15, 0.5)),
+         finds=(("تور پر از ماهی درخشان شد", 0.2),)),
+    Kind("hunt", "🏹", "شکار در جنگل", "پوست و دندان هیولا", gold=20, xp=15, items=(("monster_hide", 3, 1.0), ("monster_fang", 1.5, 0.7)),
+         finds=(("رد یک شکار بزرگ پیدا شد", 0.2),)),
+    Kind("caravan", "🐪", "همراهی کاروان", "سکه برای نگهبانی از مسیر", gold=55, xp=20, finds=(("بازرگانی پاداش اضافه داد", 0.25),)),
+    Kind("ruins", "🏛️", "کاوش در ویرانه", "طومار و سکه‌ی کهن", gold=20, items=(("old_scroll", 1.0, 0.7), ("ancient_coin", 0.3, 0.5), ("crystal_shard", 0.1, 0.4)),
+         finds=(("اتاق مخفی پیدا شد", 0.2),)),
+    Kind("farm", "🌾", "کار در کشتزار", "گندم و عسل", gold=12, items=(("wheat", 6, 1.0), ("honey", 0.6, 0.6)), finds=(("محصول امسال فراوان بود", 0.25),)),
+    Kind("sea", "🚢", "سفر دریایی", "سکه و تجربه از بندرها", gold=45, xp=35, items=(("crystal_shard", 0.12, 0.5),),
+         finds=(("کشتی‌ای غرق‌شده دیده شد", 0.2),)),
 )
 _KIND = {k.id: k for k in KINDS}
 

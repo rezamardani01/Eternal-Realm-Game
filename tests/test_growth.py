@@ -417,7 +417,7 @@ async def test_growth_screens_flow(h, services, db):
     await h.panel(10, "profile")
     assert "امتیاز ویژگی آماده" in h.session.last_text()
     await h.panel(10, "arms")
-    assert {"🎯 ویژگی‌ها", "🧬 استعدادها", "📈 پیشرفت"} <= set(h.labels())
+    assert {"🎯 ویژگی‌ها", "🧬 استعدادها", "📈 راه پیشرفت"} <= set(h.labels())
     await h.panel(10, "progress")
     assert "تجربه" in h.session.last_text() and "🔒" in h.session.last_text() and "✅" in h.session.last_text()
     await h.panel(10, "attrs")

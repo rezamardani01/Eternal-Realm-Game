@@ -29,12 +29,18 @@ REGIONS: tuple[Region, ...] = (
     Region("red_desert", "🏜️", "صحرای سرخ", "ماسه‌های داغ و شهرهای سوخته"),
     Region("mist_valley", "🌫️", "دره‌ی مه", "راه‌هایی که در مه گم می‌شوند"),
     Region("golden_plain", "🌾", "دشت طلایی", "کشتزارها و لانه‌های دور"),
+    Region("mirage_sea", "🐪", "دریای سراب", "ماسه‌های بی‌پایان و شهرهای زیر شن"),
+    Region("drowned_coast", "🌊", "ساحل غرق‌شده", "کشتی‌های شکسته و آوازهای زیر آب"),
+    Region("ghost_grove", "🌳", "بیشه‌ی ارواح", "درختانی که خاطره دارند"),
+    Region("sky_isles", "⚡", "جزایر آسمانی", "ابرهای سنگی و طوفان‌های همیشگی"),
 )
 _REGION = {r.id: r for r in REGIONS}
 #: where each kind of solo content happens
-STORY_REGION = {1: "black_forest", 2: "red_desert", 3: "north_peaks", 4: "mist_valley"}
+STORY_REGION = {1: "black_forest", 2: "red_desert", 3: "north_peaks", 4: "mist_valley", 5: "mirage_sea", 6: "drowned_coast", 7: "ghost_grove", 8: "sky_isles"}
 DUNGEON_REGION = {
     "crypt": "black_forest", "inferno": "red_desert", "prison": "north_peaks", "temple": "mist_valley", "lair": "golden_plain",
+    "swamp": "ghost_grove", "clockwork": "sunset_port", "library": "mist_valley", "volcano": "red_desert", "abyss": "sky_isles",
+    "colosseum": "mirage_sea", "crystal": "north_peaks",
 }
 ARENA_REGION = "sunset_port"
 
@@ -88,6 +94,18 @@ EVENT_KINDS: tuple[EventKind, ...] = (
     EventKind("dimension_gate", "🌀", "دروازه‌ای از جهانی ناشناخته",
               "در بندر غروب دروازه‌ای از نور باز شده و سایه‌هایی از آن بیرون می‌آیند. بسته شدنش به همت همه‌ی فرمانروایان بستگی دارد.",
               "sunset_port", "mirror_shade"),
+    EventKind("sand_curse", "🏜️", "بیداری فرعون",
+              "فرعونی که هزاره‌ها خوابیده بود از هرم بیرون آمده و ماسه‌ها را به لشکر تبدیل می‌کند. فرمانروایان باید پیش از رسیدنش به شهرها او را متوقف کنند.",
+              "mirage_sea", "mummy"),
+    EventKind("sea_wrath", "🌊", "خشم لویاتان",
+              "امواجی غول‌آسا به ساحل غرق‌شده یورش آورده‌اند و کشتی‌ها یکی‌یکی به قعر می‌روند. باید مهار اقیانوس را به دست گرفت.",
+              "drowned_coast", "kraken_spawn"),
+    EventKind("grove_awaken", "🌳", "بیداری بیشه",
+              "درختان بیشه‌ی ارواح راه افتاده‌اند و هر که را ببینند در ریشه‌هایشان می‌بندند. باید ریشه‌ی خشم را پیدا کرد.",
+              "ghost_grove", "treant"),
+    EventKind("sky_fall", "⚡", "سقوط جزیره‌ی آسمانی",
+              "جزیره‌ای از ابر و سنگ از آسمان می‌افتد و موجوداتش به زمین می‌ریزند. هر ضربه‌ی شما سرعت سقوط را کم می‌کند.",
+              "sky_isles", "storm_hawk"),
 )
 _KIND = {k.id: k for k in EVENT_KINDS}
 

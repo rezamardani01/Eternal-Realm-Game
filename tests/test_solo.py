@@ -56,15 +56,15 @@ async def finish(services, db, player, win=True):
 
 
 def test_the_tables_are_sound():
-    assert [s.number for s in data.STAGES] == list(range(1, 21))
-    assert [s.number for s in data.STAGES if s.boss] == [6, 11, 16, 20]
+    assert [s.number for s in data.STAGES] == list(range(1, 45))
+    assert [s.number for s in data.STAGES if s.boss] == [6, 11, 16, 20, 26, 32, 38, 44]
     for s in data.STAGES:
         assert s.foe in data.FOES and s.labels and set(s.labels) <= set(data.STYLES) and set(s.labels) <= set(data.STYLE_HINTS)
     assert all(f in data.CALIB for f in data.FOES)
     assert all(b in data.FOES for b in data.ARENA_BOTS)
     for d in data.DUNGEONS:
         assert all(f in data.FOES for f in (*d.foes, d.boss))
-    assert {b.foe for b in data.SOLO_BOSSES} <= set(data.FOES) and len(data.SOLO_BOSSES) == 5
+    assert {b.foe for b in data.SOLO_BOSSES} <= set(data.FOES) and len(data.SOLO_BOSSES) == 10
     for day in range(10):
         assert len({d.id for d in data.todays_dungeons(day)}) == 3
     assert all(len(e.choices) >= 2 for e in data.EVENTS)
@@ -567,9 +567,9 @@ async def test_a_hero_back_from_an_expedition_is_told_and_reads_the_report(h, se
 
     p = await hero(services, db)
     await h.panel(1, "expd")
-    assert "اعزام قهرمان" in h.session.last_text() and len([x for x in h.labels() if "·" in x]) == 5
+    assert "اعزام قهرمان" in h.session.last_text() and len([x for x in h.labels() if "·" in x]) == 11
     await h.panel(1, "expdk", "guard")
-    assert {"⏳ ۱ ساعت", "⏳ ۴ ساعت", "⏳ ۸ ساعت"} <= set(h.labels())
+    assert {"⏳ ۱ ساعت", "⏳ ۴ ساعت", "⏳ ۸ ساعت", "⏳ ۱۲ ساعت"} <= set(h.labels())
     await h.panel(1, "expdgo", "guard", "1")
     await h.panel(1, "expd")
     assert "تا بازگشت" in h.session.last_text()

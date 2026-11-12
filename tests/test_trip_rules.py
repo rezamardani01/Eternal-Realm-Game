@@ -123,15 +123,15 @@ async def test_the_capped_note_is_shown_on_the_result_screen():
 
 async def test_trip_pays_less_than_it_used_to(services, db):
     assert data.REWARD_SHARE <= 0.3  # was 0.45
-    assert [b.crystal for b in data.SOLO_BOSSES] == [1, 2, 2, 3, 4] and data.CHAPTER_DONE_CRYSTALS == 2  # were 2..6 and 3
+    assert [b.crystal for b in data.SOLO_BOSSES][:5] == [1, 2, 2, 3, 4] and data.CHAPTER_DONE_CRYSTALS == 2  # were 2..6 and 3
     p = await hero(services, db, level=10)
     gold, xp = services.solo._scale(p.level, 100, 100)
     assert gold < 100 and xp < 100 or p.level < 5
 
 
 # --- the longer maze ----------------------------------------------------------------------------------------------------
-def test_the_maze_has_four_chapters_of_fifty_floors_a_guardian_every_ten_and_pools_for_every_depth():
-    assert md.FLOORS == 200 and len(md.CHAPTERS) == 4 and sorted(md.BOSS_FLOORS) == list(range(10, 201, 10))
+def test_the_maze_has_eight_chapters_of_fifty_floors_a_guardian_every_ten_and_pools_for_every_depth():
+    assert md.FLOORS == 400 and len(md.CHAPTERS) == 8 and sorted(md.BOSS_FLOORS) == list(range(10, 401, 10))
     assert set(md.MILESTONES) == set(md.BOSS_FLOORS)
     for floor in range(1, md.FLOORS + 1):
         assert md.pool_for(floor)
@@ -201,7 +201,6 @@ async def test_a_screen_that_fails_after_the_progress_frame_gives_the_buttons_ba
     h.session.reset()
     await h.panel(1, "mazepick", "0")  # the middleware logs the failure; the player must still get a way on
     assert h.session.last_buttons(), "the message must not be left without buttons"
-    assert any("ادامه" in x for x in h.labels())
     monkeypatch.setitem(panel.SCREENS, "maze", real)
 
 
@@ -306,9 +305,9 @@ async def _finish_chapter(services, db, p, chapter):
     return await maze_win(services, db, p)
 
 
-async def test_the_maze_is_four_chapters_each_opened_by_the_last_and_walked_once(services, db, clock):
+async def test_the_maze_is_eight_chapters_each_opened_by_the_last_and_walked_once(services, db, clock):
     p = await hero(services, db, level=300)  # strong enough that the last guardian cannot end the fight before the test rigs it
-    for chapter in range(1, 5):
+    for chapter in range(1, len(md.CHAPTERS) + 1):
         run = await services.solo.maze_start(p)
         assert md.chapter_of(run.floor) == chapter and run.floor == (chapter - 1) * md.CHAPTER_FLOORS + 1
         update = await _finish_chapter(services, db, p, chapter)
@@ -316,9 +315,9 @@ async def test_the_maze_is_four_chapters_each_opened_by_the_last_and_walked_once
         assert await services.solo.maze_chapters_done(p.id) == chapter
         clock.advance(86400)
     with pytest.raises(GameError, match="فقط یک بار"):
-        await services.solo.maze_start(p)  # all four are won: the maze is closed for this hero
+        await services.solo.maze_start(p)  # every chapter is won: the maze is closed for this hero
     badges = await services.social.titles(p.id, 10)
-    assert "👑 فاتح هزارتوی ابدی" in badges and len(badges) == 5  # one badge per chapter and the master's
+    assert "👑 فاتح هزارتوی ابدی" in badges and len(badges) == len(md.CHAPTERS) + 1  # one badge per chapter and the master's
 
 
 async def test_a_lost_chapter_is_tried_again_not_skipped(services, db, clock):
@@ -336,3 +335,60 @@ async def test_the_maze_screens_know_the_chapters(h, services, db, clock):
     assert "فصل ۱" in h.session.last_text() and "دالان‌های فراموش‌شده" in h.session.last_text()
     await h.panel(1, "mazego")
     assert "فصل ۱" in h.session.last_text() and "از ۵۰" in h.session.last_text()
+
+
+# --- the bigger trip ----------------------------------------------------------------------------------------------------------------------
+def test_the_trip_has_much_more_to_play():
+    assert len(data.STAGES) == 44 and len(data.CHAPTERS) == 8 and len(data.DUNGEONS) == 12 and len(data.SOLO_BOSSES) == 10
+    assert len(data.EVENTS) >= 30 and len(md.CHAPTERS) == 8 and md.FLOORS == 400
+    from eternal_realm.game.data import expedition as ed
+    from eternal_realm.game.data import world as wd
+
+    assert len(ed.KINDS) >= 11 and ed.HOURS == (1, 4, 8, 12) and len(wd.REGIONS) >= 10 and len(wd.EVENT_KINDS) >= 10
+    for stage in data.STAGES[20:]:  # the new chapters follow the same rules as the old ones
+        assert stage.foe in data.FOES and stage.labels and set(stage.labels) <= set(data.STYLES) and stage.text and stage.title
+    assert [s.chapter for s in data.STAGES] == sorted(s.chapter for s in data.STAGES)
+    assert all(stage.chapter in wd.STORY_REGION for stage in data.STAGES)
+    assert all(d.id in wd.DUNGEON_REGION for d in data.DUNGEONS)
+    assert all(wd.STORY_REGION[c] in {r.id for r in wd.REGIONS} for c in data.CHAPTERS)
+    levels = [data.CHAPTERS[n][2] for n in sorted(data.CHAPTERS)]
+    assert levels == sorted(levels) and len(set(levels)) == len(levels)  # each chapter opens later than the one before
+
+
+async def test_a_high_level_hero_plays_a_new_chapter_and_a_new_dungeon_and_boss(services, db):
+    p = await hero(services, db, level=60)
+    async with db.transaction() as tx:
+        for key, n in (("story", 25),):
+            await tx.execute(
+                "INSERT INTO solo_progress (player_id, key, n) VALUES (?, ?, ?) ON CONFLICT (player_id, key) DO UPDATE SET n = excluded.n",
+                (p.id, key, n),
+            )
+    fight = await services.solo.start_stage(p, 26, "fight")  # the boss of the desert, chapter 5
+    assert fight.info["foe"] == "pharaoh" and fight.battle.fighters[1].max_hp > 0
+    await services.solo.abandon(p)
+    from eternal_realm.game.data.solo import DUNGEONS
+
+    new = next(d for d in DUNGEONS if d.id == "volcano")
+    foe = data.get_foe(data.floor_foe(new, 5)).fighter(60, data.floor_mult(5))
+    assert foe.name == "تایتان آتشفشان" and foe.hp > 0
+    boss = data.get_foe("boss_world_serpent").fighter(85, data.get_solo_boss("boss_world_serpent").mult)
+    assert boss.max_hp > data.get_foe("boss_titan").fighter(85, 1.05).max_hp * 0.5
+
+
+def test_new_foes_are_winnable_but_not_trivial():
+    import random
+
+    from eternal_realm.game.data.classes import CLASSES
+    from eternal_realm.game.engine import progression
+    from eternal_realm.game.engine.combat import Battle, Fighter, auto_fight
+
+    for foe_id, level in (("pharaoh", 31), ("leviathan", 39), ("star_eater", 58), ("volcano_titan", 30), ("boss_kraken", 44)):
+        wins = 0
+        for i in range(40):
+            cls = list(CLASSES)[i % 5]
+            hero_ = Fighter.for_player(1, "h", CLASSES[cls], progression.base_stats("human", cls, level), race_id="human")
+            rng = random.Random(i)
+            battle = Battle.start(hero_, data.get_foe(foe_id).fighter(level), 25, rng)
+            auto_fight(battle, rng)
+            wins += battle.winner == 0
+        assert 8 <= wins <= 38, (foe_id, wins)

@@ -31,6 +31,12 @@ CATEGORIES: dict[str, tuple[str, str]] = {
     "heal": ("🧪", "آیتم‌های بازیابی سلامتی"),
 }
 
+#: the button text of each category (two words)
+CATEGORY_SHORT: dict[str, str] = {
+    "weapon": "شمشیر و سلاح", "armor": "زره و دفاع", "ring": "انگشتر و جواهر", "charm": "طلسم و جادو",
+    "boost": "سرعت و قدرت", "heal": "بازیابی سلامتی",
+}
+
 RARITIES: dict[int, tuple[str, str]] = {
     1: ("⚪", "معمولی"),
     2: ("🟢", "غیرمعمول"),
