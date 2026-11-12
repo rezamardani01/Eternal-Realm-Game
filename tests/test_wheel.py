@@ -44,7 +44,7 @@ def test_the_table_is_sound():
 async def test_buying_a_pack_adds_spins_and_spinning_pays(services, db, h):
     p = await hero(services)
     order = await services.payments.create_order(p, "wheel_5")
-    assert order.amount == 350_000 and PACKS["wheel_5"].price_toman == 35_000
+    assert order.amount == 455_000 and PACKS["wheel_5"].price_toman == 45_500
     delivery = await services.payments.complete(7, order.payload, order.amount, "c1")
     assert "۵ فرصت" in delivery.granted
     assert await services.wheel.spins(p.id) == 5
@@ -65,7 +65,7 @@ async def test_the_wheel_screens_and_the_spin(h, services, db):
     assert h.session.last_markup_rows()[0][0]["text"].endswith("گردونه شانس")  # the top row of the treasury
     await h.panel(7, "wheel")
     text = h.session.last_text()
-    assert "گردونه شانس" in text and "هیچ چرخشی پوچ نیست" in text and "۸٬۰۰۰ تومان" in text
+    assert "گردونه شانس" in text and "هیچ چرخشی پوچ نیست" in text and "۱۰٬۴۰۰ تومان" in text
     for line in text.splitlines():
         assert len(re.findall(EMOJI, line)) <= 1, line
     assert not any("بچرخان" in label for label in h.labels())

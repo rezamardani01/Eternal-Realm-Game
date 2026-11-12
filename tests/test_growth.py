@@ -27,6 +27,7 @@ from eternal_realm.game.engine.combat import (
 from eternal_realm.shared.errors import GameError
 
 from .harness import Harness
+from .test_arms import give
 
 
 @pytest.fixture
@@ -128,12 +129,12 @@ def test_a_new_hero_has_only_his_first_skill_and_the_rest_open_with_levels():
 async def test_gear_places_open_with_the_level(services, db):
     p = await hero(services, db, level=5)
     for arm_id in ("iron_blade", "evil_eye", "green_pendant"):
-        await services.arms.buy(p, arm_id)
+        await give(services, db, p, arm_id)
     await services.arms.equip(p, 2, "iron_blade")
     with pytest.raises(GameError, match=str(SLOT_LEVELS[2]).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))):
         await services.arms.equip(p, 3, "evil_eye")
     rich = await hero(services, db, 11, "بهرام", level=15)
-    await services.arms.buy(rich, "evil_eye")
+    await give(services, db, rich, "evil_eye")
     await services.arms.equip(rich, 4, "evil_eye")
 
 
@@ -298,7 +299,7 @@ def test_upgrade_rules_are_graded():
 
 async def test_upgrade_success_failure_and_costs(services, db):
     p = await hero(services, db, level=20, gold=2_000_000)
-    await services.arms.buy(p, "blood_sword")
+    await give(services, db, p, "blood_sword")
     with pytest.raises(GameError, match="کافی نیست"):
         await services.arms.upgrade(p, "blood_sword")  # no iron ore yet
     async with db.transaction() as tx:
@@ -334,7 +335,7 @@ async def test_upgrade_needs_ownership_and_stops_at_ten(services, db):
     p = await hero(services, db, level=20, gold=10**8)
     with pytest.raises(GameError, match="ندارید"):
         await services.arms.upgrade(p, "iron_blade")
-    await services.arms.buy(p, "iron_blade")
+    await give(services, db, p, "iron_blade")
     async with db.transaction() as tx:
         await tx.execute("INSERT INTO arms_upgrades (player_id, arm_id, lvl) VALUES (?, 'iron_blade', 10)", (p.id,))
     with pytest.raises(GameError, match="بیشترین"):
@@ -434,7 +435,7 @@ async def test_growth_screens_flow(h, services, db):
     assert await services.growth.talents(p) == ["w_might"]
     await h.panel(10, "talent", "w_might")
     assert await services.growth.talents(p) == []
-    await services.arms.buy(p, "iron_blade")
+    await give(services, db, p, "iron_blade")
     await h.panel(10, "armview", "iron_blade")
     assert "⬆️ ارتقا" in h.labels()
     await h.panel(10, "armup", "iron_blade")

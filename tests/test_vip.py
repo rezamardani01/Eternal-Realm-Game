@@ -34,7 +34,7 @@ async def buy(services, p, pack_id="vip_30"):
 
 def test_vip_pack_is_cheap_and_gives_no_combat_stats():
     pack = PACKS["vip_30"]
-    assert pack.vip_days == 30 and pack.price_toman == 19_900 and not pack.items
+    assert pack.vip_days == 30 and pack.price_toman == 25_900 and not pack.items
 
 
 async def test_buying_vip_sets_and_extends_the_end_date(services, db, clock):

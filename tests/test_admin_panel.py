@@ -332,7 +332,7 @@ async def test_gifting_treasury_packs_by_hand(h, services, db):
     labels = " ".join(h.labels())
     assert "بسته‌های سکه" in labels and "گردونه شانس" in labels and "بسته‌های شانسی" in labels
     await h.panel(1, "admtrs", str(target.id), "coins")
-    assert any("۵٬۰۰۰ سکه" in x for x in h.labels())
+    assert any("×۵٬۰۰۰" in x for x in h.labels())
     await h.panel(1, "admtrp", str(target.id), "coins_s")
     assert {"×۱", "×۱۰"} <= set(h.labels())
     await h.panel(1, "admtrq", str(target.id), "coins_s.2")

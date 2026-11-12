@@ -14,7 +14,7 @@ from ..shared.text import bold, fa, headline
 from .callbacks import BuyCb
 from .panel import Ctx, Screen, screen
 
-SPIN_PACKS = ("wheel_1", "wheel_2", "wheel_5", "wheel_10")
+SPIN_PACKS = ("wheel_1", "wheel_2", "wheel_5", "wheel_10", "wheel_25", "wheel_50")
 
 
 def _strip(center: str, rng: random.Random) -> str:

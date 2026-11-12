@@ -42,7 +42,7 @@ from ..data.sets import BOSS_DROPS
 from ..engine import progression
 from ..engine.boss_fight import Boss, Hero, is_over, run_round
 from ..models import Player
-from .arms import ArmsService
+from .arms import FREE_CHANCE, ArmsService
 from .characters import CharacterService
 from .inventory import InventoryService
 from .players import PlayerService
@@ -474,6 +474,9 @@ class BossService:
                     arm_id = self.ctx.rng.choice(MYTHIC_DROPS)
                 if arm_id:
                     await ArmsService(self.ctx).grant(tx, pid, arm_id, 1)
+                elif share >= 0.05:
+                    found = await ArmsService(self.ctx).free_drop(tx, pid, FREE_CHANCE["boss"])
+                    arm_id = found.id if found else None
             card_name = None
             if status == "defeated" and self.cards is not None:
                 dropped = await self.cards.drop_for_boss(

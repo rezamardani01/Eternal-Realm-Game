@@ -6,9 +6,9 @@ contents freely: nothing else in the code depends on the numbers.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
-from .arms import ARMS, pack_id
+from .arms import ARMS, PRICE_RISE, pack_id
 
 
 @dataclass(frozen=True)
@@ -166,7 +166,65 @@ PACKS: dict[str, Pack] = {
     )
 }
 
-# every piece of hero war gear can also be bought with real money, at the price of its coins; it is the same piece
+# --- the names the shop shows (a bigger container for a bigger amount), more sizes in every section, and the price rise ----
+_TITLES = {
+    "coins_s": "یک مشت سکه ×۵٬۰۰۰", "coins_m": "یک کیسه سکه ×۳۰٬۰۰۰", "coins_l": "یک صندوق سکه ×۱۰۰٬۰۰۰",
+    "crystal_s": "یک مشت کریستال ×۲۰", "crystal_m": "یک جعبه کریستال ×۱۱۰", "crystal_l": "یک خورجین کریستال ×۳۰۰",
+    "chests_x5": "یک کوله صندوقچه جادویی ×۵",
+    "ore_5": "یک مشت سنگ آهن ×۵", "ore_10": "یک کیسه سنگ آهن ×۱۰", "ore_s": "یک خورجین سنگ آهن ×۲۰",
+    "ore_m": "یک گاری سنگ آهن ×۱۰۰", "ore_l": "یک انبار سنگ آهن ×۴۰۰",
+    "boost_24": "بوست دو برابر · یک روز", "boost_48": "بوست دو برابر · دو روز", "boost_72": "بوست دو برابر · سه روز",
+    "xp_s": "یک جرعه تجربه ×۱٬۵۰۰", "xp_m": "یک جام تجربه ×۶٬۰۰۰", "xp_l": "یک خُم تجربه ×۲۰٬۰۰۰",
+    "wheel_1": "یک چرخش شانس", "wheel_2": "دو چرخش شانس", "wheel_5": "پنج چرخش شانس", "wheel_10": "ده چرخش شانس",
+    "city_res_s": "یک کیسه منابع شهر", "city_res_m": "یک گاری منابع شهر", "city_res_l": "یک انبار منابع شهر",
+}
+
+#: bigger and smaller sizes of the same goods (prices here are before the rise)
+_EXTRA: tuple[Pack, ...] = (
+    Pack("coins_xs", "🪙", "چند سکه ×۱٬۵۰۰", 20_000, gold=1_500, section="coins"),
+    Pack("coins_xl", "🏦", "یک انبار سکه ×۳۵۰٬۰۰۰", 1_700_000, gold=350_000, section="coins"),
+    Pack("coins_xxl", "👑", "گنجینه‌ی سکه ×۱٬۰۰۰٬۰۰۰", 4_200_000, gold=1_000_000, section="coins"),
+    Pack("crystal_xs", "💎", "یک دانه کریستال ×۵", 30_000, crystal=5, section="crystals"),
+    Pack("crystal_xl", "💎", "یک انبار کریستال ×۸۰۰", 2_800_000, crystal=800, section="crystals"),
+    Pack("crystal_xxl", "💎", "گنجینه‌ی کریستال ×۲٬۰۰۰", 6_500_000, crystal=2_000, section="crystals"),
+    Pack("ore_xl", "⛓️", "یک معدن سنگ آهن ×۱٬۵۰۰", 1_600_000, items={"iron_ore": 1_500}, section="materials"),
+    Pack("chests_x10", "🎁", "یک گاری صندوقچه جادویی ×۱۰", 700_000, items={"magic_chest": 10}, section="bundles"),
+    Pack("royal_x3", "👑", "سه صندوقچه‌ی سلطنتی", 800_000, items={"royal_chest": 3}, section="bundles"),
+    Pack("energy_x25", "🔋", "یک خمره معجون انرژی ×۲۵", 250_000, items={"big_energy_potion": 25}, section="bundles"),
+    Pack(
+        "hero_chest", "🛡️", "بسته‌ی سردار", 600_000, gold=20_000, section="bundles",
+        items={"knight_sword": 1, "knight_armor": 1, "big_energy_potion": 10, "magic_chest": 2},
+    ),
+    Pack("boost_168", "🚀", "بوست دو برابر · یک هفته", 270_000, boost_hours=168, section="boost"),
+    Pack("boost_720", "🚀", "بوست دو برابر · یک ماه", 900_000, boost_hours=720, section="boost"),
+    Pack("xp_xl", "🌊", "یک چشمه تجربه ×۶۰٬۰۰۰", 800_000, xp=60_000, section="xp"),
+    Pack("xp_xxl", "🏞️", "یک رود تجربه ×۲۰۰٬۰۰۰", 2_300_000, xp=200_000, section="xp"),
+    Pack("xp_xxxl", "🌌", "اقیانوس تجربه ×۶۰۰٬۰۰۰", 6_500_000, xp=600_000, section="xp"),
+    Pack("svc_all", "🎫", "بسته‌ی بازسازی قهرمان", 220_000, section="services",
+         items={"rename_ticket": 1, "race_ticket": 1, "class_ticket": 1}),
+    Pack("wheel_25", "🎡", "یک کیسه‌ی شانس ×۲۵ چرخش", 1_500_000, spins=25, section="wheel"),
+    Pack("wheel_50", "🎡", "یک انبار شانس ×۵۰ چرخش", 2_800_000, spins=50, section="wheel"),
+    Pack("city_res_xl", "🏰", "گنجینه‌ی منابع شهر", 1_500_000, section="city",
+         city={"gold": 400_000, "food": 200_000, "wood": 200_000, "stone": 150_000, "iron": 80_000}),
+    Pack("rare_scale_10", "🐉", "۱۰ فلس اژدها", 400_000, items={"dragon_scale": 10}, section="rare"),
+    Pack("rare_shard_10", "💠", "۱۰ پاره‌کریستال", 250_000, items={"crystal_shard": 10}, section="rare"),
+    Pack("vip_90", "💠", "اشتراک VIP · سه ماه", 500_000, vip_days=90, section="vip"),
+)
+for _pack in _EXTRA:
+    PACKS[_pack.id] = _pack
+for _pid, _title in _TITLES.items():
+    PACKS[_pid] = replace(PACKS[_pid], title=_title)
+
+
+def _risen(rial: int) -> int:
+    """The price after the rise, rounded to a whole thousand rial."""
+    return round(rial * PRICE_RISE / 1000) * 1000
+
+
+for _pid, _pack in list(PACKS.items()):
+    PACKS[_pid] = replace(_pack, price_rial=_risen(_pack.price_rial))
+
+# every piece of hero war gear can be bought with real money (and only with real money), at the price of its coins; it is the same piece
 for _arm in (a for a in ARMS.values() if not a.boss):
     PACKS[pack_id(_arm.id)] = Pack(
         pack_id(_arm.id), _arm.emoji, _arm.name, _arm.rial, arms={_arm.id: 1}, section="arms"

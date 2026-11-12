@@ -22,6 +22,7 @@ from ..data import world as world_data
 from ..engine import combat, loot
 from ..engine.combat import Action, Battle, Fighter
 from ..models import Player
+from .arms import FREE_CHANCE
 from .characters import CharacterService
 from .inventory import InventoryService
 from .pets import PetService
@@ -457,6 +458,9 @@ class SoloService:
             await self.world.relieve(tx, info["region"], 1 if kind == "arena" else 2)
         pay = await self._pay(tx, pid, gold, xp, crystal, items, limited=kind not in ("boss", "tower"), keep_crystal=kind == "story")
         pay.notes = notes
+        found = await self.characters.arms.free_drop(tx, pid, FREE_CHANCE["trip"])
+        if found:
+            pay.notes.append(f"⚔️ تجهیزات پیدا کردید: {found.label} ({found.rarity_label})")
         if kind == "story":
             pay.grade = grade
         return pay

@@ -49,7 +49,7 @@ async def test_the_whole_gift_flow_from_the_group_to_the_invoice_to_the_message(
     gold = target.gold
     await h.say(1, "گیفت", group=True, reply_to=h.message_of(2))
     await h.tap(1, "بسته‌های سکه", group=True)
-    await h.tap(1, "۵٬۰۰۰ سکه", group=True)
+    await h.tap(1, "×۵٬۰۰۰", group=True)
     await h.tap(1, "×۲", group=True)
     assert "تأیید هدیه" in h.session.last_text()
     await h.click(2, h.button_data("بله، فاکتور"), group=True)  # somebody else cannot press it

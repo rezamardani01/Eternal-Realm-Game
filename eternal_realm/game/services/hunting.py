@@ -17,6 +17,7 @@ from ..data.monsters import MONSTERS, Monster
 from ..engine import loot
 from ..engine.combat import Battle, Fighter, auto_fight
 from ..models import Player
+from .arms import FREE_CHANCE
 from .characters import CharacterService
 from .inventory import InventoryService
 from .pets import PetService
@@ -49,6 +50,8 @@ class HuntResult:
     double_xp: bool = False
     card: object | None = None
     boosted: bool = False
+    #: war gear found on the way (a lucky free drop)
+    arm: str | None = None
 
 
 class HuntService:
@@ -116,6 +119,7 @@ class HuntService:
                 await self.inventory.grant(tx, player_id, item_id, qty)
             level_up = await self.players.grant_xp(tx, player_id, xp) if xp else None
             card = None
+            found = await self.characters.arms.free_drop(tx, player_id, FREE_CHANCE["hunt"]) if won else None
             await season_repo.add_points(tx, player_id, "hunt", now)
             await inv_repo.add_bond(tx, player_id)
             if won and self.cards is not None:
@@ -128,4 +132,5 @@ class HuntService:
             hero_hp=max(0, hero.hp), hero_max_hp=hero.max_hp, gold=gold, xp=xp,
             items=[(get_item(i).label, q, i) for i, q in items.items()], level_up=level_up,
             player=self.players.with_energy(after), highlights=log[-3:], log=log, next_in=wait, double_xp=double, card=card, boosted=boost > 1,
+            arm=found.id if found else None,
         )

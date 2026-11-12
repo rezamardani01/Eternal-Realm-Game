@@ -34,7 +34,7 @@ async def add(db, services, player, deed, times=1):
 
 
 def test_the_ticket_costs_49900_toman_and_the_path_has_100_tiers():
-    assert PACKS["season_ticket"].price_toman == 49_900 and TIERS == 100
+    assert PACKS["season_ticket"].price_toman == 64_900 and TIERS == 100
     assert any(reward_for("free", t) for t in range(1, TIERS + 1))
     assert reward_for("ticket", 100).title == "اسطوره‌ی فصل" and reward_for("ticket", 5).crystal == 5
     assert all(reward_for("ticket", t) for t in range(1, TIERS + 1))

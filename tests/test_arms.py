@@ -44,6 +44,12 @@ async def hero(services, db, uid=10, name="آرش", race="human", cls="warrior",
     return await services.players.require(uid)
 
 
+async def give(services, db, player, arm_id, qty=1):
+    """Put war gear in a hero's chest (it is never sold for coins, so tests hand it out)."""
+    async with db.transaction() as tx:
+        await services.arms.grant(tx, player.id, arm_id, qty)
+
+
 def fighter(cls="warrior", race="human", level=10, traits=(), **over):
     f = Fighter.for_player(1, "قهرمان", CLASSES[cls], progression.base_stats(race, cls, level), race_id=race, traits=traits)
     for k, v in over.items():
@@ -121,23 +127,37 @@ def test_every_piece_is_also_sold_for_real_money_at_the_coin_price():
 
 
 # --- buying and equipping ------------------------------------------------------------------------------------------------------------
-async def test_buy_stack_and_no_limit(services, db):
-    p = await hero(services, db, gold=100_000)
-    arm = await services.arms.buy(p, "blood_sword", 3)
-    assert arm.id == "blood_sword"
-    assert (await services.arms.owned(p.id))["blood_sword"] == 3
-    assert (await services.players.require(10)).gold == 100_500 - 3 * arm.price
-    with pytest.raises(GameError):
-        await services.arms.buy(await services.players.require(10), "dragon_slayer", 100)  # not enough coins
-    assert (await services.arms.owned(p.id))["blood_sword"] == 3
-    with pytest.raises(GameError):
-        await services.arms.buy(p, "nope")
+async def test_gear_is_never_sold_for_coins_but_stacks_without_limit(services, db):
+    p = await hero(services, db, gold=10_000_000)
+    for arm_id in ("blood_sword", "b_fire", "nope"):
+        with pytest.raises(GameError):
+            await services.arms.buy(p, arm_id)  # no coin purchase, whatever the price
+    assert not await services.arms.owned(p.id) and (await services.players.require(10)).gold == 10_000_500
+    await give(services, db, p, "blood_sword", 3)
+    assert (await services.arms.owned(p.id))["blood_sword"] == 3  # any number may be owned
+
+
+async def test_free_players_find_cheap_pieces_by_luck(services, db):
+    p = await hero(services, db, gold=0)
+    found = []
+    async with db.transaction() as tx:
+        for _ in range(300):
+            arm = await services.arms.free_drop(tx, p.id, 0.5)
+            if arm:
+                found.append(arm)
+    assert 100 < len(found) < 200
+    assert all(a.rarity <= 2 and not a.boss for a in found)  # only the cheap ones, never a boss spoil or a rare piece
+    assert sum(a.rarity == 1 for a in found) > sum(a.rarity == 2 for a in found)
+    assert sum((await services.arms.owned(p.id)).values()) == len(found)
+    async with db.transaction() as tx:
+        assert await services.arms.free_drop(tx, p.id, 0.0) is None
+        assert await services.arms.free_drop(tx, p.id, 1.0) is not None
 
 
 async def test_four_slots_equip_rules(services, db):
     p = await hero(services, db, level=30)
     for arm_id in ("blood_sword", "iron_blade", "evil_eye", "green_pendant", "gale_boots"):
-        await services.arms.buy(p, arm_id)
+        await give(services, db, p, arm_id)
     p = await services.players.require(10)
     for slot, arm_id in enumerate(("blood_sword", "iron_blade", "evil_eye", "green_pendant"), start=1):
         await services.arms.equip(p, slot, arm_id)
@@ -157,12 +177,12 @@ async def test_four_slots_equip_rules(services, db):
 
 async def test_level_and_class_limits(services, db):
     low = await hero(services, db, level=1)
-    await services.arms.buy(low, "dragon_slayer")
-    await services.arms.buy(low, "star_staff")
+    await give(services, db, low, "dragon_slayer")
+    await give(services, db, low, "star_staff")
     with pytest.raises(GameError, match="سطح"):
         await services.arms.equip(low, 1, "dragon_slayer")
     high = await hero(services, db, uid=11, name="بهرام", level=40)
-    await services.arms.buy(high, "star_staff")
+    await give(services, db, high, "star_staff")
     with pytest.raises(GameError, match="جادوگر"):
         await services.arms.equip(high, 1, "star_staff")  # a staff only a mage may carry
 
@@ -170,7 +190,7 @@ async def test_level_and_class_limits(services, db):
 async def test_gear_changes_the_stats_and_the_fighter(services, db):
     p = await hero(services, db, level=30)
     before = await services.characters.stats(p)
-    await services.arms.buy(p, "blood_sword")
+    await give(services, db, p, "blood_sword")
     await services.arms.equip(p, 1, "blood_sword")
     after = await services.characters.stats(p)
     assert after.atk == before.atk + ARMS["blood_sword"].stats.atk
@@ -182,7 +202,7 @@ async def test_gear_changes_the_stats_and_the_fighter(services, db):
 
 async def test_cannot_change_gear_during_a_fight(services, db):
     p = await hero(services, db, level=20)
-    await services.arms.buy(p, "iron_blade")
+    await give(services, db, p, "iron_blade")
     await services.solo.start_arena(p, "normal") if hasattr(services.solo, "start_arena") else None
     async with db.transaction() as tx:
         await tx.execute(
@@ -513,9 +533,9 @@ async def test_arms_screens_flow(h, services, db):
     assert len([b for b in h.labels() if any(e in b for e, _ in CATEGORIES.values())]) >= 6
     await h.panel(10, "armcat", "weapon")
     await h.panel(10, "armview", "iron_blade")
-    assert "تیغ آهنین" in h.session.last_text() and any("پول واقعی" in b for b in h.labels())
-    await h.panel(10, "armbuy", "iron_blade")
-    assert (await services.arms.owned(1)).get("iron_blade") == 1 or (await services.arms.owned((await services.players.require(10)).id)).get("iron_blade") == 1
+    assert "تیغ آهنین" in h.session.last_text() and any("تومان" in b for b in h.labels())
+    me = await services.players.require(10)
+    await give(services, db, me, "iron_blade")
     await h.panel(10, "armput", "iron_blade")
     await h.panel(10, "armeq", "2", "iron_blade")
     me = await services.players.require(10)

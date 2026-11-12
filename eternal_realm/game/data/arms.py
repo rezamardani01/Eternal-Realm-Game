@@ -8,8 +8,8 @@ Balance rules (so no piece wins a fight by itself, and nothing is bought into an
 
 * the stat bonuses stay in a narrow band per rarity (see ``TIERS``), traits are small, and ``CAPS`` limits what four
   pieces can stack for every trait kind;
-* every piece can be bought with coins, in the game, at its coin price; the real-money price is that same coin price in
-  money and gives the very same piece - nothing is sold only for money;
+* war gear is bought only with real money from the realm treasury (never with coins), so nothing here can be farmed; free
+  players still find the cheap pieces (common and uncommon) as lucky drops of hunts, trips, chests and bosses;
 * a piece needs a hero level, some need a class; in fights between heroes the stronger side's lead is capped anyway.
 """
 
@@ -42,8 +42,10 @@ RARITIES: dict[int, tuple[str, str]] = {
 
 #: rarity -> (coins, level) a typical piece of that rarity costs; a piece strays only a little from these
 TIERS = {1: (450, 1), 2: (1_800, 4), 3: (5_200, 8), 4: (12_500, 14), 5: (32_000, 22), 6: (95_000, 30)}
-#: the real-money price in rial is the coin price times this (5,000 coins are 50,000 rial in the coin packs)
+#: the real-money price in rial is the base ``price`` times this
 RIAL_PER_COIN = 10
+#: every price of the treasury was raised by this factor (see packs.py, where the packs are priced)
+PRICE_RISE = 1.3
 #: a wallet invoice never goes below this (the cheapest pieces cost this much in money)
 MIN_RIAL = 20_000
 
@@ -142,7 +144,7 @@ class Arm:
 
     @property
     def rial(self) -> int:
-        return max(MIN_RIAL, self.price * RIAL_PER_COIN)
+        return round(max(MIN_RIAL, self.price * RIAL_PER_COIN) * PRICE_RISE / 1000) * 1000
 
     @property
     def sell(self) -> int:

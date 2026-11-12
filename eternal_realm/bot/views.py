@@ -423,6 +423,16 @@ def hunt_frames(name: str, r) -> list[str]:  # noqa: ANN001 - HuntResult
     return [f"🐺 {bold('شکار')} · {name}\n{r.monster.emoji} {r.monster.name} پیدا شد... نبرد آغاز می‌شود"]
 
 
+def _arm_found(arm_id: str | None) -> str:
+    """One line for a piece of war gear found as a lucky drop (empty when nothing was found)."""
+    if not arm_id:
+        return ""
+    from ..game.data.arms import ARMS
+
+    arm = ARMS[arm_id]
+    return f"⚔️ {bold('تجهیزات پیدا کردید:')} {arm.label} ({arm.rarity_label})"
+
+
 def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
     verdict = "🏆 پیروز شدید" if r.won else "💔 هیولا قوی‌تر بود؛ عقب‌نشینی کردید"
     return _card(
@@ -432,6 +442,7 @@ def hunt_result(name: str, r) -> str:  # noqa: ANN001 - HuntResult
         [f"❤️ جان: {fa(r.hero_hp)} از {fa(r.hero_max_hp)}", f"⚡ انرژی: {fa(r.player.energy)}", _boost_note(r.double_xp, getattr(r, "boosted", False))],
         [
             f"🃏 {bold('کارت تازه:')} {r.card.emoji} {r.card.name}" if r.card is not None else "",
+            _arm_found(getattr(r, "arm", None)),
             f"⏰ شکار بعدی: {_wait_text(r.next_in)}",
             level_up_text(r.level_up.new_level) if r.level_up else "",
         ],
@@ -577,6 +588,8 @@ def chest_opened(name: str, opened) -> str:  # noqa: ANN001 - Opened
         got.append(f"💎 {bold(fa(opened.crystal))} کریستال")
     if opened.item:
         got.append(f"{opened.item.label} ×{bold(fa(opened.qty))} ({opened.item.rarity_label})")
+    if getattr(opened, "arm", None):
+        got.append(_arm_found(opened.arm))
     return f"🗝️ {bold(opened.chest.name + ' باز شد')}\n\n✨ این گنج را یافتید:\n" + "\n".join(got)
 
 

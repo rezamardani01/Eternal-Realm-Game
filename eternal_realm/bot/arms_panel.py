@@ -149,9 +149,10 @@ async def arm_shop(c: Ctx) -> Screen:
     p = await c.refresh()
     owned = await c.services.arms.owned(p.id)
     lines = [
-        f"🛒 {bold('تجهیزات جنگی')}", LINE, f"👛 کیف شما: {fa(p.gold)} سکه", "",
-        "همه‌ی تجهیزات را هم با سکه‌ی بازی می‌توانید بخرید، هم با پول واقعی؛ هر دو راه یک تجهیزات را می‌دهند.",
-        "هر تعداد که بخواهید می‌توانید بخرید، اما فقط ۴ تا را هم‌زمان روی قهرمان می‌گذارید. 👇",
+        f"🛒 {bold('تجهیزات جنگی')}", LINE,
+        "تجهیزات جنگی فقط با پول واقعی خریدنی است و با سکه نمی‌شود خرید.",
+        "🍀 بازیکن رایگان هم جا نمی‌ماند: تجهیزات معمولی و غیرمعمول را گاهی از شکار، سفر، صندوقچه و باس‌ها پیدا می‌کند.",
+        "هر تعداد که بخواهید می‌توانید داشته باشید، اما فقط ۴ تا را هم‌زمان روی قهرمان می‌گذارید. 👇",
     ]
     rows = [
         c.btn(f"{emoji} {title}", "armcat", cat)
@@ -172,7 +173,7 @@ async def arm_category(c: Ctx) -> Screen:
     rows = []
     for arm in arms_of(c.a):
         have = f" · ×{fa(owned[arm.id])}" if arm.id in owned else ""
-        lines.append(f"{RARITIES[arm.rarity][0]} {arm.label} — 🪙 {fa(arm.price)}{have}")
+        lines.append(f"{RARITIES[arm.rarity][0]} {arm.label} — 💳 {fa(arm.rial // 10)} تومان{have}")
         rows.append(c.btn(f"{RARITIES[arm.rarity][0]} {arm.name}", "armview", arm.id))
     grid = keyboards.grid(rows, 2)
     grid.append(c.back("armshop"))
@@ -180,8 +181,7 @@ async def arm_category(c: Ctx) -> Screen:
 
 
 def _card_buttons(c: Ctx, arm: Arm, have: int) -> list[list]:
-    rows = [[c.btn(f"🪙 خرید با سکه ({fa(arm.price)})", "armbuy", arm.id, style="success")]]
-    rows.append([Button.inline(f"💳 خرید با پول واقعی ({fa(arm.rial // 10)} تومان)", BuyCb(kind="cash", id=pack_id(arm.id)))])
+    rows = [[Button.inline(f"💳 خرید ({fa(arm.rial // 10)} تومان)", BuyCb(kind="cash", id=pack_id(arm.id)), style="success")]]
     if have:
         rows.append([c.btn("✅ تجهیز کردن", "armput", arm.id, style="primary"), c.btn("⬆️ ارتقا", "armup", arm.id)])
     rows.append(c.back("armcat", "↩️ بازگشت", arm.cat))
@@ -195,20 +195,11 @@ async def arm_view(c: Ctx) -> Screen:
     p = await c.refresh()
     have = (await c.services.arms.owned(p.id)).get(arm.id, 0)
     level = (await c.services.arms.plus_of(p.id)).get(arm.id, 0)
-    text = f"{arm.card()}\n\n{LINE}\n💰 قیمت: {fa(arm.price)} سکه\n👛 کیف شما: {fa(p.gold)} سکه"
+    text = f"{arm.card()}\n\n{LINE}\n💳 قیمت: {fa(arm.rial // 10)} تومان (فقط با پول واقعی)"
     if have:
         text += f"\n🎒 در کیف شما: ×{fa(have)}"
         text += f"\n⬆️ ارتقا: {plus(level) or '+۰'} از +{fa(MAX_UPGRADE)}"
     return Screen(text, _card_buttons(c, arm, have))
-
-
-@screen("armbuy")
-async def arm_buy(c: Ctx) -> Screen:
-    _private(c)
-    arm = await c.services.arms.buy(c.player, c.a)
-    shown = await arm_view(c)
-    shown.toast = f"✅ {arm.name} خریداری شد"
-    return shown
 
 
 @screen("armput")

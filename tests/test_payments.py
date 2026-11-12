@@ -107,21 +107,21 @@ async def test_invoice_flow_through_the_bot(h, services):
     assert len(h.labels()) == 17  # the wheel, the war gear, thirteen sections (rare materials, boost and experience included) and a back button
     await h.tap(10, "خرید کریستال")
     assert any("تومان" in b["text"] for b in h.session.last_buttons())  # the prices are on the buttons
-    await h.click(10, h.button_data("۲۰ کریستال"))
+    await h.click(10, h.button_data("×۲۰"))
     invoice = h.session.sent("sendInvoice")[-1]
     assert invoice["provider_token"].startswith("WALLET-")
-    assert invoice["prices"] == [{"label": "۲۰ کریستال", "amount": 100_000}]
+    assert invoice["prices"] == [{"label": "یک مشت کریستال ×۲۰", "amount": 130_000}]
     payload = invoice["payload"]
 
-    await h.precheckout(10, payload, 100_000)
+    await h.precheckout(10, payload, 130_000)
     answer = h.session.sent("answerPreCheckoutQuery")[-1]
     assert answer["ok"] is True
 
-    await h.paid(10, payload, 100_000, "wallet-abc")
+    await h.paid(10, payload, 130_000, "wallet-abc")
     assert any("پرداخت موفق بود" in t for t in h.session.texts())
     assert (await services.players.require(10)).crystal == 20
 
-    await h.paid(10, payload, 100_000, "wallet-abc")  # Bale re-delivers the update
+    await h.paid(10, payload, 130_000, "wallet-abc")  # Bale re-delivers the update
     assert (await services.players.require(10)).crystal == 20
     assert p
 
@@ -182,7 +182,7 @@ async def test_owner_gets_a_complete_sale_report(h, services):
     reports = [m for m in h.session.sent("sendMessage") if m["chat_id"] == 1]  # owner_id of the test settings
     assert len(reports) == 1
     text = reports[0]["text"]
-    for needle in ("فروش جدید", "بسته ماجراجو", "بسته‌ی ویژه", "۱۵٬۰۰۰ تومان", "آرش", "TRACK-77", "@u10",
+    for needle in ("فروش جدید", "بسته ماجراجو", "بسته‌ی ویژه", "۱۹٬۵۰۰ تومان", "آرش", "TRACK-77", "@u10",
                    "شناسه بله", "تاریخ", "ساعت", "جمع فروش"):
         assert needle in text, needle
     assert text.split("\n")[0].startswith("💰")
@@ -252,7 +252,7 @@ def test_the_rare_materials_are_sold_and_the_kits_match_the_forge_recipes():
     from eternal_realm.game.data.recipes import RECIPES
 
     rare = {p.id: p for p in PACKS.values() if p.section == "rare"}
-    assert PACKS["rare_scale_1"].price_toman == 5_000  # a dragon scale costs five thousand toman
+    assert PACKS["rare_scale_1"].price_toman == 6_500  # a dragon scale costs 5,000 toman, plus the 30% rise
     parts = {}
     for pack in rare.values():
         assert len(pack.items) >= 1 and pack.price_rial % 10 == 0
@@ -281,3 +281,22 @@ async def test_the_rare_section_is_in_the_treasury_and_a_scale_can_be_bought(h, 
     await services.payments.complete(10, order.payload, order.amount, "ch-rare")
     async with services.ctx.db.read() as tx:
         assert await tx.scalar("SELECT qty FROM inventory WHERE player_id = ? AND item_id = 'dragon_scale'", (p.id,), 0) == 3
+
+
+def test_the_treasury_names_sizes_and_the_price_rise():
+    assert PACKS["coins_s"].price_rial == 65_000 and PACKS["crystal_s"].price_rial == 130_000  # 30% above the old prices
+    assert [PACKS[i].title for i in ("crystal_s", "crystal_m", "crystal_l", "crystal_xl")] == [
+        "یک مشت کریستال ×۲۰", "یک جعبه کریستال ×۱۱۰", "یک خورجین کریستال ×۳۰۰", "یک انبار کریستال ×۸۰۰",
+    ]
+    for pack in PACKS.values():
+        assert pack.price_rial % 1000 == 0 and len(pack.title) <= 32
+    by_section: dict[str, list] = {}
+    for pack in PACKS.values():
+        by_section.setdefault(pack.section, []).append(pack)
+    for section in ("coins", "crystals", "materials", "bundles", "boost", "xp", "wheel", "city", "rare"):
+        assert len(by_section[section]) >= 4, section
+    assert max(p.xp for p in by_section["xp"]) >= 600_000  # bigger experience packs
+    assert max(p.price_rial for p in by_section["xp"]) > 5_000_000
+    # a bigger container always holds more for each rial
+    coins = sorted(by_section["coins"], key=lambda p: p.gold)
+    assert [p.gold / p.price_rial for p in coins] == sorted((p.gold / p.price_rial for p in coins))

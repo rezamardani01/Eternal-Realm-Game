@@ -23,6 +23,13 @@ from ..data.stats import Stats
 from ..models import Player
 
 
+#: the pieces free players can find, and how likely each rarity is among them
+FREE_MAX_RARITY = 2
+FREE_WEIGHT = {1: 70, 2: 30}
+#: chance of a find: a won hunt, a won fight of the trip, a chest, a fighter of a boss
+FREE_CHANCE = {"hunt": 0.06, "trip": 0.08, "chest": 0.15, "boss": 0.25}
+
+
 @dataclass
 class Loadout:
     """What the equipped pieces give: stat bonuses and special traits."""
@@ -94,15 +101,21 @@ class ArmsService:
         )
 
     async def buy(self, player: Player, arm_id: str, qty: int = 1) -> Arm:
-        """Buy pieces with coins from the realm treasury. There is no limit on how many a hero may own."""
+        """War gear cannot be bought with coins: the treasury sells it for real money, and it drops in the game."""
         if arm_id not in ARMS or qty < 1:
             raise GameError("این تجهیزات در قلمرو شناخته نمی‌شود.")
-        arm = get_arm(arm_id)
-        if arm.boss:
+        if get_arm(arm_id).boss:
             raise GameError("این تجهیزات فقط از شکست دادن باس‌ها به دست می‌آید.")
-        async with self.ctx.db.transaction() as tx:
-            await wallet.apply(tx, player.id, gold=-arm.price * qty, reason="arm_buy", now=self.ctx.now())
-            await self.grant(tx, player.id, arm_id, qty)
+        raise GameError("تجهیزات جنگی را فقط با پول واقعی از «خزانه قلمرو» می‌توان خرید؛ با سکه نمی‌شود. تجهیزات کم‌ارزش‌تر را گاهی از شکار، سفر، صندوقچه و باس‌ها پیدا می‌کنید.")
+
+    async def free_drop(self, tx: Tx, player_id: int, chance: float) -> Arm | None:
+        """A lucky find for everybody: a common or uncommon piece (never a boss spoil)."""
+        if self.ctx.rng.random() >= chance:
+            return None
+        pool = [a for a in ARMS.values() if not a.boss and a.rarity <= FREE_MAX_RARITY]
+        size = {r: sum(1 for a in pool if a.rarity == r) for r in FREE_WEIGHT}  # each rarity gets its share, split by its pieces
+        arm = self.ctx.rng.choices(pool, weights=[FREE_WEIGHT[a.rarity] / size[a.rarity] for a in pool], k=1)[0]
+        await self.grant(tx, player_id, arm.id, 1)
         return arm
 
     # --- equipping ------------------------------------------------------------------------------------------------

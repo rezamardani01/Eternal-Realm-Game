@@ -54,12 +54,12 @@ async def test_the_treasury_has_two_separate_sections(h, services, db):
     await h.tap(10, "بوست دو برابر")
     text = h.session.last_text()
     assert "دو برابر" in text and "کریستال دو برابر نمی‌شود" in text and "ساعتی" in text and "۲۴ ساعت" in text
-    assert [b["text"] for b in h.session.last_buttons() if "ساعته" in b["text"]] and len([b for b in h.session.last_buttons() if "تومان" in b["text"]]) == 3
+    assert [b["text"] for b in h.session.last_buttons() if "بوست دو برابر" in b["text"]] and len([b for b in h.session.last_buttons() if "تومان" in b["text"]]) == 5
     await h.panel(10, "premium")
     await h.tap(10, "بسته‌های تجربه")
     text = h.session.last_text()
     assert "سطح شما" in text and "حدود" in text and "هر تعداد" in text
-    assert len([b for b in h.session.last_buttons() if "تومان" in b["text"]]) == 3
+    assert len([b for b in h.session.last_buttons() if "تومان" in b["text"]]) == 6
 
 
 async def test_a_boost_pack_runs_for_its_hours_and_stacks(services, db, clock):

@@ -10,6 +10,7 @@ from ...shared.errors import GameError
 from ..data.chests import CHESTS, Chest, Prize
 from ..data.items import Item, Kind, get_item
 from ..models import Player
+from .arms import FREE_CHANCE, ArmsService
 from .inventory import InventoryService
 
 
@@ -21,6 +22,8 @@ class Opened:
     crystal: int
     item: Item | None
     qty: int
+    #: war gear found inside (a lucky free drop)
+    arm: str | None = None
 
 
 class ChestService:
@@ -68,4 +71,5 @@ class ChestService:
             )
             if prize.item_id:
                 await self.inventory.grant(tx, player.id, prize.item_id, qty)
-        return Opened(item, prize, gold, crystal, get_item(prize.item_id) if prize.item_id else None, qty)
+            found = await ArmsService(self.ctx).free_drop(tx, player.id, FREE_CHANCE["chest"])
+        return Opened(item, prize, gold, crystal, get_item(prize.item_id) if prize.item_id else None, qty, found.id if found else None)
