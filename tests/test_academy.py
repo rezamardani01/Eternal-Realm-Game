@@ -89,11 +89,13 @@ async def test_a_visit_and_a_word_teach_their_lessons_with_a_note_and_a_reward(h
     await h.panel(1, "academy")
     assert "آکادمی قلمرو" in h.session.last_text() and "۰ از" in h.session.last_text()
     gold = (await services.players.require(1)).gold
+    await h.panel(1, "aclesson", "hero")  # the lesson is opened: the academy mode
     h.session.reset()
     await h.panel(1, "profile")  # the first lesson: look at your hero
     assert any("قهرمان تو" in n for n in notes(h))
     assert (await services.players.require(1)).gold == gold + data.LESSON_BY_ID["hero"].gold
     assert "جایزه‌ی روزانه" in h.session.last_text()  # the note points at the next lesson
+    await h.tap(1, "درس بعدی")  # the button of the note opens the next lesson
     h.session.reset()
     await h.say(1, "جایزه")  # the daily gift, claimed with a word
     assert any("جایزه‌ی روزانه" in n for n in notes(h))
@@ -105,6 +107,7 @@ async def test_sending_hunt_teaches_the_hunt_lesson(h, services, db):
     p = await hero(services, db)
     await learn_before(services, db, p, "hunt")
     assert (await services.academy.state(p.id)).current.id == "hunt"
+    await h.panel(1, "aclesson", "hunt")
     h.session.reset()
     await h.say(1, "شکار")
     assert any("شکار" in n and "هیولا" in n for n in notes(h))
@@ -159,6 +162,7 @@ async def test_lessons_are_locked_until_the_ones_before_are_learned(h, services,
         assert await tx.scalar("SELECT n FROM deed_counts WHERE player_id = ? AND deed = 'hunt'", (p.id,), 0) >= 1
     assert await services.academy.check(p, "hunt") is None  # ... yet the locked lesson is not learned
     # lessons are learned in order, and the next one opens
+    await h.panel(1, "aclesson", "hero")
     await h.panel(1, "profile")
     assert (await services.academy.state(p.id)).done == {"hero"}
     await h.panel(1, "aclesson", "daily")
@@ -253,11 +257,12 @@ async def test_a_new_hero_is_invited_to_the_academy(h, services):
 # --- never stuck, never broken midway ---------------------------------------------------------------------------------
 async def test_a_refused_rest_still_teaches_lesson_3_of_chapter_1_with_a_note(h, services, db):
     p = await hero(services, db)
-    await h.panel(1, "academy")
+    await h.panel(1, "aclesson", "hero")
     await h.panel(1, "profile")
+    await h.panel(1, "aclesson", "daily")
     await h.say(1, "جایزه")
     assert (await services.academy.state(p.id)).current.id == "energy"
-    assert (await services.players.require(1)).energy == (await services.players.require(1)).energy  # a hero with full energy
+    await h.panel(1, "aclesson", "energy")  # the lesson is open; the hero has full energy
     h.session.reset()
     await h.say(1, "استراحت")  # the game answers «سرشار از انرژی هستید» ...
     assert any("سرشار از انرژی" in t for t in h.session.texts())
@@ -270,11 +275,13 @@ async def test_a_refused_rest_still_teaches_lesson_3_of_chapter_1_with_a_note(h,
 async def test_a_refused_rest_button_teaches_it_too_but_other_refused_tries_do_not(h, services, db):
     p = await hero(services, db)
     await learn_before(services, db, p, "energy")
+    await h.panel(1, "aclesson", "energy")
     h.session.reset()
     await h.panel(1, "rest")  # the button: refused (full energy), still learned
     assert any("درس ۳ فصل ۱" in n for n in notes(h))
     # a refused try of a lesson that is about doing (the hunt, with no energy) teaches nothing
     await learn_before(services, db, p, "hunt")
+    await h.panel(1, "aclesson", "hunt")
     async with db.transaction() as tx:
         await tx.execute("UPDATE players SET energy = 0 WHERE id = ?", (p.id,))
     h.session.reset()
@@ -284,7 +291,7 @@ async def test_a_refused_rest_button_teaches_it_too_but_other_refused_tries_do_n
 
 async def test_a_level_up_from_a_lesson_reward_never_breaks_the_note(h, services, db):
     p = await hero(services, db, level=1)
-    await services.academy.start(p.id)
+    await h.panel(1, "aclesson", "hero")
     async with db.transaction() as tx:  # one xp short of the next level
         await tx.execute("UPDATE players SET xp = ? WHERE id = ?", (services.characters.xp_needed(p) - 1, p.id))
     h.session.reset()
@@ -376,6 +383,7 @@ async def test_the_first_chapter_can_be_walked_from_start_to_finish_with_a_note_
     ]
     for lesson_id, act in steps:
         before = len(notes(h))
+        await h.panel(1, "aclesson", lesson_id)  # each lesson is opened first, like a player would
         await act()
         assert lesson_id in (await services.academy.state(p.id)).done, lesson_id
         assert len(notes(h)) == before + 1, lesson_id  # exactly one well done per lesson, never two, never none
@@ -390,4 +398,80 @@ async def test_the_first_chapter_can_be_walked_from_start_to_finish_with_a_note_
     await h.say(1, "استراحت")
     await h.panel(1, "missions")
     assert notes(h) == [] and (await services.players.require(1)).gold == gold
+
+
+# --- the academy speaks only while the hero is in it --------------------------------------------------------------------
+async def test_the_academy_stays_silent_when_the_hero_plays_normally(h, services, db):
+    p = await hero(services, db)
+    await services.academy.start(p.id)  # the hero is registered in the academy (a new hero is) but has opened no lesson
+    h.session.reset()
+    for word in ("جایزه", "استراحت", "ماهیگیری", "شکار"):
+        await h.say(1, word)
+    await h.panel(1, "profile")
+    await h.panel(1, "missions")
+    assert notes(h) == []
+    assert (await services.academy.state(p.id)).done == set()  # and nothing was ticked behind their back
+    async with db.read() as tx:
+        assert await tx.scalar("SELECT COUNT(*) FROM transactions WHERE reason = 'academy'", default=0) == 0
+
+
+async def test_a_lesson_counts_only_while_it_is_the_one_being_learned(h, services, db, clock):
+    p = await hero(services, db)
+    await h.panel(1, "aclesson", "hero")  # the mode starts with this lesson
+    clock.advance(31 * 60)  # the hero wanders off for half an hour and plays as usual
+    h.session.reset()
+    await h.panel(1, "profile")
+    assert notes(h) == [] and (await services.academy.state(p.id)).active is None
+    await h.panel(1, "aclesson", "hero")  # back in the academy
+    assert (await services.academy.state(p.id)).active == "hero"
+    clock.advance(29 * 60)
+    await h.panel(1, "profile")
+    assert any("قهرمان تو" in n for n in notes(h))
+
+
+async def test_only_the_open_lesson_is_noticed_and_the_mode_ends_when_it_is_learned(h, services, db):
+    p = await hero(services, db)
+    await h.panel(1, "aclesson", "hero")
+    h.session.reset()
+    await h.say(1, "جایزه")  # the next lesson's deed: not the open lesson, so no word about it
+    assert notes(h) == [] and (await services.academy.state(p.id)).done == set()
+    await h.panel(1, "profile")
+    assert [n for n in notes(h)] and (await services.academy.state(p.id)).done == {"hero"}
+    assert (await services.academy.state(p.id)).active is None  # learned: the mode ends until the next lesson is opened
+    h.session.reset()
+    await h.panel(1, "missions")
+    await h.say(1, "استراحت")
+    assert notes(h) == []
+
+
+async def test_opening_a_lesson_whose_deed_is_already_done_ticks_it_on_the_spot(h, services, db):
+    p = await hero(services, db)
+    await learn_before(services, db, p, "hunt")
+    async with db.transaction() as tx:
+        await tx.execute("INSERT INTO deed_counts (player_id, deed, n) VALUES (?, 'hunt', 2)", (p.id,))
+    await h.panel(1, "aclesson", "hunt")
+    assert "hunt" in (await services.academy.state(p.id)).done and "تکمیل شد" in h.session.last_text()
+
+
+# --- the group lesson: «پروفایل» said in a group ---------------------------------------------------------------------------
+async def test_the_profile_word_in_a_group_teaches_the_group_lesson_and_in_private_it_does_not(h, services, db):
+    p = await hero(services, db)
+    await learn_before(services, db, p, "group")
+    await h.panel(1, "aclesson", "group")
+    assert not any("بررسی" in b["text"] for b in h.session.last_buttons())  # no check button: the word is noticed at once
+    h.session.reset()
+    await h.say(1, "پروفایل")  # in the private chat: that is not what the lesson asks
+    assert notes(h) == [] and "group" not in (await services.academy.state(p.id)).done
+    await h.say(1, "پروفایل", group=True)  # in a group: well done, sent to the hero's private chat
+    note = next(m for m in h.session.sent() if "آفرین! درس" in m.get("text", ""))
+    assert "درس ۱ فصل ۷ تکمیل شد" in note["text"] and note["chat_id"] == 1
+    assert "group" in (await services.academy.state(p.id)).done
+
+
+async def test_the_group_lesson_is_not_taught_by_a_group_word_outside_the_academy(h, services, db):
+    p = await hero(services, db)
+    await learn_before(services, db, p, "group")  # the lesson is next, but the hero never opened it
+    h.session.reset()
+    await h.say(1, "پروفایل", group=True)
+    assert notes(h) == [] and "group" not in (await services.academy.state(p.id)).done
 

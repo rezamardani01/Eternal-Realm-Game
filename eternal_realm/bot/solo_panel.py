@@ -35,7 +35,10 @@ def _reward_lines(p) -> list[str]:  # noqa: ANN001 - Payout
     if p.crystal:
         lines.append(f"💎 {fa(p.crystal)} کریستال")
     lines += [f"🎁 {get_item(i).name} ×{fa(q)}" for i, q in p.items.items()]
-    return lines or ["چیزی عایدتان نشد"]
+    lines = lines or ["چیزی عایدتان نشد"]
+    if getattr(p, "capped", False):
+        lines.append(f"🔒 جایزه‌های ویژه‌ی امروز (کریستال و صندوقچه) تمام شد؛ فردا دوباره. سکه و تجربه همچنان می‌گیرید.")
+    return lines
 
 
 async def _energy_line(c: Ctx) -> str:
@@ -50,25 +53,21 @@ async def trip(c: Ctx) -> Screen:
     fight = await c.services.solo.active(c.player.id)
     event = await c.services.solo.pending_event(c.player.id)
     run = await c.services.solo.maze_run(c.player.id)
-    today = await c.services.solo.overview(c.player.id)
-
-    def mark(section: str) -> str:
-        return " (امروز انجام شد)" if today.get(f"today:use:{section}", 0) >= data.DAILY_USES else ""
 
     lines = [
         f"🧭 {bold('سفر قهرمان')}", LINE,
         "تنها هم می‌شود قهرمان بود؛ همه‌ی این بخش‌ها با قدرت و تجهیزات خودتان است و به هیچ بازیکن دیگری نیاز ندارد.",
-        f"📅 هر بخش در روز {fa(data.DAILY_USES)} بار باز است.",
+        f"🎁 هر روز {fa(data.DAILY_VALUABLE)} بار جایزه‌ی ویژه (کریستال و صندوقچه) می‌گیرید؛ بعد از آن سفر فقط سکه و تجربه می‌دهد.",
         "",
-        f"📖 داستان{mark('story')}: ۲۰ مرحله با انتخاب راه؛ سکه، تجربه، صندوقچه و کریستال",
-        f"🏚️ دخمه‌ها{mark('dungeon')}: هر روز سه دخمه‌ی پنج‌طبقه؛ طبقه‌به‌طبقه پاداش",
-        f"🐉 باس‌ها{mark('boss')}: پنج باس با ترفند؛ کریستال و صندوقچه",
-        f"🥊 میدان بات‌ها{mark('arena')}: تمرین در چهار سطح سختی",
-        f"♾️ هزارتو{mark('maze')}: {fa(len(maze_data.CHAPTERS))} فصل و {fa(maze_data.FLOORS)} طبقه؛ هر طبقه یک ماجرا و تصمیم، و غول‌هایی که راه را بسته‌اند",
-        f"🎲 گشت‌زنی{mark('wander')}: اتفاق‌های راه؛ گنج، راهزن، معما و تاجر مرموز",
+        f"📖 داستان: ۲۰ مرحله با انتخاب راه؛ سکه، تجربه، صندوقچه و کریستال",
+        f"🏚️ دخمه‌ها: هر روز سه دخمه‌ی پنج‌طبقه؛ طبقه‌به‌طبقه پاداش",
+        f"🐉 باس‌ها: پنج باس با ترفند؛ کریستال و صندوقچه",
+        f"🥊 میدان بات‌ها: تمرین در چهار سطح سختی",
+        f"♾️ هزارتو: {fa(len(maze_data.CHAPTERS))} فصل و {fa(maze_data.FLOORS)} طبقه؛ هر طبقه یک ماجرا و تصمیم، و غول‌هایی که راه را بسته‌اند",
+        f"🎲 گشت‌زنی: اتفاق‌های راه؛ گنج، راهزن، معما و تاجر مرموز",
         "🗼 برج بی‌پایان: هر طبقه یک نبرد، بی‌پایان و با رتبه‌ی جهانی",
         "🏕️ اعزام: قهرمان را بفرستید و در غیبتتان پاداش بگیرید",
-        f"🌍 جهان زنده{mark('world')}: رویداد جهانی و تاریکی مناطق",
+        f"🌍 جهان زنده: رویداد جهانی و تاریکی مناطق",
         LINE, await _energy_line(c),
     ]
     rows = []
@@ -245,7 +244,7 @@ async def arena(c: Ctx) -> Screen:
     lines = [
         f"🥊 {bold('میدان بات‌ها')}", LINE,
         "حریفان ساخته‌ی ربات با مهارت‌های گوناگون؛ هر وقت خواستید می‌جنگید و سکه و تجربه می‌گیرید.",
-        f"🏅 روزی یک نبرد در میدان باز است؛ سطح حریف را با دقت انتخاب کنید.",
+        f"🏅 {fa(data.ARENA_FULL_WINS)} برد اول هر روز پاداش کامل دارد؛ سطح حریف را با دقت انتخاب کنید.",
         "",
         "🌱 تازه‌کار: حریفی ملایم برای گرم شدن",
         "⚔️ جنگجو: نبردی هم‌شأن",

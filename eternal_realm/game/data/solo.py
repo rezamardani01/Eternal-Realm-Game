@@ -11,9 +11,10 @@ from dataclasses import dataclass, field
 from ..engine.combat import Fighter
 
 #: gold and experience of every solo reward are multiplied by this (the trip is a side road, not the main income)
-REWARD_SHARE = 0.45
-#: how many times a day one hero may use each section of the trip (the owner is exempt)
-DAILY_USES = 1
+REWARD_SHARE = 0.3
+#: the trip has no daily limit of visits any more; instead the crystals and chests it pays are limited: after this many
+#: such prizes in a day (a boss's first win of the day is not counted) the trip pays only gold and experience
+DAILY_VALUABLE = 3
 SECTION_NAMES = {
     "story": "داستان", "arena": "میدان بات‌ها", "dungeon": "دخمه‌ها", "boss": "باس‌های تک‌نفره", "maze": "هزارتوی ابدی",
     "wander": "گشت‌زنی", "world": "جهان زنده",
@@ -285,7 +286,7 @@ STAGES: tuple[Stage, ...] = (
            {"fight": "⚔️ سرنوشت را رقم بزن", "careful": "🛡️ سپر بالا", "bold": "🔥 همه‌چیز را به خطر بینداز"}, boss=True),
 )
 _STAGE = {s.number: s for s in STAGES}
-CHAPTER_DONE_CRYSTALS = 3
+CHAPTER_DONE_CRYSTALS = 2
 #: a stage is graded by the health the hero kept: 1 bronze (won), 2 silver (40%+), 3 gold (75%+)
 GRADES = {1: "برنزی", 2: "نقره‌ای", 3: "طلایی"}
 
@@ -357,11 +358,11 @@ class SoloBoss:
 
 
 SOLO_BOSSES: tuple[SoloBoss, ...] = (
-    SoloBoss("boss_undead_king", 5, 1.0, 900, 700, 2, ("magic_chest", 1)),
-    SoloBoss("boss_red_dragon", 12, 1.02, 1_800, 1_400, 3, ("magic_chest", 1)),
-    SoloBoss("boss_time_keeper", 20, 1.02, 3_000, 2_300, 4, ("royal_chest", 1)),
-    SoloBoss("boss_shadow_lord", 28, 1.03, 4_500, 3_400, 5, ("royal_chest", 1)),
-    SoloBoss("boss_titan", 35, 1.05, 7_000, 5_200, 6, ("royal_chest", 1)),
+    SoloBoss("boss_undead_king", 5, 1.0, 900, 700, 1, ("magic_chest", 1)),
+    SoloBoss("boss_red_dragon", 12, 1.02, 1_800, 1_400, 2, ("magic_chest", 1)),
+    SoloBoss("boss_time_keeper", 20, 1.02, 3_000, 2_300, 2, ("royal_chest", 1)),
+    SoloBoss("boss_shadow_lord", 28, 1.03, 4_500, 3_400, 3, ("royal_chest", 1)),
+    SoloBoss("boss_titan", 35, 1.05, 7_000, 5_200, 4, ("royal_chest", 1)),
 )
 
 

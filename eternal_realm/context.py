@@ -33,5 +33,10 @@ class AppContext:
         if delay > 0:
             await asyncio.sleep(delay)
 
+    async def wait(self, seconds: float) -> None:
+        """A real wait (a group dungeon in progress), unlike :meth:`pause`, which only spaces animation frames."""
+        if seconds > 0:
+            await asyncio.sleep(seconds)
+
     def now(self) -> int:
         return self.clock()

@@ -1423,7 +1423,7 @@ async def on_panel(
         if isinstance(error, GameError):  # a refused try (full energy, a wait) still teaches the lessons about knowing it
             from .academy_panel import after as academy_after
 
-            await academy_after(message.bot, services, player, player.platform_user_id, screen=callback_data.s, attempted=True)
+            await academy_after(message.bot, services, player, player.platform_user_id, screen=callback_data.s, attempted=True, in_group=_is_group(message))
         if not isinstance(error, KeyError):
             raise
         shown = None
@@ -1437,7 +1437,7 @@ async def on_panel(
     await query.answer((shown.toast or "")[:190] or None, show_alert=shown.alert)
     from .academy_panel import after as academy_after
 
-    await academy_after(message.bot, services, player, player.platform_user_id, screen=callback_data.s)
+    await academy_after(message.bot, services, player, player.platform_user_id, screen=callback_data.s, in_group=_is_group(message))
 
 
 # --- text prompt: price of a market listing ---------------------------------------------------

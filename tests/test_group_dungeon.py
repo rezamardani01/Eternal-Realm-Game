@@ -1,5 +1,8 @@
+import asyncio
+
 import pytest
 
+from eternal_realm.bot import group_dungeon as ui
 from eternal_realm.bot.services import Services
 from eternal_realm.config import Settings
 from eternal_realm.context import AppContext
@@ -120,7 +123,46 @@ async def test_glass_flow_in_a_group(h, services, db):
     await h.click(11, start, group=True)  # not the opener
     assert any("گشاینده" in a.get("text", "") for a in h.session.callback_answers())
     await h.click(10, start, group=True)
+    await asyncio.gather(*ui.TASKS)  # the result comes after the wait
     text = h.session.last_text()
     assert "سیاه‌چال فتح شد" in text or "سیاه‌چال شما را بلعید" in text
     assert any("🪙" in label for label in h.labels())
     assert players
+
+
+async def test_the_result_comes_two_minutes_after_the_start_with_the_rooms_shown_meanwhile(h, services, db, monkeypatch):
+    players = await squad(services, db, 3, level=30)
+    waits = []
+
+    async def record(self, seconds):
+        waits.append(seconds)
+
+    monkeypatch.setattr(AppContext, "wait", record)
+    await h.say(10, "سیاه‌چال گروهی", group=True)
+    await h.click(11, h.button_data("پیوستن"), group=True)
+    await h.click(12, h.button_data("پیوستن"), group=True)
+    await h.click(10, h.button_data("شروع"), group=True)
+    # at once: the doors close and the countdown starts; nothing about the result yet
+    frame = h.session.sent("editMessageText")[-1]["text"]
+    assert "در جریان است" in frame and "نتیجه تا ۲ دقیقه" in frame and "سیاه‌چال فتح شد" not in frame
+    assert not any("سیاه‌چال فتح شد" in m["text"] or "بلعید" in m["text"] for m in h.session.sent())
+    gold = [(await services.players.require(uid)).gold for uid in (10, 11, 12)]
+    await asyncio.gather(*ui.TASKS)
+    # four steps of thirty seconds, the rooms announced on the way, then the result
+    assert waits == [30, 30, 30, 30] and sum(waits) == services.ctx.balance.gdungeon_run_seconds == 120
+    frames = [c["text"] for c in h.session.sent("editMessageText")]
+    for room in ui.ROOMS:
+        assert any(room in f for f in frames)
+    assert "نتیجه تا ۱ دقیقه" in " ".join(frames)  # the countdown goes down
+    assert "سیاه‌چال فتح شد" in h.session.last_text() or "بلعید" in h.session.last_text()
+    assert players and gold  # (the rewards are paid once, at the start, as before)
+
+
+async def test_a_refused_start_leaves_the_lobby_untouched_and_starts_no_countdown(h, services, db):
+    await squad(services, db, 3, level=30)
+    await h.say(10, "سیاه‌چال گروهی", group=True)
+    await h.click(11, h.button_data("پیوستن"), group=True)
+    await h.click(10, h.button_data("شروع"), group=True)  # only two fighters: refused
+    assert not ui.TASKS
+    assert not any("در جریان است" in m["text"] for m in h.session.sent("editMessageText"))
+

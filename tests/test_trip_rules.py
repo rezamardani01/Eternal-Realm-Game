@@ -42,42 +42,26 @@ async def drop_fight(services, p):
     await services.solo.abandon(p)
 
 
-# --- one use of every section a day -----------------------------------------------------------------------------------
-async def test_every_section_of_the_trip_opens_once_a_day(services, db, clock, monkeypatch):
-    monkeypatch.setattr(data, "DAILY_USES", 1)
+# --- no daily limit of visits; the crystals and chests are what is limited -------------------------------------------------
+async def test_every_section_of_the_trip_can_be_played_as_often_as_energy_allows(services, db, clock):
     p = await hero(services, db, level=30)
 
-    await services.solo.start_arena(p, "normal")
-    await drop_fight(services, p)
-    with pytest.raises(GameError, match="امروز از «میدان بات‌ها»"):
+    for _ in range(3):
         await services.solo.start_arena(p, "normal")
-
-    await services.solo.maze_start(p)
-    await services.solo.maze_retreat(p)
-    with pytest.raises(GameError, match="امروز از «هزارتوی ابدی»"):
+        await drop_fight(services, p)
+    for _ in range(2):
         await services.solo.maze_start(p)
-
-    await services.solo.wander(p)
-    with pytest.raises(GameError):  # the pending event, then (once decided) the daily limit
-        await services.solo.wander(p)
-
-    await services.solo.start_boss(p, "boss_undead_king")
-    await drop_fight(services, p)
-    with pytest.raises(GameError, match="امروز از «باس‌های تک‌نفره»"):
+        await services.solo.maze_retreat(p)
+    for _ in range(2):
         await services.solo.start_boss(p, "boss_undead_king")
-
+        await drop_fight(services, p)
     dungeon = data.todays_dungeons((clock() + 12600) // 86400)[0]
-    await services.solo.start_dungeon(p, dungeon.id)
-    await drop_fight(services, p)
-    with pytest.raises(GameError, match="امروز از «دخمه‌ها»"):
+    for _ in range(2):
         await services.solo.start_dungeon(p, dungeon.id)
-
-    clock.advance(86400)  # a new day opens them all again
-    await services.solo.start_arena(p, "normal")
+        await drop_fight(services, p)
 
 
-async def test_a_refused_start_does_not_use_up_the_day(services, db, monkeypatch):
-    monkeypatch.setattr(data, "DAILY_USES", 1)
+async def test_a_refused_start_changes_nothing(services, db):
     p = await hero(services, db, level=5)
     async with db.transaction() as tx:
         await tx.execute("UPDATE players SET energy = 0 WHERE id = ?", (p.id,))
@@ -88,16 +72,58 @@ async def test_a_refused_start_does_not_use_up_the_day(services, db, monkeypatch
     await services.solo.maze_start(p)
 
 
-async def test_the_owner_is_not_limited(services, db, monkeypatch):
-    monkeypatch.setattr(data, "DAILY_USES", 1)
-    p = await hero(services, db, uid=999, level=10)
-    for _ in range(2):
-        await services.solo.maze_start(p)
-        await services.solo.maze_retreat(p)
+async def pay(services, db, p, crystal=0, items=None, **kwargs):
+    async with db.transaction() as tx:
+        return await services.solo._pay(tx, p.id, 100, 100, crystal, items or {}, **kwargs)
+
+
+async def test_the_trip_pays_only_a_few_crystal_and_chest_prizes_a_day(services, db, clock):
+    p = await hero(services, db, level=10)
+    for _ in range(data.DAILY_VALUABLE):
+        paid = await pay(services, db, p, items={"wooden_chest": 1})
+        assert paid.items == {"wooden_chest": 1} and not paid.capped
+    capped = await pay(services, db, p, crystal=2, items={"wooden_chest": 1})  # the next one: gold and experience only
+    assert capped.capped and capped.crystal == 0 and capped.items == {} and capped.gold > 0 and capped.xp > 0
+    view = dict((i.id, q) for i, q in (await services.inventory.view(p.id)).stacks)
+    assert view.get("wooden_chest") == data.DAILY_VALUABLE
+    plain = await pay(services, db, p)  # a reward of gold and experience only is never capped
+    assert not plain.capped and plain.gold > 0
+    clock.advance(86400)  # a new day starts again
+    assert (await pay(services, db, p, crystal=1)).crystal == 1
+
+
+async def test_a_bosss_first_win_of_the_day_is_not_counted_in_the_limit(services, db):
+    p = await hero(services, db, level=10)
+    for _ in range(data.DAILY_VALUABLE + 2):
+        paid = await pay(services, db, p, crystal=3, items={"magic_chest": 1}, limited=False)
+        assert paid.crystal == 3 and not paid.capped
+    assert not (await pay(services, db, p, items={"wooden_chest": 1})).capped  # the limit's own count is untouched
+
+
+async def test_one_time_rewards_are_never_lost_to_the_limit(services, db):
+    p = await hero(services, db, level=10)
+    for _ in range(data.DAILY_VALUABLE):
+        await pay(services, db, p, items={"wooden_chest": 1})
+    # the crystals of a story grade or chapter are paid once in a hero's life: kept even when the day's chests are used up
+    story = await pay(services, db, p, crystal=3, items={"wooden_chest": 1}, keep_crystal=True)
+    assert story.crystal == 3 and story.items == {} and story.capped
+    # a tower guardian or a maze milestone is paid once too: not limited at all
+    once = await pay(services, db, p, crystal=2, items={"magic_chest": 1}, limited=False)
+    assert once.crystal == 2 and once.items == {"magic_chest": 1} and not once.capped
+
+
+async def test_the_capped_note_is_shown_on_the_result_screen():
+    from eternal_realm.bot.solo_panel import _reward_lines
+    from eternal_realm.game.services.solo import Payout
+
+    lines = _reward_lines(Payout(gold=10, xp=5, capped=True))
+    assert any("تمام شد" in line for line in lines) and any("سکه" in line for line in lines)
+    assert not any("تمام شد" in line for line in _reward_lines(Payout(gold=10)))
 
 
 async def test_trip_pays_less_than_it_used_to(services, db):
-    assert data.REWARD_SHARE < 0.6
+    assert data.REWARD_SHARE <= 0.3  # was 0.45
+    assert [b.crystal for b in data.SOLO_BOSSES] == [1, 2, 2, 3, 4] and data.CHAPTER_DONE_CRYSTALS == 2  # were 2..6 and 3
     p = await hero(services, db, level=10)
     gold, xp = services.solo._scale(p.level, 100, 100)
     assert gold < 100 and xp < 100 or p.level < 5

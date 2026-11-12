@@ -3,7 +3,7 @@ import pytest
 from eternal_realm.bot.services import Services
 from eternal_realm.config import Settings
 from eternal_realm.context import AppContext
-from eternal_realm.game.data.deals import DEALS_PER_DAY, daily_deals, discounted, find_deal, seconds_left
+from eternal_realm.game.data.deals import DEALS_PER_DAY, daily_deals, discounted, find_deal, kinds, seconds_left
 from eternal_realm.game.data.items import ITEMS
 from eternal_realm.game.data.packs import PACKS
 from eternal_realm.shared.errors import GameError
@@ -40,6 +40,24 @@ def test_deals_are_the_same_all_day_and_change_tomorrow():
     assert a == [(d.pack.id, d.percent) for d in daily_deals(evening)] and len(a) == DEALS_PER_DAY
     assert a != [(d.pack.id, d.percent) for d in daily_deals(morning + 86400)]
     assert 0 < seconds_left(NOW) <= 86400
+
+
+def test_a_day_never_offers_the_same_item_twice():
+    for day in range(400):
+        deals = daily_deals(NOW + day * 86400)
+        assert len(deals) == DEALS_PER_DAY
+        names = [name for d in deals for name in kinds(d.pack)]
+        assert len(names) == len(set(names)), [d.pack.id for d in deals]  # no two crystal packs, no two scale packs...
+        assert len({d.pack.id for d in deals}) == len(deals)
+
+
+def test_every_day_puts_the_valuable_things_on_sale():
+    for day in range(200):
+        sections = [d.pack.section for d in daily_deals(NOW + day * 86400)]
+        ids = [d.pack.id for d in daily_deals(NOW + day * 86400)]
+        assert {"coins", "xp", "crystals"} <= set(sections)  # a coin pack, an experience pack, crystals
+        assert any(i.startswith("rare_") for i in ids)  # a rare material (dragon scale, crystal shard...)
+        assert any(i.startswith("kit_") or i.startswith("deal_") for i in ids)  # a legendary kit, a piece of gear or a chest
 
 
 def test_discount_rounding():

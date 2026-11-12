@@ -122,7 +122,7 @@ class ExpeditionService:
             report.xp = round(kind.xp * hours * data.REWARD_SHARE * loot.xp_scale(level) * rng.uniform(0.9, 1.1)) * boost
             for item_id, per_hour, chance in kind.items:
                 if rng.random() <= chance:
-                    qty = max(1, round(per_hour * hours * rng.uniform(0.8, 1.2))) if per_hour >= 1 else int(rng.random() < per_hour * hours)
+                    qty = max(1, round(per_hour * hours * data.ITEM_SHARE * rng.uniform(0.8, 1.2))) if per_hour >= 1 else int(rng.random() < per_hour * hours * data.ITEM_SHARE)
                     if qty:
                         report.items[item_id] = qty * boost
             for text, chance in kind.finds:

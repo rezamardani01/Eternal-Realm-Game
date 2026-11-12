@@ -48,6 +48,8 @@ class Balance:
     command_gap_seconds: float = 1.0
     #: pause between the steps of «در حال شکار...»-style animations (0 turns them off)
     animation_seconds: float = 1.0
+    #: a group dungeon takes this long from «شروع» to its result (the rooms are fought behind closed doors)
+    gdungeon_run_seconds: int = 120
     event_interval_seconds: int = 7200
     event_min_active: int = 2
     clan_create_gold: int = 1000

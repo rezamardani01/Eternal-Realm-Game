@@ -10,7 +10,9 @@ from dataclasses import dataclass
 HOURS = (1, 4, 8)
 DAILY_LIMIT = 1
 #: the gold and experience of a report are multiplied by this
-REWARD_SHARE = 0.6
+REWARD_SHARE = 0.4
+#: the resources an expedition brings back are multiplied by this too
+ITEM_SHARE = 0.75
 
 
 @dataclass(frozen=True)

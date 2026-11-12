@@ -56,6 +56,8 @@ class Payout:
     notes: list[str] = field(default_factory=list)
     #: for a story stage: 1 bronze, 2 silver, 3 gold (0 = not a stage)
     grade: int = 0
+    #: the day's crystals and chests of the trip were used up, so only gold and experience were paid
+    capped: bool = False
 
 
 @dataclass
@@ -219,15 +221,6 @@ class SoloService:
     def _scale(self, level: int, gold: float, xp: float) -> tuple[int, int]:
         return round(gold * data.REWARD_SHARE * loot.level_scale(level)), round(xp * data.REWARD_SHARE * loot.xp_scale(level))
 
-    async def _use_today(self, tx: Tx, player: Player, section: str) -> None:
-        """One use of a section of the trip; a hero gets ``DAILY_USES`` of each a day (the owner is exempt)."""
-        if self.players.is_owner(player):
-            return
-        used = await self._daily(tx, player.id, f"use:{section}")
-        if used >= data.DAILY_USES:
-            raise GameError(f"امروز از «{data.SECTION_NAMES[section]}» استفاده کرده‌اید؛ هر بخش سفر قهرمان روزی {fa(data.DAILY_USES)} بار باز است. فردا برگردید!")
-        await self._bump_daily(tx, player.id, f"use:{section}")
-
     async def start_arena(self, player: Player, tier_id: str, bot_id: str | None = None) -> SoloFight:
         try:
             _, name, mult, reward, need = data.get_tier(tier_id)
@@ -237,7 +230,6 @@ class SoloService:
             raise GameError(f"این سطح از میدان از سطح {fa(need)} باز می‌شود.")
         bot_id = bot_id if bot_id in data.ARENA_BOTS else self.ctx.rng.choice(data.ARENA_BOTS)
         async with self.ctx.db.transaction() as tx:
-            await self._use_today(tx, player, "arena")
             fm, rm = await self.world.effect(tx, world_data.ARENA_REGION)  # a darker region fights harder and pays more
             foe = data.get_foe(bot_id).fighter(player.level, mult * fm)
             gold, xp = self._scale(player.level, 60 * reward * rm, 55 * reward * rm)
@@ -276,8 +268,6 @@ class SoloService:
             base_gold, base_xp = data.stage_reward(stage)
             gold, xp = self._scale(player.level, base_gold * effect["gold"] * rm, base_xp * effect["xp"] * rm)
             replay = number <= cleared
-            if not replay:
-                await self._use_today(tx, player, "story")
             if replay:  # a stage already told pays a third
                 gold, xp = round(gold / 3), round(xp / 3)
             info = {
@@ -295,7 +285,6 @@ class SoloService:
         if dungeon not in data.todays_dungeons(_day(self.ctx.now())):
             raise GameError("این دخمه امروز بسته است؛ دخمه‌های امروز را ببینید.")
         async with self.ctx.db.transaction() as tx:
-            await self._use_today(tx, player, "dungeon")
             fight = await self._floor(tx, player, dungeon, 1, data.ENERGY["dungeon"])
             await self._set_progress(tx, player.id, "run", self._run_code(dungeon, 1))
             return fight
@@ -347,7 +336,6 @@ class SoloService:
             "item": list(boss.item), "foe": foe_id,
         }
         async with self.ctx.db.transaction() as tx:
-            await self._use_today(tx, player, "boss")
             return await self._begin(tx, player, "boss", foe, info, data.ENERGY["boss"])
 
     # --- playing -------------------------------------------------------------------------------------------------
@@ -383,9 +371,23 @@ class SoloService:
             return SoloUpdate(fight, lines, finished=True, won=won, fled=fled, payout=payout)
 
     # --- paying out -----------------------------------------------------------------------------------------------
-    async def _pay(self, tx: Tx, pid: int, gold: int, xp: int, crystal: int = 0, items: dict[str, int] | None = None) -> Payout:
+    async def _pay(
+        self, tx: Tx, pid: int, gold: int, xp: int, crystal: int = 0, items: dict[str, int] | None = None, *,
+        limited: bool = True, keep_crystal: bool = False,
+    ) -> Payout:
+        """Pay a reward.
+
+        What can be won again and again (the chest of a dungeon or a story stage, what a maze or the road hands out) is
+        limited to ``DAILY_VALUABLE`` such prizes a day. A one-time reward (a boss's first win of the day, a maze
+        milestone, a tower guardian, the crystals of a story grade or chapter) is never limited: ``limited=False``, or
+        ``keep_crystal`` when only the items of the payout are repeatable.
+        """
+        capped = False
+        if limited and (items or (crystal and not keep_crystal)):
+            if await self._bump_daily(tx, pid, "valuable") > data.DAILY_VALUABLE:
+                crystal, items, capped = (crystal if keep_crystal else 0), {}, True
         boost = await self.players.boost_factor(tx, pid)
-        pay = Payout(gold=gold * boost, xp=xp * boost, crystal=crystal, items=dict(items or {}))
+        pay = Payout(gold=gold * boost, xp=xp * boost, crystal=crystal, items=dict(items or {}), capped=capped)
         now = self.ctx.now()
         await wallet.apply(tx, pid, gold=pay.gold, crystal=pay.crystal, reason="solo", now=now)
         for item_id, qty in pay.items.items():
@@ -453,7 +455,7 @@ class SoloService:
             await self._set_progress(tx, pid, f"boss:{info['boss']}", kills + 1)
         if info.get("region"):  # a win pushes the region's darkness back a little
             await self.world.relieve(tx, info["region"], 1 if kind == "arena" else 2)
-        pay = await self._pay(tx, pid, gold, xp, crystal, items)
+        pay = await self._pay(tx, pid, gold, xp, crystal, items, limited=kind not in ("boss", "tower"), keep_crystal=kind == "story")
         pay.notes = notes
         if kind == "story":
             pay.grade = grade
@@ -481,7 +483,6 @@ class SoloService:
         gold, xp = self._scale(player.level, 80, 90)
         info = {"title": f"رویداد جهانی · {event.kind.title}", "event": event.id, "gold": gold, "xp": xp, "foe": event.kind.foe}
         async with self.ctx.db.transaction() as tx:
-            await self._use_today(tx, player, "world")
             return await self._begin(tx, player, "world", foe, info, world_data.ENERGY)
 
     async def _world_fought(self, tx: Tx, player: Player, fight: SoloFight, won: bool) -> Payout:
@@ -547,7 +548,6 @@ class SoloService:
             done = await self._progress(tx, player.id, "maze:chapters")
             if done >= len(maze_data.CHAPTERS):
                 raise GameError("هر چهار فصل هزارتو را فتح کرده‌اید؛ هزارتو برای هر قهرمان فقط یک بار باز است و دیگر درهایش بسته شد. 🏆")
-            await self._use_today(tx, player, "maze")
             await self.players.spend_energy(tx, player.id, maze_data.ENERGY)
             first = done * maze_data.CHAPTER_FLOORS + 1
             run = MazeRun(first, 1.0, {}, 0, 0, "scene", "")
@@ -703,12 +703,12 @@ class SoloService:
             else:
                 notes.append(f"فصل «{title}» به پایان رسید؛ فصل بعد باز شد. همه‌ی غنیمت‌تان با شماست.")
             pay.notes = notes
-            extra = await self._pay(tx, pid, 0, 0, crystal, items)
+            extra = await self._pay(tx, pid, 0, 0, crystal, items, limited=False)  # a guardian floor: paid once
             pay.crystal, pay.items = extra.crystal, extra.items
             return pay
         self._enter(run, floor + 1)
         await self._save_run(tx, pid, run)
-        pay = await self._pay(tx, pid, 0, 0, crystal, items)
+        pay = await self._pay(tx, pid, 0, 0, crystal, items, limited=False)  # a milestone floor: paid once
         pay.notes = notes
         return pay
 
@@ -786,7 +786,6 @@ class SoloService:
         async with self.ctx.db.transaction() as tx:
             if await self._progress(tx, player.id, "event"):
                 raise GameError("یک اتفاق در راه منتظر تصمیم شماست.")
-            await self._use_today(tx, player, "wander")
             await self.players.spend_energy(tx, player.id, data.ENERGY["wander"])
             index = self.ctx.rng.randrange(len(data.EVENTS))
             await self._set_progress(tx, player.id, "event", index + 1)

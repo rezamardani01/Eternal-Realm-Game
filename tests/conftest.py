@@ -41,14 +41,6 @@ def balance() -> Balance:
 
 
 @pytest.fixture(autouse=True)
-def _open_trip_sections(monkeypatch):
-    """The trip's daily limit is tested on its own; everywhere else a hero may play a section as often as the test needs."""
-    from eternal_realm.game.data import solo
-
-    monkeypatch.setattr(solo, "DAILY_USES", 999)
-
-
-@pytest.fixture(autouse=True)
 def _no_animation_delay(monkeypatch):
     """Animations pause between frames; tests must not wait for them."""
     from eternal_realm.context import AppContext
@@ -56,4 +48,8 @@ def _no_animation_delay(monkeypatch):
     async def instant(self, factor: float = 1.0) -> None:
         return None
 
+    async def no_wait(self, seconds: float) -> None:
+        return None
+
     monkeypatch.setattr(AppContext, "pause", instant)
+    monkeypatch.setattr(AppContext, "wait", no_wait)

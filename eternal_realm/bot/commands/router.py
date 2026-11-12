@@ -77,9 +77,9 @@ async def on_text(message: Message, bot: Bot, services: Services) -> None:
         await cmd.handler(ctx)
     except GameError:
         if player is not None:  # a refused try (full energy, a wait) still teaches the lessons that are about knowing it
-            await academy_after(bot, services, player, player.platform_user_id, command=cmd.name, attempted=True)
+            await academy_after(bot, services, player, player.platform_user_id, command=cmd.name, attempted=True, in_group=not private)
         raise
     if player is not None:  # the academy notices lessons learned by words (sent here or in a group); quiet otherwise
-        await academy_after(bot, services, player, player.platform_user_id, command=cmd.name)
+        await academy_after(bot, services, player, player.platform_user_id, command=cmd.name, in_group=not private)
     if not private and player is not None and cmd.points:
         await services.groups.add_points(message.chat.id, player.id, cmd.points)
