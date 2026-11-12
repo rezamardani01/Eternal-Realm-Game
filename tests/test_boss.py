@@ -249,7 +249,7 @@ def test_guardians_protect_allies():
 
 
 def test_rare_events_happen():
-    rng = random.Random(3)
+    rng = random.Random(4)
     boss = Boss("b", 10**7, 10**7, 40, 6)
     heroes = [make_hero(i, c) for i, c in enumerate(CLASSES)]
     texts = []

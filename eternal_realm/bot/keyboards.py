@@ -164,19 +164,22 @@ def duel_result(update) -> Rows:  # noqa: ANN001 - DuelUpdate
 def skill_label(fighter: Fighter, index: int) -> str:
     """A hero's skill as a button text; a skill that is still cooling down shows how many turns are left."""
     skill = fighter.skills[index]
+    if index < len(fighter.lock) and fighter.lock[index]:
+        return f"🔒 {skill['name']} · سطح {fa(fighter.lock[index])}"
     wait = fighter.skill_wait(index)
     return f"{skill['emoji']} {skill['name']}" + (f" ⏳{fa(wait)}" if wait else "")
 
 
 def hero_battle_rows(fighter: Fighter, button, last: list) -> Rows:  # noqa: ANN001
-    """The fight buttons of a hero: the basic attack, his three own skills, then the closing row.
+    """The fight buttons of a hero: the basic attack, his three own skills (one under the other), then the closing row.
 
     ``button(action, label, style)`` builds one button of the calling fight screen; ``last`` is its closing row."""
     skills = [
-        button(f"skill{i + 1}", skill_label(fighter, i), "success" if not fighter.skill_wait(i) else None)
+        button(f"skill{i + 1}", skill_label(fighter, i),
+               "success" if not fighter.skill_wait(i) and not (i < len(fighter.lock) and fighter.lock[i]) else None)
         for i in range(len(fighter.skills))
     ]
-    return [[button("attack", "⚔️ حمله عادی", "primary")], skills, last]
+    return [[button("attack", "⚔️ حمله عادی", "primary")], *[[b] for b in skills], last]
 
 
 def duel_actions(duel_id: int, fighter: Fighter) -> Rows:

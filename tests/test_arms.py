@@ -94,10 +94,10 @@ def test_skill_descriptions_are_readable():
 
 # --- the catalogue ----------------------------------------------------------------------------------------------------------------
 def test_catalogue_size_balance_and_data_integrity():
-    assert 40 <= len(ARMS) <= 60
+    assert 40 <= len(ARMS) <= 70
     assert {a.cat for a in ARMS.values()} == set(CATEGORIES)
     assert not set(ARMS) & set(ITEMS), "war gear never reuses an economy item id"
-    base = {1: (3, 18), 2: (2, 40), 3: (4, 60), 4: (4, 100), 5: (20, 140)}
+    base = {1: (3, 18), 2: (2, 40), 3: (4, 60), 4: (4, 100), 5: (20, 140), 6: (30, 200)}
     for arm in ARMS.values():
         assert arm.rarity in RARITIES and arm.price > 0 and arm.level_req >= 1 and arm.blurb
         assert len(arm.name) <= 32 and arm.card()
@@ -113,7 +113,7 @@ def test_catalogue_size_balance_and_data_integrity():
 
 
 def test_every_piece_is_also_sold_for_real_money_at_the_coin_price():
-    for arm in ARMS.values():
+    for arm in (a for a in ARMS.values() if not a.boss):
         pack = PACKS[arms_data.pack_id(arm.id)]
         assert pack.arms == {arm.id: 1} and pack.price_rial == arm.rial and pack.section == "arms"
         assert arm.rial >= arm.price * arms_data.RIAL_PER_COIN or arm.rial == arms_data.MIN_RIAL
@@ -476,12 +476,12 @@ async def test_duel_buttons_have_the_new_layout_with_cooldowns(h, services, db):
 
     f = fighter("mage", "dragonborn")
     rows = keyboards.duel_actions(1, f)
-    assert [len(r) for r in rows] == [1, 3, 2]
-    assert rows[0][0].text == "⚔️ حمله عادی" and [b.text for b in rows[2]] == ["🛡️ دفاع", "🏳️ تسلیم"]
+    assert [len(r) for r in rows] == [1, 1, 1, 1, 2]
+    assert rows[0][0].text == "⚔️ حمله عادی" and [b.text for b in rows[4]] == ["🛡️ دفاع", "🏳️ تسلیم"]
     names = [s["name"] for s in f.skills]
-    assert all(name in b.text for name, b in zip(names, rows[1], strict=True))
+    assert all(name in b.text for name, b in zip(names, [r[0] for r in rows[1:4]], strict=True))
     f.cds = [3, 0, 5]
-    labels = [b.text for b in keyboards.duel_actions(1, f)[1]]
+    labels = [r[0].text for r in keyboards.duel_actions(1, f)[1:4]]
     assert "⏳۲" in labels[0] and "⏳" not in labels[1] and "⏳۴" in labels[2]
 
 

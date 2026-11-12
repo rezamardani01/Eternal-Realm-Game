@@ -5,7 +5,8 @@ from __future__ import annotations
 
 from baleropy import Button
 
-from ..game.data.arms import CATEGORIES, MAX_EQUIPPED, RARITIES, Arm, arms_of, get_arm, pack_id, trait_text
+from ..game.data.arms import CATEGORIES, MAX_EQUIPPED, MAX_UPGRADE, RARITIES, Arm, arms_of, get_arm, pack_id, plus, trait_text
+from ..game.data.growth import SLOT_LEVELS, slots_open
 from ..game.data.classes import CLASSES
 from ..game.data.races import RACES
 from ..game.data.skills import skills_for
@@ -52,12 +53,20 @@ async def arms(c: Ctx) -> Screen:
     loadout = await c.services.arms.loadout(c.player.id)
     lines = [f"⚔️ {bold('تجهیزات قهرمان')}", LINE, f"{c.player.char_class.emoji} {c.player.name} · سطح {fa(c.player.level)}", ""]
     rows = []
+    plus_of = loadout.plus or {}
+    open_slots = slots_open(c.player.level)
     for i, arm in enumerate(loadout.slots):
-        lines.append(f"{CIRCLED[i]} {arm.label if arm else '— جای خالی —'}")
-        rows.append(c.btn(f"{CIRCLED[i]} {arm.label if arm else 'جای خالی'}", "armslot", f"{i + 1}.0"))
+        if i >= open_slots:
+            lines.append(f"{CIRCLED[i]} 🔒 از سطح {fa(SLOT_LEVELS[i])} باز می‌شود")
+            rows.append(c.btn(f"{CIRCLED[i]} 🔒 سطح {fa(SLOT_LEVELS[i])}", "armslot", f"{i + 1}.0"))
+            continue
+        tag = f" {plus(plus_of.get(arm.id, 0))}" if arm and plus_of.get(arm.id) else ""
+        lines.append(f"{CIRCLED[i]} {arm.label + tag if arm else '— جای خالی —'}")
+        rows.append(c.btn(f"{CIRCLED[i]} {arm.label + tag if arm else 'جای خالی'}", "armslot", f"{i + 1}.0"))
     lines += ["", f"📊 {bold('اثر تجهیزات')}", *_summary(loadout.worn), "", "🔁 بیرون از نبرد هر وقت خواستید تجهیزات را عوض کنید و بیلد تازه بسازید."]
     grid = keyboards.grid(rows, 2)
     grid.append([c.btn("🛒 خرید تجهیزات", "armshop", style="primary"), c.btn("🌟 مهارت‌های من", "skills")])
+    grid.append([c.btn("🎯 ویژگی‌ها", "attrs"), c.btn("🧬 استعدادها", "talents"), c.btn("📈 پیشرفت", "progress")])
     grid.append(c.back("profile"))
     return Screen("\n".join(lines), grid)
 
@@ -174,7 +183,7 @@ def _card_buttons(c: Ctx, arm: Arm, have: int) -> list[list]:
     rows = [[c.btn(f"🪙 خرید با سکه ({fa(arm.price)})", "armbuy", arm.id, style="success")]]
     rows.append([Button.inline(f"💳 خرید با پول واقعی ({fa(arm.rial // 10)} تومان)", BuyCb(kind="cash", id=pack_id(arm.id)))])
     if have:
-        rows.append([c.btn("✅ تجهیز کردن", "armput", arm.id, style="primary")])
+        rows.append([c.btn("✅ تجهیز کردن", "armput", arm.id, style="primary"), c.btn("⬆️ ارتقا", "armup", arm.id)])
     rows.append(c.back("armcat", "↩️ بازگشت", arm.cat))
     return rows
 
@@ -185,9 +194,11 @@ async def arm_view(c: Ctx) -> Screen:
     arm = get_arm(c.a)
     p = await c.refresh()
     have = (await c.services.arms.owned(p.id)).get(arm.id, 0)
+    level = (await c.services.arms.plus_of(p.id)).get(arm.id, 0)
     text = f"{arm.card()}\n\n{LINE}\n💰 قیمت: {fa(arm.price)} سکه\n👛 کیف شما: {fa(p.gold)} سکه"
     if have:
         text += f"\n🎒 در کیف شما: ×{fa(have)}"
+        text += f"\n⬆️ ارتقا: {plus(level) or '+۰'} از +{fa(MAX_UPGRADE)}"
     return Screen(text, _card_buttons(c, arm, have))
 
 

@@ -830,6 +830,10 @@ def boss_final(v) -> str:  # noqa: ANN001 - BossView
                 gains.append(f"🎉 سطح {fa(p.level_up)}")
             if p.trophy:
                 gains.append(f"🏆 {get_item(p.trophy).name}")
+            if p.arm:
+                from ..game.data.arms import ARMS
+
+                gains.append(f"⚔️ {ARMS[p.arm].label} ({ARMS[p.arm].rarity_label})")
             if p.card:
                 gains.append(f"🃏 {p.card}")
             entries.append((p.mention, gains))

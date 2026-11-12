@@ -18,7 +18,8 @@ from typing import Any
 from ...shared.text import fa
 from ..data.arms import CAPS, RATING
 from ..data.classes import CharacterClass
-from ..data.skills import CLASS_SKILLS, DOTS, EFFECT_INFO, Effect, HeroSkill, skills_for
+from ..data.growth import SKILL_LEVELS
+from ..data.skills import CLASS_SKILLS, DOTS, EFFECT_INFO, HARMFUL, TICKING, Effect, HeroSkill, skills_for
 from ..data.stats import Stats
 
 #: traits whose strength lives in the chance (the rest in the value)
@@ -77,6 +78,10 @@ class Fighter:
     trait_power: int = 0
     undying_used: bool = False
     stand_used: bool = False
+    #: for each of the three skills the hero level that opens it while it is still closed (0 = open)
+    lock: list[int] = field(default_factory=list)
+    #: chance (0-1) to shrug off each kind of harmful effect; 1 = immune (bosses)
+    resist: dict[str, float] = field(default_factory=dict)
 
     @property
     def hp_ratio(self) -> float:
@@ -97,7 +102,7 @@ class Fighter:
     @classmethod
     def for_player(
         cls, player_id: int, name: str, char_class: CharacterClass, stats: Stats, mention: str = "",
-        race_id: str = "", traits: tuple | list = (),
+        race_id: str = "", traits: tuple | list = (), level: int = 999,
     ) -> Fighter:
         skill = char_class.skill
         fighter = cls(
@@ -110,6 +115,7 @@ class Fighter:
         if race_id and char_class.id in CLASS_SKILLS:
             fighter.skills = [s.to_dict() for s in skills_for(race_id, char_class.id)]
             fighter.cds = [0, 0, 0]
+            fighter.lock = [need if level < need else 0 for need in SKILL_LEVELS]
             top = fighter.skills[2]  # the old single-skill fields describe the signature move
             fighter.skill_name, fighter.skill_emoji, fighter.skill_kind = top["name"], top["emoji"], top["kind"]
         fighter.traits = [{"k": t.k, "v": t.v, "c": t.c, "t": t.t} for t in traits]
@@ -150,7 +156,7 @@ def _status(f: Fighter, kind: str) -> dict | None:
 
 def _apply(f: Fighter, kind: str, value: float, turns: int) -> None:
     """Put an effect on a fighter (a repeated one is refreshed, never stacked). Modifiers last ``turns`` full turns."""
-    keep = turns if kind in DOTS else turns + 1
+    keep = turns if kind in TICKING or kind == "freeze" else turns + 1
     current = _status(f, kind)
     if current:
         current["t"], current["v"] = max(current["t"], keep), max(current["v"], value)
@@ -167,16 +173,21 @@ def _mod(f: Fighter, up: str, down: str) -> float:
     return m
 
 
+def _shocked(f: Fighter) -> float:
+    return max(0.1, 1 - s["v"]) if (s := _status(f, "shock")) else 1.0
+
+
 def eff_atk(f: Fighter) -> float:
-    return f.atk * _mod(f, "atk_up", "atk_down")
+    return f.atk * _mod(f, "atk_up", "atk_down") * _shocked(f)
 
 
 def eff_magic(f: Fighter) -> float:
-    return f.magic * _mod(f, "atk_up", "atk_down")
+    return f.magic * _mod(f, "atk_up", "atk_down") * _shocked(f)
 
 
 def eff_defense(f: Fighter) -> float:
-    return f.defense * _mod(f, "def_up", "def_down")
+    low = 1 + _sum(f, "low_hp_def") if f.hp_ratio < 0.4 else 1.0
+    return f.defense * _mod(f, "def_up", "def_down") * low
 
 
 def eff_speed(f: Fighter) -> float:
@@ -188,7 +199,7 @@ def status_line(f: Fighter) -> str:
     parts = []
     for s in f.statuses:
         if s["t"] > 0 and s["k"] in EFFECT_INFO:
-            left = s["t"] if s["k"] in DOTS else max(1, s["t"] - 1)
+            left = s["t"] if s["k"] in TICKING or s["k"] == "freeze" else max(1, s["t"] - 1)
             parts.append(f"{EFFECT_INFO[s['k']][0]}{fa(left)}")
     if f.shield:
         parts.append("🛡️")
@@ -292,9 +303,10 @@ def _dodge_chance(actor: Fighter, target: Fighter) -> float:
     return min(0.15, max(0.0, base)) + min(_sum(target, "evade"), CAPS["evade"])
 
 
-def _crit_chance(actor: Fighter) -> float:
+def _crit_chance(actor: Fighter, target: Fighter | None = None) -> float:
     boost = s["v"] if (s := _status(actor, "crit_up")) else 0.0
-    return min(0.6, 0.05 + actor.luck * 0.003 + actor.crit_bonus + _sum(actor, "crit_chance") + boost)
+    chance = min(0.6, 0.05 + actor.luck * 0.003 + actor.crit_bonus + _sum(actor, "crit_chance") + boost)
+    return chance * (1 - _sum(target, "crit_resist")) if target is not None else chance
 
 
 def _strike(
@@ -305,7 +317,7 @@ def _strike(
 
     The target's shield halves it and its damage cut (gear) trims it; it is never below 1."""
     raw = offense * rng.uniform(0.9, 1.1) - defense
-    crit = force_crit or rng.random() < _crit_chance(actor)
+    crit = force_crit or rng.random() < _crit_chance(actor, target)
     if crit:
         raw *= 1.5 + _sum(actor, "crit_mult")
     raw *= bonus
@@ -338,8 +350,21 @@ def _heal(f: Fighter, amount: int) -> int:
     return amount
 
 
-def _inflict(me: Fighter, foe: Fighter, kind: str, value: float, turns: int, offense: float, lines: list[str]) -> None:
-    """Put an effect on the foe. Damage-over-time effects freeze their damage per turn when they are cast."""
+def _resist_chance(f: Fighter, kind: str) -> float:
+    return min(1.0, _sum(f, "resist_all") + f.resist.get(kind, 0.0) + f.resist.get("all", 0.0))
+
+
+def _inflict(
+    me: Fighter, foe: Fighter, kind: str, value: float, turns: int, offense: float, lines: list[str],
+    rng: random.Random | None = None,
+) -> None:
+    """Put an effect on the foe. Damage-over-time effects freeze their damage per turn when they are cast.
+
+    The foe may resist it (gear, attribute points, the nature of a boss); an immune foe always does."""
+    chance = _resist_chance(foe, kind)
+    if chance >= 1.0 or (chance > 0 and rng is not None and rng.random() < chance):
+        lines.append(f"🧿 {foe.name} در برابر «{EFFECT_INFO[kind][1]}» مقاومت کرد!")
+        return
     if kind in DOTS:
         value = max(1, round(offense * value))
     elif kind == "stun":
@@ -350,7 +375,7 @@ def _inflict(me: Fighter, foe: Fighter, kind: str, value: float, turns: int, off
         if foe.skill_ready_in > 0:
             foe.skill_ready_in += 1
     if kind != "stun":
-        _apply(foe, kind, value, turns)
+        _apply(foe, kind, value, turns or 1)
     icon, name = EFFECT_INFO[kind]
     lines.append(f"{icon} {foe.name} {name} شد!")
 
@@ -373,7 +398,7 @@ def _on_hit(me: Fighter, foe: Fighter, damage: int, rng: random.Random, lines: l
         offense = max(eff_atk(me), eff_magic(me) * 0.8)
         for t in me.traits:
             if t["k"].startswith("inflict_") and rng.random() < t["c"]:
-                _inflict(me, foe, t["k"].split("_", 1)[1], t["v"], t["t"], offense, lines)
+                _inflict(me, foe, t["k"].split("_", 1)[1], t["v"], t["t"], offense, lines, rng)
 
 
 PET_CHANCE = 0.30
@@ -396,6 +421,8 @@ def _bonus(me: Fighter, foe: Fighter, effects: tuple | list = ()) -> float:
             bonus *= 1 + e.v
     if foe.hp_ratio < 0.3 and (v := _sum(me, "execute")):
         bonus *= 1 + v
+    if (v := _sum(me, "backstab")) and any(s["k"] in HARMFUL and s["t"] > 0 for s in foe.statuses):
+        bonus *= 1 + v
     return bonus
 
 
@@ -406,8 +433,10 @@ def _armor(me: Fighter, foe: Fighter, kind: str, pierce: bool) -> float:
 
 
 def _blow(me: Fighter, foe: Fighter, offense: float, kind: str, rng: random.Random, lines: list[str], *,
-          pierce: bool = False, force_crit: bool = False, effects: tuple | list = (), power: float = 1.0) -> tuple[int, bool]:
+          pierce: bool = False, force_crit: bool = False, effects: tuple | list = (), power: float = 1.0,
+          scale: str | None = None) -> tuple[int, bool]:
     foe_hp = foe.hp
+    offense *= 1 + _sum(me, "magic_power" if (scale or kind) == "magic" else "phys_power")
     damage, crit = _strike(me, foe, offense * power, _armor(me, foe, kind, pierce), rng,
                            force_crit=force_crit, bonus=_bonus(me, foe, effects))
     foe.hp = max(0, foe.hp - damage)
@@ -420,7 +449,8 @@ def _extra_hit(me: Fighter, foe: Fighter, rng: random.Random, lines: list[str]) 
     chance = _sum(me, "extra_hit")
     if chance and foe.hp > 0 and me.hp > 0 and rng.random() < chance:
         offense = max(eff_atk(me), eff_magic(me) * 0.8)
-        damage, crit = _blow(me, foe, offense, "phys", rng, lines, power=0.6)
+        damage, crit = _blow(me, foe, offense, "phys", rng, lines, power=0.6,
+                             scale="magic" if eff_magic(me) * 0.8 > eff_atk(me) else "phys")
         lines.append(f"⚡ {me.name} پیش از آن‌که {foe.name} نفس بکشد، ضربه‌ی دوم را زد! {'🎯 ' if crit else ''}💥 {fa(damage)} آسیب")
 
 
@@ -438,8 +468,12 @@ def readiness_error(f: Fighter, action: Action) -> str | None:
     """A Persian sentence if ``action`` cannot be used now (a skill still cooling down), else ``None``."""
     if action in SKILL_ACTIONS and not f.skills:
         return "این مهارت برای شما وجود ندارد."
+    if action in (Action.SKILL, *SKILL_ACTIONS) and _status(f, "freeze"):
+        return "❄️ یخ زده‌اید و این نوبت نمی‌توانید مهارت بزنید؛ حمله‌ی معمولی یا دفاع کنید."
     if f.skills and action in (Action.SKILL, *SKILL_ACTIONS):
         index = SKILL_ACTIONS.get(action, 2)
+        if index < len(f.lock) and f.lock[index]:
+            return f"این مهارت از سطح {fa(f.lock[index])} باز می‌شود."
         wait = f.skill_wait(index)
         if wait:
             name = f.skills[index]["name"]
@@ -460,6 +494,10 @@ def _start_of_turn(me: Fighter, lines: list[str]) -> None:
         got = _heal(me, max(1, round(me.max_hp * regen)))
         if got:
             lines.append(f"💚 {me.name} {fa(got)} جان بازیافت.")
+    for s in [s for s in me.statuses if s["k"] == "regen" and s["t"] > 0]:
+        got = _heal(me, max(1, round(me.max_hp * s["v"])))
+        if got:
+            lines.append(f"💚 بازیابی {fa(got)} جان به {me.name} برگرداند.")
     for s in me.statuses:
         if s["k"] != "stun":  # a stun waits for the turn it takes away
             s["t"] -= 1
@@ -492,10 +530,15 @@ def _cast(me: Fighter, foe: Fighter, index: int, sk: HeroSkill, rng: random.Rand
     for e in sk.effects:
         if e.c < 1 and rng.random() >= e.c:
             continue
-        if e.k in DOTS or e.k in ("def_down", "atk_down", "slow", "stun"):
+        if e.k in HARMFUL:
             if foe.hp > 0:
-                _inflict(me, foe, e.k, e.v, e.t, stat, lines)
-        elif e.k in ("atk_up", "def_up", "crit_up"):
+                _inflict(me, foe, e.k, e.v, e.t, stat, lines, rng)
+        elif e.k == "cleanse":
+            gone = [s for s in me.statuses if s["k"] in HARMFUL]
+            me.statuses = [s for s in me.statuses if s["k"] not in HARMFUL]
+            if gone:
+                lines.append(f"✨ {me.name} از اثرهای بد پاک شد.")
+        elif e.k in ("atk_up", "def_up", "crit_up", "regen"):
             _apply(me, e.k, e.v, e.t)
             lines.append(f"{EFFECT_INFO[e.k][0]} {me.name} {EFFECT_INFO[e.k][1]} شد!")
         elif e.k == "lifesteal" and total:
@@ -574,7 +617,8 @@ def act(battle: Battle, action: Action, rng: random.Random) -> list[str]:
             lines.append(f"💨 {foe.name} چابک کنار پرید و از ضربه‌ی {me.name} جاخالی داد!")
         else:
             offense = max(eff_atk(me), eff_magic(me) * 0.8)
-            damage, crit = _blow(me, foe, offense, "phys", rng, lines)
+            damage, crit = _blow(me, foe, offense, "phys", rng, lines,
+                                 scale="magic" if eff_magic(me) * 0.8 > eff_atk(me) else "phys")
             lines.append(
                 f"⚔️ {me.name} به {foe.name} حمله کرد! {'🎯 ضربه‌ی کاری! ' if crit else ''}💥 {fa(damage)} آسیب"
             )
@@ -606,10 +650,12 @@ def act(battle: Battle, action: Action, rng: random.Random) -> list[str]:
 
 def auto_action(fighter: Fighter) -> Action:
     """Simple AI used for monsters, auto-played turns and auto-resolved hunts: the strongest skill that is ready."""
+    if _status(fighter, "freeze"):
+        return Action.ATTACK
     if fighter.has_skills:
         hurt = fighter.hp_ratio < 0.4
         for index in (2, 1, 0):
-            if fighter.skill_wait(index):
+            if fighter.skill_wait(index) or (index < len(fighter.lock) and fighter.lock[index]):
                 continue
             effects = {e["k"] for e in fighter.skills[index]["effects"]}
             if "heal" in effects and not hurt and fighter.hp_ratio > 0.8:

@@ -167,7 +167,7 @@ PACKS: dict[str, Pack] = {
 }
 
 # every piece of hero war gear can also be bought with real money, at the price of its coins; it is the same piece
-for _arm in ARMS.values():
+for _arm in (a for a in ARMS.values() if not a.boss):
     PACKS[pack_id(_arm.id)] = Pack(
         pack_id(_arm.id), _arm.emoji, _arm.name, _arm.rial, arms={_arm.id: 1}, section="arms"
     )

@@ -39,6 +39,10 @@ EFFECT_INFO: dict[str, tuple[str, str]] = {
     "atk_down": ("🥀", "ضعیف‌شده"),
     "slow": ("🐌", "کُند"),
     "stun": ("💫", "گیج"),
+    "freeze": ("❄️", "یخ‌زده"),
+    "shock": ("⚡", "شوک‌زده"),
+    "regen": ("💚", "بازیابی"),
+    "cleanse": ("✨", "پاک‌سازی"),
     "atk_up": ("💢", "خشمگین"),
     "def_up": ("🧱", "مستحکم"),
     "crit_up": ("🎯", "هوشیار"),
@@ -52,7 +56,9 @@ EFFECT_INFO: dict[str, tuple[str, str]] = {
 
 DOTS = ("poison", "burn", "bleed")
 #: statuses that sit on the *target* (the rest sit on the caster)
-HARMFUL = ("poison", "burn", "bleed", "def_down", "atk_down", "slow", "stun")
+HARMFUL = ("poison", "burn", "bleed", "def_down", "atk_down", "slow", "stun", "freeze", "shock")
+#: statuses that deal or give something every turn (they tick that many times)
+TICKING = DOTS + ("regen",)
 
 
 @dataclass(frozen=True)
@@ -103,6 +109,10 @@ def effect_text(e: Effect) -> str:
         "atk_down": f"{icon} حمله‌ی دشمن {_pct(e.v)} کم می‌شود{turns}{chance}",
         "slow": f"{icon} دشمن کُند می‌شود و مهارت‌هایش دیرتر آماده می‌شوند{turns}{chance}",
         "stun": f"{icon} دشمن نوبتش را از دست می‌دهد{chance}",
+        "freeze": f"{icon} دشمن یخ می‌زند و نمی‌تواند مهارت بزند{turns}{chance}",
+        "shock": f"{icon} حمله‌ی دشمن {_pct(e.v)} کم می‌شود{turns}{chance}",
+        "regen": f"{icon} هر نوبت {_pct(e.v)} از جان کل‌تان برمی‌گردد{turns}{chance}",
+        "cleanse": f"{icon} اثرهای بد (زهر، سوختگی، یخ، ...) از تن‌تان پاک می‌شود{chance}",
         "atk_up": f"{icon} حمله‌ی شما {_pct(e.v)} بیشتر می‌شود{turns}{chance}",
         "def_up": f"{icon} دفاع شما {_pct(e.v)} بیشتر می‌شود{turns}{chance}",
         "crit_up": f"{icon} شانس ضربه‌ی کاری {_pct(e.v)} بیشتر می‌شود{turns}{chance}",
@@ -124,7 +134,7 @@ CLASS_SKILLS: dict[str, tuple[tuple[str, str, str, float, int, tuple[Effect, ...
         ("خشم {a}", "💢", "phys", 2.0, 1, (Effect("atk_up", 0.25, 3), Effect("lifesteal", 0.25))),
     ),
     "mage": (
-        ("جرقه‌ی {a}", "✨", "magic", 0.95, 1, (Effect("atk_down", 0.2, 2),)),
+        ("جرقه‌ی {a}", "✨", "magic", 0.95, 1, (Effect("shock", 0.2, 2),)),
         ("تیغ جادوی {a}", "🔮", "magic", 1.35, 1, (Effect("pierce"), Effect("burn", 0.28, 3))),
         ("ویرانگر {a}", "☄️", "magic", 2.2, 1, (Effect("pierce"), Effect("execute", 0.4))),
     ),
@@ -135,8 +145,8 @@ CLASS_SKILLS: dict[str, tuple[tuple[str, str, str, float, int, tuple[Effect, ...
     ),
     "guardian": (
         ("کوبش سپر {a}", "🛡️", "phys", 1.0, 1, (Effect("stun", 0, 1, 0.4),)),
-        ("حصار {a}", "🧱", "phys", 1.2, 1, (Effect("shield"), Effect("def_up", 0.35, 3))),
-        ("دژ {a}", "🏰", "phys", 1.6, 1, (Effect("heal", 0.22), Effect("atk_down", 0.25, 3), Effect("shield"))),
+        ("حصار {a}", "🧱", "phys", 1.2, 1, (Effect("shield"), Effect("def_up", 0.35, 3), Effect("regen", 0.04, 3))),
+        ("دژ {a}", "🏰", "phys", 1.6, 1, (Effect("heal", 0.22), Effect("cleanse"), Effect("atk_down", 0.25, 3), Effect("shield"))),
     ),
     "rogue": (
         ("خنجر دوگانه‌ی {a}", "🔪", "phys", 0.6, 2, (Effect("crit_up", 0.25, 2),)),
@@ -149,7 +159,7 @@ CLASS_SKILLS: dict[str, tuple[tuple[str, str, str, float, int, tuple[Effect, ...
 RACE_SKILLS: dict[str, tuple[str, Effect]] = {
     "elf": ("جنگلی", Effect("poison", 0.12, 3, 0.7)),
     "dwarf": ("کوهی", Effect("def_down", 0.15, 2)),
-    "fairy": ("پریانی", Effect("slow", 0.2, 2)),
+    "fairy": ("پریانی", Effect("freeze", 0.0, 1, 0.35)),
     "dragonborn": ("آتشین", Effect("burn", 0.2, 3)),
     "shadowborn": ("سایه‌ای", Effect("lifesteal", 0.15)),
     "human": ("نورانی", Effect("crit_up", 0.12, 2)),

@@ -99,6 +99,33 @@ BEHAVIORS: dict[str, tuple[str, str]] = {
 }
 
 
+#: element -> the class whose blows the boss shrugs off a little (the weak class hits it harder)
+ELEMENT_RESIST: dict[str, str] = {
+    "fire": "guardian", "ice": "warrior", "lightning": "rogue", "nature": "mage", "water": "archer",
+    "shadow": "warrior", "earth": "mage", "wind": "guardian", "light": "archer", "poison": "mage",
+}
+#: element -> harmful effects the boss cannot be given at all
+ELEMENT_IMMUNE: dict[str, tuple[str, ...]] = {
+    "fire": ("burn",), "ice": ("freeze",), "lightning": ("shock",), "nature": ("poison",), "water": ("burn",),
+    "shadow": ("bleed",), "earth": ("freeze", "shock"), "wind": ("slow",), "light": ("burn", "bleed"), "poison": ("poison",),
+}
+#: element -> the exclusive piece of war gear its bosses drop
+ELEMENT_DROP: dict[str, str] = {
+    "fire": "b_fire", "ice": "b_ice", "lightning": "b_lightning", "nature": "b_nature", "water": "b_water",
+    "shadow": "b_shadow", "earth": "b_earth", "wind": "b_wind", "light": "b_light", "poison": "b_poison",
+}
+#: chance that the top fighter finds the element piece, by tier (the others get a fifth of it)
+DROP_CHANCE = {"weak": 0.15, "normal": 0.25, "strong": 0.35, "enraged": 0.50, "legend": 0.70}
+#: a legendary boss may also drop one of these
+MYTHIC_DROPS = ("doom_blade", "eternity_plate", "first_crown")
+MYTHIC_CHANCE = 0.10
+#: the announcement of each phase of the fight
+PHASES = {
+    2: "⚡ {name} وارد فاز دوم شد! تندتر و خطرناک‌تر می‌جنگد",
+    3: "☠️ {name} وارد فاز سوم شد! دیگر چیزی برای از دست دادن ندارد و با همه‌ی توانش می‌کوبد",
+}
+
+
 def behavior_of(kind: "BossType") -> tuple[str, str]:
     archetype = kind.id.split("_")[0]
     return BEHAVIORS.get(archetype, ("normal", "در نیمه‌ی نبرد وارد فاز دوم می‌شود و تند و تیزتر می‌جنگد."))

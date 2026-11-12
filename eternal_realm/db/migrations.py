@@ -991,6 +991,26 @@ MIGRATIONS: list[str] = [
         UNIQUE (player_id, arm_id)
     );
     """,
+    # 60: attribute points, class talents and the +1..+10 upgrade of war gear
+    """
+    CREATE TABLE hero_attrs (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        attr      TEXT    NOT NULL,
+        pts       INTEGER NOT NULL CHECK (pts >= 0),
+        PRIMARY KEY (player_id, attr)
+    );
+    CREATE TABLE hero_talents (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        talent_id TEXT    NOT NULL,
+        PRIMARY KEY (player_id, talent_id)
+    );
+    CREATE TABLE arms_upgrades (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        arm_id    TEXT    NOT NULL,
+        lvl       INTEGER NOT NULL CHECK (lvl BETWEEN 0 AND 10),
+        PRIMARY KEY (player_id, arm_id)
+    );
+    """,
 ]
 
 

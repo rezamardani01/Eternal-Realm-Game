@@ -360,7 +360,9 @@ async def profile(c: Ctx) -> Screen:
     header = views.profile_header(target, c.services.characters.xp_needed(target), c.services.ctx.now())
     badges = await c.services.social.titles(target.id)
     badge_line = ("\n🎖️ نشان‌ها: " + " · ".join(badges)) if badges else ""
-    return Screen(f"{header}{badge_line}\n{views.LINE}\n{sheet}", rows)
+    free = await c.services.growth.free_points(target) if target is me else 0
+    points_line = f"\n🎯 امتیاز ویژگی آماده: {fa(free)} (از «تجهیزات و مهارت‌ها»)" if free else ""
+    return Screen(f"{header}{badge_line}{points_line}\n{views.LINE}\n{sheet}", rows)
 
 
 @screen("stat")

@@ -20,6 +20,12 @@ from ...shared.errors import GameError, NotRegistered
 from ...shared.jalali import describe
 from ...shared.text import duration, fa
 from ..data.bosses import (
+    DROP_CHANCE,
+    ELEMENT_DROP,
+    ELEMENT_IMMUNE,
+    ELEMENT_RESIST,
+    MYTHIC_CHANCE,
+    MYTHIC_DROPS,
     BossType,
     behavior_of,
     boss_attack,
@@ -36,6 +42,7 @@ from ..data.sets import BOSS_DROPS
 from ..engine import progression
 from ..engine.boss_fight import Boss, Hero, is_over, run_round
 from ..models import Player
+from .arms import ArmsService
 from .characters import CharacterService
 from .inventory import InventoryService
 from .players import PlayerService
@@ -60,6 +67,8 @@ class Payout:
     level_up: int | None = None
     trophy: str | None = None
     card: str | None = None
+    #: the war gear the boss dropped for this fighter (see data/arms.py)
+    arm: str | None = None
 
 
 @dataclass
@@ -278,9 +287,10 @@ class BossService:
         for r in roster:
             player = await self.players_get(tx, r["player_id"])
             stats = await self.characters.stats_in(tx, player)
+            fighter = await self.characters.fighter_from(tx, player, stats)
             heroes.append(
                 Hero(player.id, player.mention, player.class_id, stats.hp, stats.hp, stats.atk, stats.defense,
-                     stats.magic, stats.speed, stats.luck)
+                     stats.magic, stats.speed, stats.luck, traits=fighter.traits)
             )
         avg_level = max(1, round(sum(r["level"] for r in roster) / len(roster)))
         kind = boss_by_id(row["boss_type"])
@@ -293,6 +303,7 @@ class BossService:
         boss = Boss(
             kind.name, hp, hp, round(boss_attack(kind, avg_level) * boost * tier.atk * atk_scale), boss_defense(avg_level),
             special=kind.special, weak_class=kind.weak_class, behavior=behavior_of(kind)[0],
+            resist_class=ELEMENT_RESIST.get(kind.element.id, ""), immune=list(ELEMENT_IMMUNE.get(kind.element.id, ())),
         )
         state = {"boss": asdict(boss), "heroes": [asdict(h) for h in heroes], "pending": [], "recent": [
             f"⚔️ نبرد با {kind.name} آغاز شد!"
@@ -452,6 +463,17 @@ class BossService:
                     await self.inventory.grant(
                         tx, pid, trophy, 1, origin=f"غنیمت شکست {kind.name} · {date}\nنخستین صاحب: {r['name']}"
                     )
+            arm_id = None
+            if status == "defeated":
+                tier = state.get("tier") or "normal"
+                kind = boss_by_id(row["boss_type"])
+                chance = DROP_CHANCE.get(tier, 0.25) * (1.0 if index == 0 else 0.2 if share >= 0.10 else 0.0)
+                if self.ctx.rng.random() < chance:
+                    arm_id = ELEMENT_DROP[kind.element.id]
+                if index == 0 and tier == "legend" and self.ctx.rng.random() < MYTHIC_CHANCE:
+                    arm_id = self.ctx.rng.choice(MYTHIC_DROPS)
+                if arm_id:
+                    await ArmsService(self.ctx).grant(tx, pid, arm_id, 1)
             card_name = None
             if status == "defeated" and self.cards is not None:
                 dropped = await self.cards.drop_for_boss(
@@ -460,7 +482,7 @@ class BossService:
                 card_name = f"{dropped.emoji} {dropped.name}" if dropped else None
             payouts.append(
                 Payout(r["name"], f"[{r['name']}](uid:{r['platform_user_id']})", r["damage"], share, gold, xp, chest,
-                       level_up.new_level if level_up else None, trophy, card_name)
+                       level_up.new_level if level_up else None, trophy, card_name, arm_id)
             )
         return payouts
 
