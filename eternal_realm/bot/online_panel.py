@@ -1,7 +1,6 @@
 """Online duels in the private chat: the search, the match and the fight shown on both players' screens.
 
-The fight itself is the ordinary duel engine. Every player has their own message: the one whose turn it is gets a *fresh*
-message with the move buttons (so the phone rings), the other one sees the same fight with a «wait» note.
+The fight itself is the ordinary duel engine. Every player has their own message: the fight message is sent once and then only edited, with the move buttons on both screens (as in a group duel).
 """
 
 from __future__ import annotations
@@ -86,23 +85,23 @@ async def push(bot: Bot, services: Services, match: OnlineMatch, update: DuelUpd
     for seat in match.seats:
         try:
             if update.finished:
+                text, rows = result_text(update), result_rows(seat.platform_user_id)
+            else:  # both players see the same fight with the move buttons, like in a group duel
+                text = battle_text(seat.player_id, update, turn_seconds)
+                rows = keyboards.duel_actions(update.duel.id, update.battle.current)
+            if fresh or not seat.message_id:
                 await _drop(bot, seat.chat_id, seat.message_id)
-                await _send(bot, seat.chat_id, result_text(update), result_rows(seat.platform_user_id))
-                messages[seat.player_id] = None
-                continue
-            text = battle_text(seat.player_id, update, turn_seconds)
-            mine = update.battle.current.player_id == seat.player_id
-            rows = keyboards.duel_actions(update.duel.id, update.battle.current) if mine else None
-            if mine or fresh or not seat.message_id:
-                await _drop(bot, seat.chat_id, seat.message_id)  # a fresh message: it is what makes the phone ring
                 messages[seat.player_id] = await _send(bot, seat.chat_id, text, rows)
-            else:
-                try:
-                    await bot.edit_message_text(seat.chat_id, seat.message_id, headline(text))
-                except (BaleAPIError, BaleNetworkError):
-                    messages[seat.player_id] = await _send(bot, seat.chat_id, text, None)
+                continue
+            try:  # the message is only edited, never deleted and sent again
+                await bot.edit_message_text(seat.chat_id, seat.message_id, headline(text), buttons=rows)
+                messages[seat.player_id] = seat.message_id
+            except (BaleAPIError, BaleNetworkError):
+                messages[seat.player_id] = await _send(bot, seat.chat_id, text, rows)
         except (BaleAPIError, BaleNetworkError):
             log.warning("could not show the online fight to player %s", seat.player_id)
+    if update.finished:
+        messages = {k: None for k in messages}
     await services.online.set_messages(match.duel_id, messages)
 
 

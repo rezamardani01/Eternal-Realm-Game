@@ -77,7 +77,7 @@ async def test_two_players_in_the_queue_are_matched_and_both_see_the_fight(h, se
     assert mine and "نوبت شماست" in mine[-1]["text"]
     labels = [b["text"] for b in buttons_of(mine[-1])]
     assert "⚔️ حمله عادی" in labels and len(labels) == 6  # attack, three skills, defend, surrender
-    assert theirs and "صبر کنید" in theirs[-1]["text"] and not buttons_of(theirs[-1])  # the waiting side has no move buttons
+    assert theirs and "صبر کنید" in theirs[-1]["text"] and buttons_of(theirs[-1])  # both sides see the move buttons, as in a group duel
 
 
 async def test_a_match_is_an_ordinary_duel_with_a_rated_result_for_both(h, services, db):
@@ -92,7 +92,7 @@ async def test_a_match_is_an_ordinary_duel_with_a_rated_result_for_both(h, servi
     done = await services.duels.get(match.duel_id)
     assert done.status == "finished" and done.winner_id != actor
     for s in match.seats:
-        results = [p for p in sent_to(h, s.platform_user_id) if "پایان نبرد" in p["text"]]
+        results = [p for p in sent_to(h, s.platform_user_id, "editMessageText") if "پایان نبرد" in p["text"]]
         assert results and any("جستجوی حریف تازه" in b["text"] for b in buttons_of(results[-1]))
     fights, wins = await services.online.record(done.winner_id)
     assert fights == 1 and wins == 1
@@ -114,10 +114,11 @@ async def test_a_turn_moves_the_fight_on_and_the_next_player_gets_a_fresh_messag
     now = await services.duels.get(match.duel_id)
     assert now.battle.current.player_id != first and now.status == "active"
     second = match.seat_of(now.battle.current.player_id)
-    fresh = [p for p in sent_to(h, second.platform_user_id) if "نوبت شماست" in p["text"]]
-    assert fresh and buttons_of(fresh[-1])  # a new message with the buttons: the phone rings
+    shown = [p for p in sent_to(h, second.platform_user_id, "editMessageText") if "نوبت شماست" in p["text"]]
+    assert shown and buttons_of(shown[-1])  # the same message is edited, with the buttons
     edited = [p for p in sent_to(h, seat.platform_user_id, "editMessageText") if "صبر کنید" in p["text"]]
-    assert edited  # the one who moved sees the same fight, waiting
+    assert edited and buttons_of(edited[-1])  # the one who moved sees the same fight, waiting
+    assert not sent_to(h, second.platform_user_id) and not sent_to(h, seat.platform_user_id)  # nothing new is sent
     # the player who just moved cannot move again
     with pytest.raises(GameError):
         await services.duels.act(duel.id, await services.players.get(first), __import__("eternal_realm.game.engine.combat", fromlist=["x"]).Action.ATTACK)
@@ -244,7 +245,7 @@ async def test_a_turn_that_times_out_ends_the_fight_for_both(h, services, db, cl
     done = await services.duels.get(match.duel_id)
     assert done.status == "finished" and done.winner_id != idler
     for s in match.seats:
-        results = [p for p in sent_to(h, s.platform_user_id) if "پایان نبرد" in p["text"]]
+        results = [p for p in sent_to(h, s.platform_user_id, "editMessageText") if "پایان نبرد" in p["text"]]
         assert results, s.platform_user_id
     assert (await services.online.match_of_player(1)) is None  # a finished fight no longer blocks a new search
 
