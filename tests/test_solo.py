@@ -230,7 +230,7 @@ async def test_the_hub_and_a_whole_session_through_buttons(h, services, db):
         for line in h.session.last_text().splitlines():
             assert len(re.findall(EMOJI, line)) <= 1, (screen_name, line)
     await h.panel(1, "arenago", "normal")
-    assert "نوبت شماست" in h.session.last_text() and {"⚔️ حمله", "🛡️ دفاع", "🏳️ فرار"} <= set(h.labels())
+    assert "نوبت شماست" in h.session.last_text() and {"⚔️ حمله عادی", "🛡️ دفاع", "🏳️ فرار"} <= set(h.labels())
     await h.panel(1, "trip")
     assert "ادامه‌ی نبرد" in " ".join(h.labels())
     await rig(db, p.id)

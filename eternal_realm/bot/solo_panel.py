@@ -5,10 +5,11 @@ from __future__ import annotations
 from ..game.data import maze as maze_data
 from ..game.data import solo as data
 from ..game.data import world as world_data
-from ..game.engine.combat import Action, Fighter
+from ..game.engine.combat import Action, Fighter, status_line
 from ..game.services.solo import SoloFight, SoloUpdate
 from ..shared.errors import GameError
 from ..shared.text import bar, bold, fa
+from . import keyboards
 from .panel import Ctx, Screen, _int, screen
 
 LINE = "─" * 12
@@ -21,7 +22,11 @@ def _guard(c: Ctx) -> None:
 
 def _hp(f: Fighter) -> list[str]:
     percent = round(100 * max(f.hp, 0) / f.max_hp) if f.max_hp else 0
-    return [f"{f.emoji} {bold(f.name)}", f"❤️ {bar(max(f.hp, 0), f.max_hp, 10)} {fa(percent)}٪ · {fa(max(f.hp, 0))}/{fa(f.max_hp)}"]
+    marks = status_line(f)
+    return [
+        f"{f.emoji} {bold(f.name)}" + (f"  {marks}" if marks else ""),
+        f"❤️ {bar(max(f.hp, 0), f.max_hp, 10)} {fa(percent)}٪ · {fa(max(f.hp, 0))}/{fa(f.max_hp)}",
+    ]
 
 
 def _reward_lines(p) -> list[str]:  # noqa: ANN001 - Payout
@@ -103,6 +108,12 @@ def _fight_screen(c: Ctx, fight: SoloFight, lines: list[str]) -> Screen:
     if warn and foe.skill_ready:
         text += ["", f"⚠️ {warn}؛ بهتر است دفاع کنید!"]
     text += ["", f"🎯 نوبت شماست · دور {fa(battle.round)} از {fa(battle.max_rounds)}"]
+    if hero.has_skills:
+        rows = keyboards.hero_battle_rows(
+            hero, lambda action, label, style: c.btn(label, "sact", action, style=style),
+            [c.btn("🛡️ دفاع", "sact", "defend"), c.btn("🏳️ فرار", "sfleeq", style="danger")],
+        )
+        return Screen("\n".join(text), rows)
     wait = hero.skill_ready_in - 1
     skill = f"{hero.skill_emoji} {hero.skill_name}" + (f" ({fa(wait)})" if wait > 0 else "")
     rows = [
@@ -141,7 +152,10 @@ async def fight_view(c: Ctx) -> Screen:
     return _fight_screen(c, fight, [])
 
 
-ACTIONS = {"attack": Action.ATTACK, "skill": Action.SKILL, "defend": Action.DEFEND}
+ACTIONS = {
+    "attack": Action.ATTACK, "skill": Action.SKILL, "skill1": Action.SKILL1, "skill2": Action.SKILL2,
+    "skill3": Action.SKILL3, "defend": Action.DEFEND,
+}
 
 
 @screen("sact")

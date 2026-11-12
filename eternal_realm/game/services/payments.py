@@ -239,6 +239,12 @@ class PaymentService:
         )
         for item_id, qty in items.items():
             await self.inventory.grant(tx, order.player_id, item_id, qty)
+        if pack.arms:
+            from .arms import ArmsService
+
+            for arm_id, qty in pack.arms.items():
+                await ArmsService(self.ctx).grant(tx, order.player_id, arm_id, qty)
+            granted = "⚔️ تجهیزات جنگی به کیف شما رسید؛ از «قهرمان من ← تجهیزات قهرمان» روی قهرمان بگذارید."
         if pack.boost_hours:
             await tx.execute(
                 "UPDATE players SET boost_until = MAX(boost_until, ?) + ? WHERE id = ?",

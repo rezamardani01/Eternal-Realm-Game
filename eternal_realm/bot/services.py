@@ -10,6 +10,7 @@ from ..game.services.admin import AdminService
 from ..game.services.bosses import BossService
 from ..game.services.bets import BetService
 from ..game.services.cards import CardService
+from ..game.services.arms import ArmsService
 from ..game.services.characters import CharacterService
 from ..game.services.chests import ChestService
 from ..game.services.clan_wars import ClanWarService
@@ -105,6 +106,7 @@ class Services:
     invites: InviteService
     bets: BetService
     characters: CharacterService
+    arms: ArmsService
     groups: GroupService
     academy: AcademyService
     throttle: Throttle
@@ -176,6 +178,7 @@ class Services:
             invites=InviteService(ctx, inventory),
             bets=BetService(ctx, duels),
             characters=characters,
+            arms=characters.arms,
             groups=GroupService(ctx),
             academy=AcademyService(ctx, players, inventory),
             throttle=Throttle(

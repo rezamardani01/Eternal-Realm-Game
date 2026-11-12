@@ -161,7 +161,33 @@ def duel_result(update) -> Rows:  # noqa: ANN001 - DuelUpdate
     return rows
 
 
+def skill_label(fighter: Fighter, index: int) -> str:
+    """A hero's skill as a button text; a skill that is still cooling down shows how many turns are left."""
+    skill = fighter.skills[index]
+    wait = fighter.skill_wait(index)
+    return f"{skill['emoji']} {skill['name']}" + (f" ⏳{fa(wait)}" if wait else "")
+
+
+def hero_battle_rows(fighter: Fighter, button, last: list) -> Rows:  # noqa: ANN001
+    """The fight buttons of a hero: the basic attack, his three own skills, then the closing row.
+
+    ``button(action, label, style)`` builds one button of the calling fight screen; ``last`` is its closing row."""
+    skills = [
+        button(f"skill{i + 1}", skill_label(fighter, i), "success" if not fighter.skill_wait(i) else None)
+        for i in range(len(fighter.skills))
+    ]
+    return [[button("attack", "⚔️ حمله عادی", "primary")], skills, last]
+
+
 def duel_actions(duel_id: int, fighter: Fighter) -> Rows:
+    if fighter.has_skills:
+        return hero_battle_rows(
+            fighter, lambda action, label, style: Button.inline(label, DuelCb(action=action, id=duel_id), style=style),
+            [
+                Button.inline("🛡️ دفاع", DuelCb(action="defend", id=duel_id)),
+                Button.inline("🏳️ تسلیم", DuelCb(action="surrender", id=duel_id), style="danger"),
+            ],
+        )
     wait = fighter.skill_ready_in - 1
     skill = f"{fighter.skill_emoji} {fighter.skill_name}" + (f" ({fa(wait)})" if wait > 0 else "")
     return [

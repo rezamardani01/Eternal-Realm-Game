@@ -116,7 +116,7 @@ class DungeonService:
             if boss_room or rng.random() < 0.7:
                 monster = self._monster(fresh.level, stage)
                 stats = await self.characters.stats_in(tx, fresh)
-                hero = Fighter.for_player(fresh.id, fresh.name, fresh.char_class, stats)
+                hero = await self.characters.fighter_from(tx, fresh, stats)
                 hero.hp = hp
                 foe = monster.fighter(fresh.level)
                 scale = 1.7 if boss_room else 1 + 0.08 * stage

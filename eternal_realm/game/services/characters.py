@@ -12,7 +12,9 @@ from ..data.classes import CLASSES
 from ..data.pets import get_pet
 from ..data.stats import Stats
 from ..engine import progression
+from ..engine.combat import Fighter
 from ..models import Player
+from .arms import ArmsService
 from .inventory import InventoryService
 
 
@@ -20,6 +22,7 @@ class CharacterService:
     def __init__(self, ctx: AppContext, inventory: InventoryService) -> None:
         self.ctx = ctx
         self.inventory = inventory
+        self.arms = ArmsService(ctx)
 
     async def stats(self, player: Player) -> Stats:
         """Final stats of a character: race + class + level + equipped gear."""
@@ -35,10 +38,18 @@ class CharacterService:
             "SELECT pet_id FROM player_pets WHERE player_id = ? AND active = 1", (player.id,)
         )
         extra = get_pet(pet["pet_id"]).bonus if pet else Stats()
-        total = base + await self.inventory.equipped_stats(tx, player.id) + extra
+        loadout = await self.arms.loadout_in(tx, player.id)
+        total = base + await self.inventory.equipped_stats(tx, player.id) + extra + loadout.stats
         from .effects import EffectService
 
         return await EffectService(self.ctx).apply_to(tx, player.id, total)
+
+    async def fighter_from(self, tx: Tx, player: Player, stats: Stats, mention: str = "") -> Fighter:
+        """The hero as a fighter: his stats, his three skills (race and class) and the traits of his four pieces."""
+        loadout = await self.arms.loadout_in(tx, player.id)
+        return Fighter.for_player(
+            player.id, player.name, player.char_class, stats, mention, race_id=player.race_id, traits=loadout.traits
+        )
 
     def xp_needed(self, player: Player) -> int:
         return progression.xp_needed(player.level, self.ctx.balance)

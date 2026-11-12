@@ -57,7 +57,7 @@ async def gift_sections(c: Ctx) -> Screen:
         f"برای {who} چه چیزی می‌خرید؟ هر چه از خزانه انتخاب کنید، بعد از پرداخت شما برای او فعال می‌شود "
         "و پیامش می‌رسد.\n\nیک بخش را بزنید 👇"
     )
-    sections = list(dict.fromkeys(x.section for x in PACKS.values() if x.section != "path"))
+    sections = list(dict.fromkeys(x.section for x in PACKS.values() if x.section not in ("path", "arms")))
     rows = keyboards.grid([c.btn(_section_name(s), "gfsec", target.id, s) for s in sections], 2)
     rows.append([c.btn("❌ انصراف", "gfx")])
     return Screen(text, rows)

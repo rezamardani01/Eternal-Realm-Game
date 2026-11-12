@@ -520,7 +520,7 @@ class ClanWarService:
 
     async def _fighter(self, tx: Tx, p: Player) -> Fighter:
         stats = await self.characters.stats_in(tx, p)
-        fighter = Fighter.for_player(p.id, p.name, p.char_class, stats, p.mention)
+        fighter = await self.characters.fighter_from(tx, p, stats, p.mention)
         striker = await PetService(self.ctx).striker_in(tx, p.id, stats.atk)
         if striker:
             fighter.pet_emoji, fighter.pet_name, fighter.pet_power = striker

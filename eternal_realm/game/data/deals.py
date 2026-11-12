@@ -68,7 +68,7 @@ def kinds(pack: Pack) -> frozenset[str]:
 
 def daily_deals(now: int) -> list[Deal]:
     rng = random.Random(f"deals-{day_number(now)}")
-    candidates = [p for p in PACKS.values() if not p.lucky]
+    candidates = [p for p in PACKS.values() if not p.lucky and p.section != "arms"]
     chosen: list[Pack] = []
     taken: set[str] = set()
     for _, wanted in SLOTS:

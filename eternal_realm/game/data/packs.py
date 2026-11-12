@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .arms import ARMS, pack_id
+
 
 @dataclass(frozen=True)
 class Pack:
@@ -37,6 +39,8 @@ class Pack:
     city: dict[str, int] = field(default_factory=dict)
     #: hours of city shield the pack adds
     city_shield_hours: int = 0
+    #: pieces of hero war gear the pack adds (see arms.py)
+    arms: dict[str, int] = field(default_factory=dict)
 
     @property
     def price_toman(self) -> int:
@@ -161,6 +165,12 @@ PACKS: dict[str, Pack] = {
         Pack("lucky_l", "🎲", "بسته شانسی بزرگ", 600_000, section="lucky", lucky=True),
     )
 }
+
+# every piece of hero war gear can also be bought with real money, at the price of its coins; it is the same piece
+for _arm in ARMS.values():
+    PACKS[pack_id(_arm.id)] = Pack(
+        pack_id(_arm.id), _arm.emoji, _arm.name, _arm.rial, arms={_arm.id: 1}, section="arms"
+    )
 
 #: an unpaid order is abandoned after this long
 ORDER_TTL_SECONDS = 3600

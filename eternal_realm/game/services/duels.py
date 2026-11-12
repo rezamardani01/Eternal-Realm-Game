@@ -106,7 +106,7 @@ class DuelService:
 
     async def _fighter(self, tx: Tx, p: Player) -> Fighter:
         stats = await self.characters.stats_in(tx, p)
-        fighter = Fighter.for_player(p.id, p.name, p.char_class, stats, p.mention)
+        fighter = await self.characters.fighter_from(tx, p, stats, p.mention)
         striker = await PetService(self.ctx).striker_in(tx, p.id, stats.atk)
         if striker:
             fighter.pet_emoji, fighter.pet_name, fighter.pet_power = striker
@@ -200,8 +200,8 @@ class DuelService:
                 raise GameError("✋ صبر کنید فرمانده، نوبت حریف شماست!")
             if row["expires_at"] <= now:
                 raise GameError("زمان شما تمام شد و ریگ‌های ساعت ریختند! نبرد به‌زودی بسته می‌شود.")
-            if action is Action.SKILL and battle.current.skill_ready_in > 1:
-                raise GameError(f"مهارت ویژه‌ی شما هنوز آماده نیست؛ {battle.current.skill_ready_in - 1} نوبت دیگر صبر کنید یا حمله‌ی معمولی بزنید.")
+            if action is not Action.SURRENDER and (problem := combat.readiness_error(battle.current, action)):
+                raise GameError(problem)
             lines = combat.act(battle, action, self.ctx.rng)
             return await self._after_turn(tx, duel, battle, lines, now, b.duel_turn_seconds)
 

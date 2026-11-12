@@ -271,7 +271,7 @@ async def treasury_sections(c: Ctx) -> Screen:
     from ..game.data.packs import PACKS
 
     p = await _card_player(c, to_int(c.a) or 0)
-    sections = list(dict.fromkeys(x.section for x in PACKS.values()))
+    sections = list(dict.fromkeys(x.section for x in PACKS.values() if x.section != "arms"))
     text = (
         f"🎁 {bold('اهدا از خزانه قلمرو')}\n\n"
         f"همان خزانه‌ی فروشی ربات را می‌بینید. هر بسته‌ای که انتخاب کنید برای {bold(p.name)} فعال می‌شود "

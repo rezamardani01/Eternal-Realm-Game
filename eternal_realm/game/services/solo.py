@@ -174,7 +174,7 @@ class SoloService:
 
     async def _hero(self, tx: Tx, player: Player) -> Fighter:
         stats = await self.characters.stats_in(tx, player)
-        hero = Fighter.for_player(player.id, player.name, player.char_class, stats, player.mention)
+        hero = await self.characters.fighter_from(tx, player, stats, player.mention)
         striker = await PetService(self.ctx).striker_in(tx, player.id, stats.atk)
         if striker:
             hero.pet_emoji, hero.pet_name, hero.pet_power = striker
@@ -355,8 +355,8 @@ class SoloService:
                 self._foe_turns(fight, [])
             lines: list[str] = []
             if not battle.finished:  # a far stronger foe that opened the fight may already have ended it
-                if action is Action.SKILL and battle.current.skill_ready_in > 1:
-                    raise GameError(f"مهارت ویژه هنوز آماده نیست؛ {fa(battle.current.skill_ready_in - 1)} نوبت دیگر صبر کنید یا حمله‌ی معمولی بزنید.")
+                if action is not Action.SURRENDER and (problem := combat.readiness_error(battle.current, action)):
+                    raise GameError(problem)
                 lines = combat.act(battle, action, self.ctx.rng)
             if not battle.finished:
                 self._foe_turns(fight, lines)

@@ -83,7 +83,7 @@ class HuntService:
             await self.players.spend_energy(tx, player_id, HUNT_ENERGY)
 
             stats = await self.characters.stats_in(tx, player)
-            hero = Fighter.for_player(player.id, player.name, player.char_class, stats)
+            hero = await self.characters.fighter_from(tx, player, stats)
             striker = await PetService(self.ctx).striker_in(tx, player.id, stats.atk)
             if striker:
                 hero.pet_emoji, hero.pet_name, hero.pet_power = striker

@@ -13,6 +13,7 @@ from ..game.data.items import get_item
 from ..game.data.leagues import league_of
 from ..game.data.races import RACES, Race
 from ..game.data.stats import Stats
+from ..game.engine.combat import status_line
 from ..game.models import Player
 from ..shared.text import bar, bold, duration, emphasize, fa
 
@@ -608,6 +609,10 @@ def pack_description(pack, now: int | None = None) -> str:  # noqa: ANN001 - Pac
     if pack.crystal:
         parts.append(f"{fa(pack.crystal)} کریستال")
     parts += [f"{get_item(i).name} ×{fa(q)}" for i, q in pack.items.items()]
+    if pack.arms:
+        from ..game.data.arms import ARMS
+
+        return "شامل: " + "، ".join(f"{ARMS[i].label}" for i in pack.arms) + "\nتجهیزات جنگی قهرمان؛ همان تجهیزاتی که با سکه‌ی بازی هم می‌توان خرید."
     if pack.season:
         return (
             "شامل: بلیط طلایی این فصل.\nجایزه‌های ویژه‌ی همه‌ی مرحله‌ها برایتان باز شد؛ "
@@ -1243,10 +1248,11 @@ def duel_invite(challenger, target, seconds: int, note: str = "") -> str:  # noq
 def _hp_block(f) -> str:  # noqa: ANN001 - Fighter
     hp = max(f.hp, 0)
     percent = round(100 * hp / f.max_hp) if f.max_hp else 0
+    marks = status_line(f)
     return "\n".join([
         f"{f.emoji} {f.mention or bold(f.name)}",
         f"❤️ {bar(hp, f.max_hp, 10)} {fa(percent)}٪",
-        f"     {fa(hp)} از {fa(f.max_hp)} جان",
+        f"     {fa(hp)} از {fa(f.max_hp)} جان" + (f" · {marks}" if marks else ""),
     ])
 
 

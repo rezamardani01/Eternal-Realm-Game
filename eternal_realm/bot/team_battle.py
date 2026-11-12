@@ -9,11 +9,13 @@ from baleropy.exceptions import BaleAPIError
 from baleropy.types import CallbackQuery
 
 from ..game.engine import team_fight
+from ..game.engine import combat
 from ..game.engine.combat import Action, Fighter
 from ..game.services.team_battles import SEATS, Lobby, TeamUpdate
 from ..shared.errors import GameError
 from ..shared.text import bar, bold, duration, fa
 from .callbacks import TeamCb
+from . import keyboards
 from .keyboards import Rows
 from .services import Services
 
@@ -21,7 +23,10 @@ router = Router(name="team_battle")
 
 TEAM_MARKS = ("🟢", "🔴")
 TEAM_NAMES = ("تیم اول", "تیم دوم")
-ACTIONS = {"attack": Action.ATTACK, "skill": Action.SKILL, "defend": Action.DEFEND, "surrender": Action.SURRENDER}
+ACTIONS = {
+    "attack": Action.ATTACK, "skill": Action.SKILL, "skill1": Action.SKILL1, "skill2": Action.SKILL2,
+    "skill3": Action.SKILL3, "defend": Action.DEFEND, "surrender": Action.SURRENDER,
+}
 
 
 # --- texts --------------------------------------------------------------------------------------
@@ -57,7 +62,7 @@ def _member_lines(f: Fighter, current: bool, short: bool = False) -> list[str]:
     head = f"{'👉' if current else f.emoji} {f.mention or bold(f.name)}"
     if short:  # big teams: one line each so the message stays under the platform limit
         return [f"{head} — {fa(percent)}٪"]
-    return [head, f"❤️ {bar(f.hp, f.max_hp, 8)} {fa(percent)}٪ · {team_fight.describe(f)}"]
+    return [head, f"❤️ {bar(f.hp, f.max_hp, 8)} {fa(percent)}٪ · {team_fight.describe(f)}" + (f" {mark}" if (mark := combat.status_line(f)) else "")]
 
 
 def battle_text(update: TeamUpdate, turn_seconds: int, short: bool = False) -> str:
@@ -127,6 +132,15 @@ def lobby_buttons(lobby: Lobby) -> Rows:
 
 
 def action_buttons(battle_id: int, fighter: Fighter) -> Rows:
+    if fighter.has_skills:
+        rows = keyboards.hero_battle_rows(
+            fighter, lambda action, label, style: Button.inline(label, TeamCb(action=action, id=battle_id), style=style),
+            [
+                Button.inline("🛡️ دفاع", TeamCb(action="defend", id=battle_id)),
+                Button.inline("🏳️ تسلیم", TeamCb(action="surrender", id=battle_id), style="danger"),
+            ],
+        )
+        return [*rows, [Button.inline("❌ لغو مبارزه", TeamCb(action="cancel", id=battle_id))]]
     wait = fighter.skill_ready_in - 1
     skill = f"{fighter.skill_emoji} {fighter.skill_name}" + (f" ({fa(wait)})" if wait > 0 else "")
     return [

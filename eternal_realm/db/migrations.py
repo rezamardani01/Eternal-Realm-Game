@@ -975,6 +975,22 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_clan_withdrawals_clan ON clan_withdrawals (clan_id, status, created_at);
     CREATE INDEX idx_clan_withdrawals_player ON clan_withdrawals (player_id, status);
     """,
+    # 59: hero war gear (the four-piece loadout and the pieces a hero owns)
+    """
+    CREATE TABLE arms_owned (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        arm_id    TEXT    NOT NULL,
+        qty       INTEGER NOT NULL CHECK (qty >= 0),
+        PRIMARY KEY (player_id, arm_id)
+    );
+    CREATE TABLE arms_equipped (
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        slot      INTEGER NOT NULL CHECK (slot BETWEEN 1 AND 4),
+        arm_id    TEXT    NOT NULL,
+        PRIMARY KEY (player_id, slot),
+        UNIQUE (player_id, arm_id)
+    );
+    """,
 ]
 
 

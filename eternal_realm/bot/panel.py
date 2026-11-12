@@ -346,6 +346,7 @@ async def profile(c: Ctx) -> Screen:
     elif target is me:
         rows += [
             [c.btn("🎒 کوله‌پشتی", "inv"), c.btn("🧰 تجهیزات", "gear")],
+            [c.btn("⚔️ تجهیزات و مهارت‌های قهرمان", "arms", style="primary")],
             [c.btn("🐱 حیوان خانگی", "pets"), c.btn("🃏 آلبوم کارت", "album")],
             [c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")],
             [c.btn("📅 مأموریت‌ها", "missions"), c.btn("🏅 دستاوردها", "ach")],
@@ -1172,6 +1173,7 @@ async def premium(c: Ctx) -> Screen:
     ])
     rows = [
         [c.btn("🎡 گردونه شانس", "wheel", style="success")],
+        [c.btn("⚔️ تجهیزات جنگی قهرمان", "armshop", style="primary")],
         [c.btn("🪙 خرید سکه", "prem", "coins"), c.btn("💎 خرید کریستال", "prem", "crystals")],
         [c.btn("🎁 خرید بسته", "prem", "bundles"), c.btn("📦 خرید صندوق", "prem", "chests")],
         [c.btn("⛓️ خرید منابع", "prem", "materials"), c.btn("💠 منابع کمیاب", "prem", "rare")],

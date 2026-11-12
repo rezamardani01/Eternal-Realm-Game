@@ -205,7 +205,7 @@ class TeamBattleService:
             fighters, teams = [], []
             for team, _seat, p in lobby.members:
                 stats = await self.characters.stats_in(tx, p)
-                fighter = Fighter.for_player(p.id, p.name, p.char_class, stats, p.mention)
+                fighter = await self.characters.fighter_from(tx, p, stats, p.mention)
                 striker = await PetService(self.ctx).striker_in(tx, p.id, stats.atk)
                 if striker:
                     fighter.pet_emoji, fighter.pet_name, fighter.pet_power = striker
@@ -240,8 +240,8 @@ class TeamBattleService:
                 raise GameError(f"✋ صبر کنید فرمانده، نوبت {battle.current.name} است!")
             if lobby.expires_at <= now:
                 raise GameError("زمان شما تمام شد و ریگ‌های ساعت ریختند! نبرد به‌زودی ادامه پیدا می‌کند.")
-            if action is Action.SKILL and battle.current.skill_ready_in > 1:
-                raise GameError(f"مهارت ویژه‌ی شما هنوز آماده نیست؛ {battle.current.skill_ready_in - 1} نوبت دیگر صبر کنید یا حمله‌ی معمولی بزنید.")
+            if action is not Action.SURRENDER and (problem := combat.readiness_error(battle.current, action)):
+                raise GameError(problem)
             if battle.actor in battle.auto:
                 battle.auto.remove(battle.actor)  # back in the fight
             lines = team_fight.act(battle, action, self.ctx.rng)

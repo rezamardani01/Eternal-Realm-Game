@@ -5,7 +5,7 @@ import pytest
 from eternal_realm.bot.services import Services
 from eternal_realm.config import Settings
 from eternal_realm.context import AppContext
-from eternal_realm.game.engine.combat import Action
+from eternal_realm.game.engine.combat import Action, auto_action
 from eternal_realm.shared.errors import GameError
 
 from .harness import Harness
@@ -38,7 +38,7 @@ async def play_to_end(services, duel_id, a, b):
         if duel.status != "active":
             return duel
         who = await current_player(services, duel_id, a, b)
-        action = Action.SKILL if duel.battle.current.skill_ready_in <= 1 else Action.ATTACK
+        action = auto_action(duel.battle.current)
         await services.duels.act(duel_id, who, action)
     raise AssertionError("duel did not end")
 

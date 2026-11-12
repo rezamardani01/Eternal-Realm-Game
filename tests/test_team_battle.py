@@ -5,7 +5,7 @@ import pytest
 from eternal_realm.bot.services import Services
 from eternal_realm.config import Settings
 from eternal_realm.context import AppContext
-from eternal_realm.game.engine.combat import Action
+from eternal_realm.game.engine.combat import Action, auto_action
 from eternal_realm.shared.errors import GameError
 from eternal_realm.shared.text import EMOJI
 
@@ -34,7 +34,7 @@ async def play_to_end(services, battle_id):
             return lobby
         battle = lobby.battle
         who = next(p for _t, _s, p in lobby.members if p.id == battle.current.player_id)
-        action = Action.SKILL if battle.current.skill_ready_in <= 1 else Action.ATTACK
+        action = auto_action(battle.current)
         await services.teams.act(battle_id, who, action)
     raise AssertionError("team battle did not end")
 
