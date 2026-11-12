@@ -567,6 +567,24 @@ def chest_opened(name: str, opened) -> str:  # noqa: ANN001 - Opened
     return f"🗝️ {bold(opened.chest.name + ' باز شد')}\n\n✨ این گنج را یافتید:\n" + "\n".join(got)
 
 
+def chests_opened_all(name: str, total) -> str:  # noqa: ANN001 - OpenedAll
+    """The sum of a whole batch of chests: how many of each, and everything that came out."""
+    from ..game.data.arms import ARMS
+    from ..game.data.items import get_item
+
+    kinds = "، ".join(f"{get_item(i).name} ×{fa(n)}" for i, n in total.chests.items())
+    got = []
+    if total.gold:
+        got.append(f"🪙 {bold(fa(total.gold))} سکه")
+    if total.crystal:
+        got.append(f"💎 {bold(fa(total.crystal))} کریستال")
+    got += [f"{get_item(i).label} ×{bold(fa(q))}" for i, q in sorted(total.items.items())]
+    got += [f"⚔️ {ARMS[a].label} ×{bold(fa(n))} ({ARMS[a].rarity_label})" for a, n in total.arms.items()]
+    return (
+        f"🗝️ {bold(fa(total.count) + ' صندوقچه باز شد')}\n{kinds}\n\n✨ {bold('همه‌ی این گنج‌ها را یافتید')}\n" + "\n".join(got or ["چیزی پیدا نشد"])
+    )
+
+
 # --- premium shop and payments -----------------------------------------------------------------
 def pack_description(pack, now: int | None = None) -> str:  # noqa: ANN001 - Pack
     from ..game.data import lucky

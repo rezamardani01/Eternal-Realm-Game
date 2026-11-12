@@ -1011,6 +1011,14 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (player_id, arm_id)
     );
     """,
+    # 61: who invited a newcomer who has not finished creating the hero yet (it must survive a restart of the bot)
+    """
+    CREATE TABLE pending_referrals (
+        invited_platform_id  INTEGER PRIMARY KEY,
+        referrer_platform_id INTEGER NOT NULL,
+        created_at           INTEGER NOT NULL
+    );
+    """,
 ]
 
 

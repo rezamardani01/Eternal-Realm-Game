@@ -510,7 +510,10 @@ async def _item_screen(c: Ctx, item_id: str, toast: str | None = None) -> Screen
     if item.kind is Kind.CONSUMABLE:
         rows.append([c.btn("🧪 مصرف", "use", item.id, style="success")])
     if item.kind is Kind.CHEST:
-        rows.append([c.btn("🗝️ باز کردن", "open", item.id, style="success")])
+        open_row = [c.btn("🗝️ باز کردن", "open", item.id, style="success")]
+        if qty > 1:
+            open_row.append(c.btn(f"🗝️ باز کردن همه ({fa(qty)})", "openall", item.id, style="primary"))
+        rows.append(open_row)
     if item.sell > 0:
         sell_row = [c.btn("💰 فروش ۱", "isellq", item.id, "1")]
         if qty > 1:
@@ -579,9 +582,25 @@ async def open_chest(c: Ctx) -> Screen:
     left = await _stack_qty(c, item.id)
     rows = []
     if left:
-        rows.append([c.btn(f"🗝️ باز کردن دوباره ({fa(left)})", "open", item.id, style="success")])
+        again = [c.btn(f"🗝️ باز کردن دوباره ({fa(left)})", "open", item.id, style="success")]
+        if left > 1:
+            again.append(c.btn("🗝️ باز کردن همه", "openall", item.id, style="primary"))
+        rows.append(again)
     rows.append(c.back("chests", "🔙 بازگشت"))
     return Screen(views.chest_opened(c.player.name, opened), rows)
+
+
+@screen("openall")
+async def open_all_chests(c: Ctx) -> Screen:
+    """Open every chest of one kind (``a`` = its item id) or of all kinds (empty) with a single tap."""
+    item = get_item(c.a) if c.a else None
+    total = await c.services.chests.open_all(c.player, item)
+    await c.show(f"🗝️ {bold('در حال باز کردن ' + fa(total.count) + ' صندوقچه')}\n\nکلیدها در قفل‌ها می‌چرخند... کمی صبر کنید ✨")
+    rows = []
+    if item is not None and await _stack_qty(c, item.id):
+        rows.append([c.btn("🗝️ باز کردن بقیه", "openall", item.id, style="success")])  # the batch limit left some
+    rows.append(c.back("chests", "🔙 بازگشت"))
+    return Screen(views.chests_opened_all(c.player.name, total), rows)
 
 
 @screen("chests")
@@ -589,10 +608,13 @@ async def chests(c: Ctx) -> Screen:
     view = await c.services.inventory.view(c.player.id)
     _, owned = _split(view)
     rows = [[c.btn(f"{i.label} ×{fa(q)}", "item", i.id)] for i, q in owned]
-    rows.append([c.btn("🛍️ خرید صندوقچه", "chestshop", style="success")])
+    if owned:
+        total = sum(q for _, q in owned)
+        rows.append([c.btn(f"🗝️ باز کردن همه‌ی صندوقچه‌ها ({fa(total)})", "openall", style="success")])
+    rows.append([c.btn("🛍️ خرید صندوقچه", "chestshop")])
     rows.append(c.back("inv"))
     text = f"🎁 {bold('صندوقچه‌ها')}\n" + (
-        "یکی را بزنید تا باز کنید 👇" if owned else "هنوز صندوقچه‌ای ندارید. می‌توانید بخرید یا در ماجراجویی پیدا کنید!"
+        "یکی را بزنید تا ببینید، یا همه را یک‌جا باز کنید 👇" if owned else "هنوز صندوقچه‌ای ندارید. می‌توانید بخرید یا در ماجراجویی پیدا کنید!"
     )
     return Screen(text, rows)
 

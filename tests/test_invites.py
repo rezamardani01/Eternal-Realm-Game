@@ -191,3 +191,24 @@ async def test_owner_gifts_the_three_service_tickets(h, services, db):
     assert await stack(db, target.id, "rename_ticket") == 3
     with pytest.raises(GameError):
         await services.invites.open_box(target, 999)
+
+
+async def test_the_inviter_is_still_paid_when_the_newcomer_taps_start_again_or_the_bot_restarts(h, services, db):
+    inviter = await hero(services, 5, "آرش")
+    await h.say(20, "/start ref_5")
+    assert await services.invites.pending(20) == 5  # kept in the database, not only in the chat state
+    await h.say(20, "/start")  # a second tap without the link used to throw the invitation away
+    await h.say(20, "سارا")
+    await h.click(20, h.button_data("الف"))
+    await h.click(20, h.button_data("کماندار"))
+    dms = [p for p in h.session.sent("sendMessage") if str(p["chat_id"]) == "5" and "دوستتان به قلمرو پیوست" in p["text"]]
+    assert len(dms) == 1 and await services.invites.count(inviter.id) == 1
+    assert await services.invites.pending(20) is None  # used up: it can never pay twice
+
+
+async def test_the_first_invitation_link_wins_and_self_links_are_ignored(services):
+    await services.invites.remember(30, 5)
+    await services.invites.remember(30, 6)
+    assert await services.invites.pending(30) == 5
+    await services.invites.remember(31, 31)
+    assert await services.invites.pending(31) is None

@@ -78,3 +78,49 @@ async def test_chest_rewards_are_all_credited(services, db):
     after = await services.players.require(10)
     assert after.gold >= before.gold and after.crystal >= before.crystal
     assert not {i.id: q for i, q in (await services.inventory.view(p.id)).stacks}.get("wooden_chest")
+
+
+async def test_open_all_opens_every_chest_in_one_go_and_sums_the_prizes(services, db):
+    from eternal_realm.game.data.items import get_item
+    from eternal_realm.game.services.chests import OPEN_ALL_LIMIT
+
+    p = await services.players.register(10, "u", "آرش", "elf", "archer")
+    async with db.transaction() as tx:
+        await services.inventory.grant(tx, p.id, "wooden_chest", 40)
+        await services.inventory.grant(tx, p.id, "magic_chest", 3)
+    before = await services.players.require(10)
+    total = await services.chests.open_all(before)
+    assert total.count == 43 and total.chests == {"wooden_chest": 40, "magic_chest": 3}
+    view = await services.inventory.view(p.id)
+    assert view.stack_qty("wooden_chest") == 0 and view.stack_qty("magic_chest") == 0
+    after = await services.players.require(10)
+    assert after.gold - before.gold == total.gold and after.crystal - before.crystal == total.crystal
+    for item_id, qty in total.items.items():  # the sum matches what really landed in the backpack
+        assert view.stack_qty(item_id) >= qty
+    with pytest.raises(GameError):
+        await services.chests.open_all(after)  # nothing left to open
+
+    async with db.transaction() as tx:
+        await services.inventory.grant(tx, p.id, "wooden_chest", OPEN_ALL_LIMIT + 5)
+        await services.inventory.grant(tx, p.id, "magic_chest", 2)
+    only = await services.chests.open_all(await services.players.require(10), get_item("magic_chest"))
+    assert only.chests == {"magic_chest": 2}  # one kind only, when asked
+    big = await services.chests.open_all(await services.players.require(10))
+    assert big.count == OPEN_ALL_LIMIT  # a single tap is bounded; the rest stays for the next tap
+    assert (await services.inventory.view(p.id)).stack_qty("wooden_chest") == 5
+
+
+async def test_the_chest_screens_offer_open_all(h, services, db):
+    p = await services.players.register(10, "u", "آرش", "elf", "archer")
+    async with db.transaction() as tx:
+        await services.inventory.grant(tx, p.id, "wooden_chest", 40)
+    await h.say(10, "/start")
+    await h.panel(10, "chests")
+    assert any("باز کردن همه‌ی صندوقچه‌ها" in t and "۴۰" in t for t in h.labels())
+    await h.panel(10, "item", "wooden_chest")
+    assert any("باز کردن همه" in t for t in h.labels())
+    await h.panel(10, "openall")
+    assert "۴۰ صندوقچه باز شد" in h.session.last_text()
+    assert (await services.inventory.view(p.id)).stack_qty("wooden_chest") == 0
+    await h.panel(10, "chests")
+    assert not any("باز کردن همه" in t for t in h.labels())  # nothing left, so no button

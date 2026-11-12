@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ...context import AppContext
+from ...db.repos import inventory as inv_repo
 from ...db.repos import wallet
 from ...shared.errors import GameError
 from ..data.chests import CHESTS, Chest, Prize
@@ -24,6 +25,24 @@ class Opened:
     qty: int
     #: war gear found inside (a lucky free drop)
     arm: str | None = None
+
+
+@dataclass
+class OpenedAll:
+    """The sum of many chests opened at once."""
+
+    count: int
+    #: how many of each kind of chest were opened: ``{chest item id: n}``
+    chests: dict[str, int]
+    gold: int
+    crystal: int
+    items: dict[str, int]
+    #: pieces of war gear found: ``{arm id: n}``
+    arms: dict[str, int]
+
+
+#: the most chests one tap opens (a message must stay short and a transaction small)
+OPEN_ALL_LIMIT = 100
 
 
 class ChestService:
@@ -55,7 +74,8 @@ class ChestService:
             await self.inventory.grant(tx, player.id, chest_id, qty)
         return currency, total
 
-    async def open(self, player: Player, item: Item) -> Opened:
+    async def _open_one(self, tx, player_id: int, item: Item) -> Opened:  # noqa: ANN001 - Tx
+        """Open one chest inside the caller's transaction: take it, pay what was inside."""
         chest = CHESTS.get(item.id)
         if item.kind is not Kind.CHEST or chest is None:
             raise GameError(f"{item.label} صندوقچه نیست و قفلی ندارد که بشکنید!")
@@ -64,12 +84,38 @@ class ChestService:
         gold = rng.randint(*prize.gold) if prize.gold[1] else 0
         crystal = rng.randint(*prize.crystal) if prize.crystal[1] else 0
         qty = rng.randint(*prize.qty) if prize.item_id else 0
-        async with self.ctx.db.transaction() as tx:
-            await self.inventory.take(tx, player.id, item.id, 1)
-            await wallet.apply(
-                tx, player.id, gold=gold, crystal=crystal, reason="chest_open", now=self.ctx.now()
-            )
-            if prize.item_id:
-                await self.inventory.grant(tx, player.id, prize.item_id, qty)
-            found = await ArmsService(self.ctx).free_drop(tx, player.id, FREE_CHANCE["chest"])
+        await self.inventory.take(tx, player_id, item.id, 1)
+        await wallet.apply(tx, player_id, gold=gold, crystal=crystal, reason="chest_open", now=self.ctx.now())
+        if prize.item_id:
+            await self.inventory.grant(tx, player_id, prize.item_id, qty)
+        found = await ArmsService(self.ctx).free_drop(tx, player_id, FREE_CHANCE["chest"])
         return Opened(item, prize, gold, crystal, get_item(prize.item_id) if prize.item_id else None, qty, found.id if found else None)
+
+    async def open(self, player: Player, item: Item) -> Opened:
+        async with self.ctx.db.transaction() as tx:
+            return await self._open_one(tx, player.id, item)
+
+    async def open_all(self, player: Player, item: Item | None = None) -> OpenedAll:
+        """Open every chest of one kind (or of every kind) the player owns, up to ``OPEN_ALL_LIMIT``, in one go."""
+        async with self.ctx.db.transaction() as tx:
+            stacks = {i: q for i, q in await inv_repo.stacks(tx, player.id)}
+            wanted = [(get_item(i), q) for i, q in stacks.items() if i in CHESTS and (item is None or i == item.id)]
+            if not wanted:
+                raise GameError("صندوقچه‌ای برای باز کردن ندارید.")
+            total = OpenedAll(0, {}, 0, 0, {}, {})
+            budget = OPEN_ALL_LIMIT
+            for chest_item, qty in sorted(wanted, key=lambda w: w[0].rarity):
+                for _ in range(min(qty, budget)):
+                    opened = await self._open_one(tx, player.id, chest_item)
+                    total.count += 1
+                    total.chests[chest_item.id] = total.chests.get(chest_item.id, 0) + 1
+                    total.gold += opened.gold
+                    total.crystal += opened.crystal
+                    if opened.item:
+                        total.items[opened.item.id] = total.items.get(opened.item.id, 0) + opened.qty
+                    if opened.arm:
+                        total.arms[opened.arm] = total.arms.get(opened.arm, 0) + 1
+                    budget -= 1
+                if budget <= 0:
+                    break
+            return total

@@ -71,6 +71,28 @@ class InviteService:
             return int(payload[4:])
         return None
 
+    async def remember(self, invited_platform_id: int, inviter_platform_id: int) -> None:
+        """Keep who invited a newcomer until the hero is created (the first link wins). Stored in the database, not in
+        the conversation memory, so a restart of the bot or a second tap on «start» does not lose it."""
+        if inviter_platform_id == invited_platform_id:
+            return
+        async with self.ctx.db.transaction() as tx:
+            await tx.execute(
+                "INSERT INTO pending_referrals (invited_platform_id, referrer_platform_id, created_at) VALUES (?, ?, ?)"
+                " ON CONFLICT (invited_platform_id) DO NOTHING", (invited_platform_id, inviter_platform_id, self.ctx.now()),
+            )
+
+    async def pending(self, invited_platform_id: int) -> int | None:
+        async with self.ctx.db.read() as tx:
+            value = await tx.scalar(
+                "SELECT referrer_platform_id FROM pending_referrals WHERE invited_platform_id = ?", (invited_platform_id,), None
+            )
+        return int(value) if value else None
+
+    async def forget(self, invited_platform_id: int) -> None:
+        async with self.ctx.db.transaction() as tx:
+            await tx.execute("DELETE FROM pending_referrals WHERE invited_platform_id = ?", (invited_platform_id,))
+
     async def count(self, player_id: int) -> int:
         async with self.ctx.db.read() as tx:
             return int(await tx.scalar("SELECT COUNT(*) FROM referrals WHERE referrer_id = ?", (player_id,), 0))

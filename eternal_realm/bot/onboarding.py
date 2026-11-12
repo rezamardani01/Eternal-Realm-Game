@@ -49,6 +49,7 @@ async def start(message: Message, state: FSMContext, services: Services) -> None
     inviter = services.invites.parse(payload)
     if inviter is not None:
         await state.update_data(ref=inviter)  # paid when this newcomer finishes creating the hero
+        await services.invites.remember(user.id, inviter)  # ... and kept in the database in case the chat state is lost
     await message.answer(views.welcome())
 
 
@@ -113,6 +114,12 @@ async def got_class(
     )
     await state.clear()
     await services.players.grant_welcome_boost(player.id)
+    inviter = int(data["ref"]) if data.get("ref") else await services.invites.pending(user.id)
+    if inviter:  # the inviter is paid first, so nothing below can make it fail
+        try:
+            await _pay_inviter(query.message.bot, services, player, inviter)
+        finally:
+            await services.invites.forget(user.id)
     await query.message.edit_text(views.created(player) + "\n\n🚀 هدیه‌ی خوش‌آمد: ۳ روز بوست دو برابر برای شروع سریع‌تر!")
     await panel.send(query.message, services, player, "home")
     await services.academy.start(player.id)
@@ -120,8 +127,6 @@ async def got_class(
         "🎓 قدم بعدی: آکادمی\n\nقهرمانت آماده است! برای یاد گرفتن بازی برو به «آکادمی»؛ آنجا قدم به قدم و با انجام دادن همه‌چیز را یاد می‌گیری و برای هر درس جایزه هم می‌گیری 🎁",
         buttons=[[Button.inline("🎓 شروع آکادمی", PanelCb(s="aclesson", a="hero", b=None, o=user.id), style="success")]],
     )
-    if data.get("ref"):
-        await _pay_inviter(query.message.bot, services, player, int(data["ref"]))
     if data.get("raid"):
         with contextlib.suppress(GameError):
             await raid_ui.join_from_start(query.message, services, int(data["raid"]), user)
