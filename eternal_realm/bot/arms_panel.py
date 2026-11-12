@@ -162,7 +162,7 @@ async def arm_shop(c: Ctx) -> Screen:
     owned = await c.services.arms.owned(p.id)
     lines = [
         f"🛒 {bold('تجهیزات جنگی')}", LINE, "",
-        "💳 تجهیزات جنگی فقط با پول واقعی خریدنی است و با سکه نمی‌شود خرید.", "",
+        "💳 همه‌ی تجهیزات را با پول واقعی می‌خرید. تجهیزات معمولی و غیرمعمول را با سکه هم می‌شود خرید، اما گران است (بالای ۱۰۰ هزار سکه).", "",
         "🍀 بازیکن رایگان هم جا نمی‌ماند: تجهیزات معمولی و غیرمعمول را گاهی از شکار، سفر، صندوقچه و باس‌ها پیدا می‌کند.", "",
         "هر تعداد که بخواهید می‌توانید داشته باشید، اما فقط ۴ تا را هم‌زمان روی قهرمان می‌گذارید. 👇",
     ]
@@ -193,7 +193,10 @@ async def arm_category(c: Ctx) -> Screen:
 
 
 def _card_buttons(c: Ctx, arm: Arm, have: int) -> list[list]:
-    rows = [[Button.inline(f"💳 خرید ({fa(arm.rial // 10)} تومان)", BuyCb(kind="cash", id=pack_id(arm.id)), style="success")]]
+    rows = []
+    if arm.coin_price is not None:
+        rows.append([c.btn(f"🪙 خرید با سکه ({fa(arm.coin_price)})", "armbuy", arm.id, style="success")])
+    rows.append([Button.inline(f"💳 خرید با پول واقعی ({fa(arm.rial // 10)} تومان)", BuyCb(kind="cash", id=pack_id(arm.id)), style="primary" if arm.coin_price is None else None)])
     if have:
         rows.append([c.btn("✅ تجهیز کردن", "armput", arm.id, style="primary"), c.btn("⬆️ ارتقا", "armup", arm.id)])
     rows.append(c.back("armcat", "↩️ بازگشت", arm.cat))
@@ -207,11 +210,24 @@ async def arm_view(c: Ctx) -> Screen:
     p = await c.refresh()
     have = (await c.services.arms.owned(p.id)).get(arm.id, 0)
     level = (await c.services.arms.plus_of(p.id)).get(arm.id, 0)
-    text = f"{arm.card()}\n\n{LINE}\n💳 قیمت: {fa(arm.rial // 10)} تومان (فقط با پول واقعی)"
+    text = f"{arm.card()}\n\n{LINE}\n💳 قیمت: {fa(arm.rial // 10)} تومان"
+    if arm.coin_price is not None:
+        text += f"\n🪙 یا {fa(arm.coin_price)} سکه (کیف شما: {fa(p.gold)})"
+    else:
+        text += "\n🔒 این تجهیزات کمیاب فقط با پول واقعی خریدنی است"
     if have:
         text += f"\n🎒 در کیف شما: ×{fa(have)}"
         text += f"\n⬆️ ارتقا: {plus(level) or '+۰'} از +{fa(MAX_UPGRADE)}"
     return Screen(text, _card_buttons(c, arm, have))
+
+
+@screen("armbuy")
+async def arm_buy(c: Ctx) -> Screen:
+    _private(c)
+    arm = await c.services.arms.buy(c.player, c.a)
+    shown = await arm_view(c)
+    shown.toast = f"✅ {arm.name} خریداری شد"
+    return shown
 
 
 @screen("armput")

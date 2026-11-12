@@ -100,6 +100,20 @@ class ArmsService:
             (player_id, arm_id, qty),
         )
 
+    async def buy(self, player: Player, arm_id: str, qty: int = 1) -> Arm:
+        """Buy cheap pieces (common and uncommon) with coins. The rest is sold for real money only."""
+        if arm_id not in ARMS or qty < 1:
+            raise GameError("این تجهیزات در قلمرو شناخته نشد.")
+        arm = get_arm(arm_id)
+        if arm.boss:
+            raise GameError("این تجهیزات فقط از شکست دادن باس‌ها به دست می‌آید.")
+        if arm.coin_price is None:
+            raise GameError("این تجهیزات کمیاب فقط با پول واقعی از «خزانه قلمرو» خریدنی است؛ با سکه نمی‌شود.")
+        async with self.ctx.db.transaction() as tx:
+            await wallet.apply(tx, player.id, gold=-arm.coin_price * qty, reason="arm_buy", now=self.ctx.now())
+            await self.grant(tx, player.id, arm_id, qty)
+        return arm
+
     async def free_drop(self, tx: Tx, player_id: int, chance: float) -> Arm | None:
         """A lucky find for everybody: a common or uncommon piece (never a boss spoil)."""
         if self.ctx.rng.random() >= chance:

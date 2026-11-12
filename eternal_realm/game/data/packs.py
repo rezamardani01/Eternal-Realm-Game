@@ -205,7 +205,7 @@ def _risen(rial: int) -> int:
 for _pid, _pack in list(PACKS.items()):
     PACKS[_pid] = replace(_pack, price_rial=_risen(_pack.price_rial))
 
-# every piece of hero war gear can be bought with real money (and only with real money), at the price of its coins; it is the same piece
+# every piece of hero war gear can be bought with real money (the cheap ones also with coins, see arms.py); it is the same piece
 for _arm in (a for a in ARMS.values() if not a.boss):
     PACKS[pack_id(_arm.id)] = Pack(
         pack_id(_arm.id), _arm.emoji, _arm.name, _arm.rial, arms={_arm.id: 1}, section="arms"

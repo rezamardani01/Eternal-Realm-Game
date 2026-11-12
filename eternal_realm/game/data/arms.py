@@ -8,8 +8,9 @@ Balance rules (so no piece wins a fight by itself, and nothing is bought into an
 
 * the stat bonuses stay in a narrow band per rarity (see ``TIERS``), traits are small, and ``CAPS`` limits what four
   pieces can stack for every trait kind;
-* war gear is bought only with real money from the realm treasury (never with coins), so nothing here can be farmed; free
-  players still find the cheap pieces (common and uncommon) as lucky drops of hunts, trips, chests and bosses;
+* the realm treasury sells every piece for real money; only the cheap ones (common and uncommon) can also be bought with
+  coins, at a high price (over 100,000 coins each), so coins cannot buy a strong build. Free players also find the cheap
+  pieces as lucky drops of hunts, trips, chests and bosses;
 * a piece needs a hero level, some need a class; in fights between heroes the stronger side's lead is capped anyway.
 """
 
@@ -54,6 +55,10 @@ RIAL_PER_COIN = 10
 PRICE_RISE = 1.3
 #: a wallet invoice never goes below this (the cheapest pieces cost this much in money)
 MIN_RIAL = 20_000
+#: pieces up to this rarity can also be bought with coins (never the rare, epic, legendary and mythic ones)
+COIN_MAX_RARITY = 2
+#: the coin price starts here and grows with the piece's worth: always over 100,000 coins
+COIN_BASE = 100_000
 
 
 @dataclass(frozen=True)
@@ -147,6 +152,13 @@ class Arm:
     def rarity_label(self) -> str:
         icon, name = RARITIES[self.rarity]
         return f"{icon} {name}"
+
+    @property
+    def coin_price(self) -> int | None:
+        """The price in coins, or ``None`` when the piece is sold only for real money (or dropped by bosses only)."""
+        if self.boss or self.rarity > COIN_MAX_RARITY:
+            return None
+        return round((COIN_BASE + self.price * 20) / 1000) * 1000
 
     @property
     def rial(self) -> int:

@@ -547,3 +547,43 @@ async def test_gear_screens_are_private_only(h, services, db):
     await h.panel(10, "arms", group=True)
     assert h.session.callback_answers() or "پیام خصوصی" in str(h.session.calls[-3:])
     assert MAX_EQUIPPED == 4
+
+
+# --- the cheap pieces can also be bought with coins (a lot of them) ------------------------------------------------------------------
+def test_only_common_and_uncommon_pieces_have_a_coin_price_and_it_is_over_a_hundred_thousand():
+    cheap = [a for a in ARMS.values() if a.coin_price is not None]
+    assert cheap and all(a.rarity <= 2 and not a.boss for a in cheap)
+    assert all(a.coin_price > 100_000 for a in cheap)
+    assert all(a.coin_price is None for a in ARMS.values() if a.rarity >= 3 or a.boss)  # rare, epic, legendary, mythic: money only
+    assert {a.rarity for a in cheap} == {1, 2}
+    assert max(a.coin_price for a in cheap) < 160_000  # expensive, but not out of reach for a loyal player
+
+
+async def test_buying_cheap_gear_with_coins_charges_the_price_and_the_rest_is_refused(services, db):
+    p = await hero(services, db, gold=600_000)
+    arm = await services.arms.buy(p, "iron_blade")
+    assert arm.coin_price and (await services.players.require(10)).gold == 600_500 - arm.coin_price
+    assert (await services.arms.owned(p.id))["iron_blade"] == 1
+    await services.arms.buy(await services.players.require(10), "iron_blade", 2)  # any number
+    assert (await services.arms.owned(p.id))["iron_blade"] == 3
+    gold = (await services.players.require(10)).gold
+    for rare in ("ruby_ring", "dragon_slayer", "doom_blade", "b_fire", "nope"):
+        with pytest.raises(GameError):
+            await services.arms.buy(await services.players.require(10), rare)
+    assert (await services.players.require(10)).gold == gold
+    poor = await hero(services, db, uid=11, name="بهرام", gold=0)
+    with pytest.raises(Exception, match="."):
+        await services.arms.buy(poor, "iron_blade")
+    assert not await services.arms.owned(poor.id)
+
+
+async def test_the_gear_card_shows_the_coin_button_only_for_cheap_pieces(h, services, db):
+    await hero(services, db, gold=500_000)
+    await h.say(10, "/start")
+    await h.panel(10, "armview", "iron_blade")
+    assert any("خرید با سکه" in b for b in h.labels()) and any("پول واقعی" in b for b in h.labels())
+    await h.panel(10, "armbuy", "iron_blade")
+    me = await services.players.require(10)
+    assert (await services.arms.owned(me.id)).get("iron_blade") == 1
+    await h.panel(10, "armview", "ruby_ring")
+    assert not any("خرید با سکه" in b for b in h.labels()) and "فقط با پول واقعی" in h.session.last_text()
