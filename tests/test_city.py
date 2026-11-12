@@ -627,5 +627,5 @@ async def test_the_word_realm_shows_a_whole_city_for_you_or_the_hero_you_reply_t
     await h.say(1, "فرمانروایی", group=True, reply_to=h.message_of(3))
     assert "بی شهر هنوز شهری" in h.session.last_text() or "هنوز شهری" in h.session.last_text()
     await h.say(1, "فرمانروایی")  # in the private chat the same word opens the realm menu
-    assert any("شهر من" in x for x in h.labels())
+    assert any("مشخصات دهکده" in x for x in h.labels())
     del nobody

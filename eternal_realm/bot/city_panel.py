@@ -123,7 +123,7 @@ async def realm(c: Ctx) -> Screen:
         _advice(city),
     ]
     rows = [
-        [c.btn("🏰 شهر من", "citymine"), c.btn("🏗️ ساختمان‌ها", "citybuild")],
+        [c.btn("📋 مشخصات دهکده", "citymine"), c.btn("🏗️ ساختمان‌ها", "citybuild")],
         [c.btn("👥 جمعیت و مردم", "citypeople"), c.btn("🌾 منابع و آذوقه", "citystock")],
         [c.btn("⚔️ ارتش و سربازان", "citytroops"), c.btn("🛡️ دفاع شهر", "citydef")],
         [c.btn("🗡️ حمله به شهرها", "cityatk", style="danger"), c.btn("🗺️ نقشه جهان", "citymap")],
