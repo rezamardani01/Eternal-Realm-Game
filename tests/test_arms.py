@@ -512,8 +512,7 @@ async def test_arms_screens_flow(h, services, db):
     assert "تجهیزات قهرمان" in h.session.last_text() and len([b for b in h.labels() if b.startswith(("①", "②", "③", "④"))]) == 4
     await h.panel(10, "skills")
     assert all(s.name in h.session.last_text() for s in skills_for("elf", "warrior")) or True
-    await h.panel(10, "premium")
-    await h.tap(10, "تجهیزات جنگی")
+    await h.panel(10, "armshop")
     assert len([b for b in h.labels() if any(e in b for e, _ in CATEGORIES.values())]) >= 6
     await h.panel(10, "armcat", "weapon")
     await h.panel(10, "armview", "iron_blade")

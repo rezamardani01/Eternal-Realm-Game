@@ -661,7 +661,7 @@ async def shop(c: Ctx) -> Screen:
     rows = [
         [c.btn("🧪 معجون‌ها", "shopcat", "pot"), c.btn("🎁 صندوقچه‌ها", "chestshop")],
         [c.btn("💰 فروش آیتم‌ها", "items")],
-        [c.btn("⚔️ تجهیزات جنگی (خزانه قلمرو)", "armshop")],
+        [c.btn("⚔️ تجهیزات جنگی", "armshop")],
         c.back("trade", "🔙 بازگشت"),
     ]
     return Screen(text, rows)
@@ -1061,7 +1061,6 @@ async def premium(c: Ctx) -> Screen:
     rows = [
         [c.btn("🚀 بسته‌ی شروع قهرمان", "prem", "starter", style="success")],
         [c.btn("🎡 گردونه شانس", "wheel", style="success")],
-        [c.btn("⚔️ تجهیزات جنگی قهرمان", "armshop", style="primary")],
         [c.btn("🪙 خرید سکه", "prem", "coins"), c.btn("💎 خرید کریستال", "prem", "crystals")],
         [c.btn("🎁 خرید بسته", "prem", "bundles"), c.btn("📦 خرید صندوق", "prem", "chests")],
         [c.btn("⛓️ خرید منابع", "prem", "materials"), c.btn("💠 منابع کمیاب", "prem", "rare")],

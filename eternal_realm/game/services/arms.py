@@ -108,7 +108,7 @@ class ArmsService:
         if arm.boss:
             raise GameError("این تجهیزات فقط از شکست دادن باس‌ها به دست می‌آید.")
         if arm.coin_price is None:
-            raise GameError("این تجهیزات کمیاب فقط با پول واقعی از «خزانه قلمرو» خریدنی است؛ با سکه نمی‌شود.")
+            raise GameError("این تجهیزات فقط از شکست دادن باس‌ها به دست می‌آید و خریدنی نیست.")
         async with self.ctx.db.transaction() as tx:
             await wallet.apply(tx, player.id, gold=-arm.coin_price * qty, reason="arm_buy", now=self.ctx.now())
             await self.grant(tx, player.id, arm_id, qty)
@@ -137,7 +137,7 @@ class ArmsService:
         arm = get_arm(arm_id)
         async with self.ctx.db.transaction() as tx:
             if not await tx.scalar("SELECT qty FROM arms_owned WHERE player_id = ? AND arm_id = ?", (player.id, arm_id), 0):
-                raise GameError("این تجهیزات را ندارید؛ اول از خزانه قلمرو بخرید.")
+                raise GameError("این تجهیزات را ندارید؛ اول از «خرید تجهیزات» با سکه بخرید.")
             level = int(await tx.scalar("SELECT lvl FROM arms_upgrades WHERE player_id = ? AND arm_id = ?", (player.id, arm_id), 0))
             if level >= MAX_UPGRADE:
                 raise GameError(f"«{arm.name}» به بیشترین ارتقا (+{fa(MAX_UPGRADE)}) رسیده است.")
@@ -184,7 +184,7 @@ class ArmsService:
         async with self.ctx.db.transaction() as tx:
             await self._ensure_out_of_fight(tx, player.id)
             if not await tx.scalar("SELECT qty FROM arms_owned WHERE player_id = ? AND arm_id = ?", (player.id, arm_id), 0):
-                raise GameError("این تجهیزات را ندارید؛ اول از خزانه قلمرو بخرید.")
+                raise GameError("این تجهیزات را ندارید؛ اول از «خرید تجهیزات» با سکه بخرید.")
             if player.level < arm.level_req:
                 raise GameError(f"«{arm.name}» از سطح {fa(arm.level_req)} قابل استفاده است؛ شما سطح {fa(player.level)} هستید.")
             if arm.classes and player.class_id not in arm.classes:

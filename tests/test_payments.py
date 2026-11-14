@@ -139,7 +139,7 @@ async def test_invoice_flow_through_the_bot(h, services):
     await h.say(10, "/start")
     await h.panel(10, "premium")
     assert "خزانه قلمرو" in h.session.last_text()
-    assert len(h.labels()) == 19  # the starter pack, the wheel, the war gear, fourteen sections (rare materials, boost and experience included) and a back button
+    assert len(h.labels()) == 18  # the starter pack, the wheel, fourteen sections (rare materials, boost and experience included) and a back button
     await h.tap(10, "خرید کریستال")
     assert any("تومان" in b["text"] for b in h.session.last_buttons())  # the prices are on the buttons
     await h.click(10, h.button_data("×۲۰"))

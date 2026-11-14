@@ -90,7 +90,7 @@ async def arm_slot(c: Ctx) -> Screen:
     chunk = pieces[page * per:(page + 1) * per]
     lines = [f"{CIRCLED[slot - 1]} {bold('جایگاه ' + fa(slot))}", LINE, f"الان: {here.label if here else '— خالی —'}", ""]
     if not pieces:
-        lines.append("هنوز تجهیزاتی ندارید. از «خزانه قلمرو» با سکه بخرید 🛒")
+        lines.append("هنوز تجهیزاتی ندارید. از «🛒 خرید تجهیزات» با سکه بخرید")
     else:
         lines.append("یکی را برای این جایگاه انتخاب کنید 👇")
     rows = []
@@ -169,7 +169,7 @@ async def arm_shop(c: Ctx) -> Screen:
     ]
     grid = keyboards.grid(rows, 2)
     grid.append([c.btn(f"🎒 تجهیزات من ({fa(sum(owned.values()))})", "arms")])
-    grid.append(c.back("premium"))
+    grid.append(c.back("arms"))
     return Screen("\n".join(lines), grid)
 
 
