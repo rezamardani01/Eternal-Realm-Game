@@ -161,6 +161,7 @@ def duel_result(update) -> Rows:  # noqa: ANN001 - DuelUpdate
             chips.append(Button.inline(f"{league.emoji} {fa(payout.rating)}", DuelCb(action="info", id=duel_id)))
         rows.append(chips)
     rows.append([Button.inline("⚔️ مبارزه‌ی دوباره", DuelCb(action="rematch", id=duel_id), style="primary")])
+    rows.append([Button.inline("🔍 تحلیل نبرد", DuelCb(action="review", id=duel_id))])
     return rows
 
 

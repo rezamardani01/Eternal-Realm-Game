@@ -121,6 +121,7 @@ async def home(c: Ctx) -> Screen:
         [c.btn("👥 بازیکنان", "admp"), c.btn("🏢 گروه‌ها", "admg")],
         [c.btn("🏯 خاندان‌ها", "admcl"), c.btn("💰 فروش", "admo")],
         [c.btn("📣 همگانی", "admbc"), c.btn("🎁 هدیه‌ی همگانی", "admgf")],
+        [c.btn("🎟️ کدهای هدیه", "admcode")],
         [c.btn("🔒 عضویت اجباری", "admm"), c.btn("🚧 حالت تعمیر", "admmn")],
         [c.btn("💾 پشتیبان‌گیری", "admbk"), c.btn("🔗 دکمه‌های منو", "admlk")],
         [c.btn("📜 گزارش مدیریت", "adma"), c.btn("🛠️ دستورات مالک", "admc")],
@@ -416,12 +417,21 @@ PROMPTS = {
     "lk_gu": ("👥 لینک دکمه‌ی گروه", "لینک گروه را بنویسید (https://... یا @username). برای پنهان کردن دکمه بنویسید: -"),
     "lk_ct": ("📣 متن دکمه‌ی کانال", "متن تازه‌ی دکمه را بنویسید (تا ۲۸ حرف).\nمثال: 📣 کانال رسمی ما"),
     "lk_cu": ("📣 لینک دکمه‌ی کانال", "لینک کانال را بنویسید (https://... یا @username). برای پنهان کردن دکمه بنویسید: -"),
+    "code_new": (
+        "🎟️ ساخت کد هدیه",
+        "جایزه و محدودیت‌ها را در یک خط بنویسید (هر کدام که لازم است):\n"
+        "سکه=5000 کریستال=10 آیتم=سنگ آهن*5 تعداد=100 روز=7 کد=EID1405\n\n"
+        "• تعداد = چند نفر می‌توانند فعالش کنند (پیش‌فرض ۱)\n"
+        "• روز = مهلت (بدون آن، بی‌پایان)\n"
+        "• کد = نام دلخواه؛ اگر ننویسید، خودم یک کد تصادفی می‌سازم\n"
+        "• آیتم را می‌شود چند بار نوشت",
+    ),
     "chan": ("➕ افزودن کانال", "شناسه‌ی کانال را بنویسید و در صورت دلخواه عنوان.\nمثال: @mychannel کانال رسمی"),
 }
 _BACK_OF = {
     "find": ("admp", ""), "gmsg": ("admg", ""), "bcast": ("admbc", ""), "chan": ("admm", ""),
     "fwd": ("admbc", ""), "dm": ("admbc", ""), "gift_gold": ("admgf", ""), "gift_crystal": ("admgf", ""),
-    "gift_vip": ("admgf", ""), "mntext": ("admmn", ""),
+    "gift_vip": ("admgf", ""), "mntext": ("admmn", ""), "code_new": ("admcode", ""),
     "lk_gt": ("admlk", ""), "lk_gu": ("admlk", ""), "lk_ct": ("admlk", ""), "lk_cu": ("admlk", ""),
 }
 
@@ -574,6 +584,16 @@ async def got_input(message: Message, state: FSMContext, services: Services) -> 
         else:
             await admin.set_link(uid, which, url=text)
         await done("✅ دکمه ذخیره شد؛ در منوی اصلی پیوی دیده می‌شود.", [[keyboards.panel_button("🔗 دکمه‌های منو", "admlk", uid)]])
+    elif op == "code_new":
+        from ..game.services.giftcodes import parse_spec
+
+        made = await services.giftcodes.create(uid, parse_spec(text))
+        await done(
+            f"✅ {bold('کد هدیه ساخته شد')}\n\n🎟️ `{made.code}`\n🎁 {made.worth()}\n"
+            f"👥 ظرفیت: {fa(made.max_uses)} نفر · ⏳ مهلت: {fmt(made.expires_at) if made.expires_at else 'بی‌پایان'}\n\n"
+            "این کد را برای بازیکنان بفرستید؛ با «کد هدیه ...» یا دکمه‌ی «🎁 کد هدیه» در «قهرمان من» فعالش می‌کنند.",
+            [[keyboards.panel_button("🎟️ کدهای هدیه", "admcode", uid)]],
+        )
     elif op == "mntext":
         enabled, _ = await admin.maintenance()
         await admin.set_maintenance(uid, enabled, text)
@@ -925,6 +945,59 @@ async def gifts_apply(c: Ctx) -> Screen:
         raise GameError("هدیه‌ای برای ارسال نیست؛ دوباره شروع کنید.")
     count = await c.services.admin.give_all(c.owner, **gift)
     return Screen(f"✅ {bold('هدیه داده شد')}\n\nبه {fa(count)} بازیکن رسید.", [_back(c, "admgf")])
+
+
+# --- gift codes -----------------------------------------------------------------------------------------------------
+def _code_line(g) -> str:  # noqa: ANN001 - GiftCode
+    mark = "✅" if g.active and g.used < g.max_uses else "⛔"
+    return f"{mark} {g.code} · {fa(g.used)}/{fa(g.max_uses)}"
+
+
+@screen("admcode")
+async def gift_codes(c: Ctx) -> Screen:
+    _guard(c)
+    page = max(0, to_int(c.a) or 0)
+    codes, total = await c.services.giftcodes.recent(PER, page * PER)
+    lines = [
+        f"🎟️ {bold('کدهای هدیه')}", "",
+        "با یک کد، سکه، کریستال یا آیتم به بازیکنان می‌دهید؛ هر بازیکن هر کد را یک بار فعال می‌کند.",
+        f"مجموع کدها: {fa(total)}", "",
+    ]
+    rows = [[c.btn("➕ ساخت کد جدید", "admask", "code_new", style="success")]]
+    for g in codes:
+        lines.append(f"{_code_line(g)} — {g.worth()}")
+        rows.append([c.btn(_code_line(g), "admcodev", g.code)])
+    if not codes:
+        lines.append("هنوز کدی نساخته‌اید.")
+    if nav := _nav(c, "admcode", page, page > 0, (page + 1) * PER < total):
+        rows.append(nav)
+    rows.append(_back(c))
+    return Screen("\n".join(lines), rows)
+
+
+@screen("admcodev")
+async def gift_code_view(c: Ctx) -> Screen:
+    _guard(c)
+    g = await c.services.giftcodes.get(c.a)
+    if g is None:
+        raise GameError("این کد پیدا نشد.")
+    lines = [
+        f"🎟️ {bold('کد هدیه')}", "", f"`{g.code}`", f"🎁 {g.worth()}",
+        f"👥 فعال‌شده: {fa(g.used)} از {fa(g.max_uses)}",
+        f"⏳ مهلت: {fmt(g.expires_at) if g.expires_at else 'بی‌پایان'}",
+        f"وضعیت: {'فعال ✅' if g.active else 'غیرفعال ⛔'}",
+    ]
+    toggle = c.btn("⛔ غیرفعال کردن" if g.active else "✅ فعال کردن", "admcodet", g.code, "0" if g.active else "1")
+    return Screen("\n".join(lines), [[toggle], _back(c, "admcode")])
+
+
+@screen("admcodet")
+async def gift_code_toggle(c: Ctx) -> Screen:
+    _guard(c)
+    await c.services.giftcodes.set_active(c.owner, c.a, c.b == "1")
+    shown = await gift_code_view(c)
+    shown.toast = "✅ کد فعال شد" if c.b == "1" else "⛔ کد غیرفعال شد"
+    return shown
 
 
 # --- maintenance mode and backup --------------------------------------------------------------------------------

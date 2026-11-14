@@ -1051,6 +1051,31 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE cities ADD COLUMN workers INTEGER NOT NULL DEFAULT 1;
     """,
+    # 65: the notification switches: the categories a hero has turned off (comma-separated ids)
+    """
+    ALTER TABLE players ADD COLUMN notif_off TEXT NOT NULL DEFAULT '';
+    """,
+    # 66: gift codes made by the owner, and who claimed which
+    """
+    CREATE TABLE gift_codes (
+        code       TEXT    PRIMARY KEY,
+        gold       INTEGER NOT NULL DEFAULT 0,
+        crystal    INTEGER NOT NULL DEFAULT 0,
+        items      TEXT    NOT NULL DEFAULT '{}',
+        max_uses   INTEGER NOT NULL DEFAULT 1,
+        used       INTEGER NOT NULL DEFAULT 0,
+        expires_at INTEGER NOT NULL DEFAULT 0,
+        active     INTEGER NOT NULL DEFAULT 1,
+        created_by INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+    );
+    CREATE TABLE gift_code_uses (
+        code      TEXT    NOT NULL REFERENCES gift_codes (code),
+        player_id INTEGER NOT NULL REFERENCES players (id),
+        used_at   INTEGER NOT NULL,
+        PRIMARY KEY (code, player_id)
+    );
+    """,
 ]
 
 

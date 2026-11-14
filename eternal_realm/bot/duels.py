@@ -57,6 +57,9 @@ async def on_duel_button(query: CallbackQuery, callback_data: DuelCb, services: 
         await message.edit_text(f"🏳️ فراخوان دوئل بی‌نتیجه ماند؛ فرمانده‌ی مقابل آن {who}. شاید در فرصتی دیگر!")
     elif action == "info":
         pass
+    elif action == "review":
+        await _review(query, services, player, duel_id)
+        return
     elif action == "rematch":
         duel = await services.duels.get(duel_id)
         if duel is None or player.id not in (duel.challenger_id, duel.target_id):
@@ -90,6 +93,29 @@ async def on_duel_button(query: CallbackQuery, callback_data: DuelCb, services: 
     else:
         raise GameError("این دکمه از کار افتاده است؛ فرمان تازه‌ای بدهید.")
     await query.answer()
+
+
+async def _review(query: CallbackQuery, services: Services, player, duel_id: int) -> None:  # noqa: ANN001 - Player
+    """«تحلیل نبرد»: send the finished fight's review to the one who tapped, in private (a short toast in a group)."""
+    from .coach import review_text
+
+    duel = await services.duels.get(duel_id)
+    if duel is None or duel.status != "finished":
+        raise GameError("تحلیل این نبرد دیگر در دسترس نیست.")
+    index = next((i for i, f in enumerate(duel.battle.fighters) if f.player_id == player.id), -1) if duel.battle else -1
+    if index < 0:
+        raise GameError("فقط دو جنگجوی همین نبرد تحلیلش را می‌بینند.")
+    text = await review_text(services, player, duel.battle, index)
+    message = query.message
+    if message is not None and str(getattr(message.chat.type, "value", message.chat.type)) == "private":
+        await message.answer(text)
+        await query.answer()
+        return
+    try:
+        await message.bot.send_message(player.platform_user_id, text)
+        await query.answer("🔍 تحلیل نبرد را در پیوی برایتان فرستادم.")
+    except BaleAPIError:
+        await query.answer("🔍 تحلیل را در پیوی ربات ببینید؛ اول ربات را استارت کنید.", show_alert=True)
 
 
 async def _announce(bot: Bot, services: Services, item: DuelUpdate | Duel) -> None:

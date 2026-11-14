@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..game.data import maze as maze_data
 from ..game.data import solo as data
 from ..game.data import world as world_data
+from ..game.engine import coaching
 from ..game.engine.combat import Action, Fighter, status_line
 from ..game.services.solo import SoloFight, SoloUpdate
 from ..shared.errors import GameError
@@ -160,7 +161,7 @@ async def fight_act(c: Ctx) -> Screen:
     if await c.services.solo.active(c.player.id) is None:
         return await _stale(c)
     update = await c.services.solo.act(c.player, action)
-    return _after(c, update)
+    return _after(c, update, await _build_tips(c, update))
 
 
 @screen("sfleeq")
@@ -176,10 +177,19 @@ async def flee_do(c: Ctx) -> Screen:
     if await c.services.solo.active(c.player.id) is None:
         return await _stale(c)
     update = await c.services.solo.act(c.player, Action.SURRENDER)
-    return _after(c, update)
+    return _after(c, update, await _build_tips(c, update))
 
 
-def _after(c: Ctx, update: SoloUpdate) -> Screen:
+async def _build_tips(c: Ctx, update: SoloUpdate) -> list[str]:
+    """After a lost fight: tips from what the hero has built (spare points, empty gear slots)."""
+    if not update.finished or update.won or update.fled:
+        return []
+    from .coach import build_tips
+
+    return await build_tips(c.services, await c.refresh())
+
+
+def _after(c: Ctx, update: SoloUpdate, build_tips: list[str] | None = None) -> Screen:
     if not update.finished:
         return _fight_screen(c, update.fight, update.lines)
     info, kind = update.fight.info, update.fight.kind
@@ -195,8 +205,11 @@ def _after(c: Ctx, update: SoloUpdate) -> Screen:
     if update.won and update.payout.grade:
         text.append(f"🏅 درجه‌ی این مرحله: {data.GRADES[update.payout.grade]}")
     text += [f"✨ {n}" for n in update.payout.notes]
-    if not update.won and not update.fled:
-        text += ["", "شکست درس است؛ تجهیزاتتان را بهتر کنید و دوباره بیایید."]
+    index = next((i for i, f in enumerate(update.fight.battle.fighters) if f.player_id == c.player.id), 0)
+    if update.won:
+        text += ["", f"🔍 {bold('تحلیل نبرد')}", *coaching.tips(update.fight.battle, index)[:1]]
+    elif not update.fled:
+        text += ["", f"🔍 {bold('چرا شکست خوردید؟')}", *coaching.tips(update.fight.battle, index), *(build_tips or [])]
     return Screen("\n".join(text), _next_rows(c, kind, info, update.won))
 
 

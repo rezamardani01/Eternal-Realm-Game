@@ -140,7 +140,8 @@ async def notify_new_tiers(bot: Bot, services: Services) -> int:
                 "UPDATE season_progress SET notified = ? WHERE player_id = ? AND season = ?",
                 (tier, r["player_id"], season),
             )
-            news.append((r["uid"], tier, bool(r["premium"])))
+            if "path" not in (await tx.scalar("SELECT notif_off FROM players WHERE id = ?", (r["player_id"],), "")).split(","):
+                news.append((r["uid"], tier, bool(r["premium"])))
     sent = 0
     for uid, tier, premium in news:
         track = "رایگان و طلایی" if premium else "رایگان"

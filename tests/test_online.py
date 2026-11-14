@@ -329,3 +329,22 @@ async def test_the_main_menu_starts_with_a_single_online_button_and_its_page_has
     await h.panel(10, "onsearch")
     await h.panel(10, "online")
     assert h.labels() == ["❌ لغو جستجو"]  # while searching the one button cancels
+
+
+async def test_the_result_has_a_review_button_that_sends_the_fight_review(h, services, db):
+    await pair(h, services, db)
+    match = await services.online.match_of_player(1)
+    duel = await services.duels.get(match.duel_id)
+    actor = duel.battle.current.player_id
+    seat = match.seat_of(actor)
+    await h.click(seat.platform_user_id, DuelCb(action="surrender", id=duel.id).pack())
+    results = [p for p in sent_to(h, seat.platform_user_id, "editMessageText") if "پایان نبرد" in p["text"]]
+    assert any("تحلیل نبرد" in b["text"] for b in buttons_of(results[-1]))
+    h.session.reset()
+    await h.click(seat.platform_user_id, DuelCb(action="review", id=duel.id).pack())
+    review = [p for p in sent_to(h, seat.platform_user_id) if "تحلیل نبرد" in p["text"]]
+    assert review and "نکته‌ها" in review[-1]["text"]
+    await services.players.register(99, "u99", "غریبه", "elf", "archer")
+    h.session.reset()
+    await h.click(99, DuelCb(action="review", id=duel.id).pack())
+    assert not [p for p in sent_to(h, 99) if "نکته‌ها" in p["text"]]

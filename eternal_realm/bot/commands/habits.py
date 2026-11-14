@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ...shared.errors import GameError
 from ...shared.text import bar, bold, fa
-from .. import keyboards, panel
+from .. import keyboards, panel, settings_panel
 from .context import CommandContext
 from .registry import command
 
@@ -23,6 +23,22 @@ async def friend_add(ctx: CommandContext) -> None:
         await ctx.reply(f"🤝 {bold('دوست شدید!')}\n\n{ctx.who(ctx.me)} و {ctx.who(asked)} حالا دوست‌اند. هر روز می‌توانید برای هم انرژی بفرستید.")
     else:
         await ctx.reply(f"👥 درخواست دوستی برای {ctx.who(asked)} رفت؛ در پیوی ربات خبرش می‌کنند.")
+
+
+@command("gift_code", ["کد هدیه", "کد", "گیفت کد"], "فعال کردن کد هدیه: کد هدیه ABC123 (پیوی)", category="👤 شخصیت", points=0, takes_args=True)
+async def gift_code(ctx: CommandContext) -> None:
+    if ctx.is_group:
+        username = ctx.services.bot_username
+        await ctx.reply(
+            f"🎁 {bold('کد هدیه')} را در پیام خصوصی ربات وارد کنید تا کسی کدتان را نبیند.",
+            buttons=[keyboards.open_panel_button(username)] if username else None,
+        )
+        return
+    code = " ".join(ctx.args).strip()
+    if not code:
+        raise GameError("کد را همراه دستور بنویسید؛ مثلاً: کد هدیه ABC123")
+    found = await ctx.services.giftcodes.redeem(ctx.me, code)
+    await ctx.reply(settings_panel.claimed_text(found))
 
 
 @command("friends", ["دوستان", "دوست ها", "دوست‌ها"], "فهرست دوستان و هدیه‌ی انرژی", category="👤 شخصیت", points=0)

@@ -27,6 +27,7 @@ from ..game.services.group_dungeon import GroupDungeonService
 from ..game.services.groups import GroupService
 from ..game.services.hunting import HuntService
 from ..game.services.inventory import InventoryService
+from ..game.services.giftcodes import GiftCodeService
 from ..game.services.invites import InviteService
 from ..game.services.market import MarketService
 from ..game.services.academy import AcademyService
@@ -104,6 +105,7 @@ class Services:
     effects: EffectService
     membership: MembershipService
     invites: InviteService
+    giftcodes: GiftCodeService
     bets: BetService
     characters: CharacterService
     arms: ArmsService
@@ -177,6 +179,7 @@ class Services:
             effects=EffectService(ctx),
             membership=MembershipService(ctx),
             invites=InviteService(ctx, inventory),
+            giftcodes=GiftCodeService(ctx, inventory),
             bets=BetService(ctx, duels),
             characters=characters,
             arms=characters.arms,

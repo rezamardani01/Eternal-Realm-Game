@@ -384,12 +384,12 @@ class CityService:
                         "ارتش و دیوار را بسنجید یا سپر تازه بخرید.",
                     )
             rows = await tx.fetchall(
-                "SELECT a.id, a.text, c.alerts AS on_, p.platform_user_id AS uid FROM city_alerts a"
+                "SELECT a.id, a.text, c.alerts AS on_, p.platform_user_id AS uid, p.notif_off AS off FROM city_alerts a"
                 " JOIN cities c ON c.id = a.city_id JOIN players p ON p.id = c.player_id"
                 " WHERE a.sent = 0 ORDER BY a.id LIMIT 200"
             )
             for r in rows:
-                if r["on_"]:  # a muted city still has its queue emptied, it just hears nothing
+                if r["on_"] and "city" not in r["off"].split(","):  # a muted city still has its queue emptied, it just hears nothing
                     out.append(Alert(r["uid"], r["text"]))
                 await tx.execute("UPDATE city_alerts SET sent = 1 WHERE id = ?", (r["id"],))
         return out

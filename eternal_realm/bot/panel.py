@@ -353,6 +353,7 @@ async def profile(c: Ctx) -> Screen:
             [c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")],
             [c.btn("📅 مأموریت‌ها", "missions"), c.btn("🏅 دستاوردها", "ach")],
             [c.btn("🕯️ محراب", "altar"), c.btn("👥 دوستان", "friends")],
+            [c.btn("🎁 کد هدیه", "giftcode"), c.btn("🔔 اعلان‌ها", "notifs")],
             c.back("home"),
         ]
     elif c.b == "cm":

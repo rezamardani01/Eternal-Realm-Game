@@ -78,6 +78,11 @@ class Fighter:
     trait_power: int = 0
     undying_used: bool = False
     stand_used: bool = False
+    #: what this fighter did in the fight, for the after-fight review: damage dealt, and how many turns of each kind
+    dealt: int = 0
+    n_attack: int = 0
+    n_skill: int = 0
+    n_defend: int = 0
     #: for each of the three skills the hero level that opens it while it is still closed (0 = open)
     lock: list[int] = field(default_factory=list)
     #: chance (0-1) to shrug off each kind of harmful effect; 1 = immune (bosses)
@@ -558,6 +563,22 @@ def _cast(me: Fighter, foe: Fighter, index: int, sk: HeroSkill, rng: random.Rand
 
 def act(battle: Battle, action: Action, rng: random.Random) -> list[str]:
     """Apply the current fighter's action; returns the log lines of this turn."""
+    if battle.finished:
+        raise ValueError("battle already finished")
+    me, foe = battle.current, battle.other
+    before = foe.hp
+    lines = _act(battle, action, rng)
+    me.dealt += max(0, before - foe.hp)
+    if action is Action.ATTACK:
+        me.n_attack += 1
+    elif action is Action.DEFEND:
+        me.n_defend += 1
+    elif action is not Action.SURRENDER:
+        me.n_skill += 1
+    return lines
+
+
+def _act(battle: Battle, action: Action, rng: random.Random) -> list[str]:
     if battle.finished:
         raise ValueError("battle already finished")
     me, foe = battle.current, battle.other

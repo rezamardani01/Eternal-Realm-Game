@@ -5,8 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ...context import AppContext
+from ...shared.errors import GameError
 from ...shared.text import fa
 from ..data.expedition import get_kind
+from ..data import notifs
 from ..notify import queue
 
 
@@ -138,11 +140,32 @@ class AlertService:
         out: list[Alert] = []
         async with self.ctx.db.transaction() as tx:
             rows = await tx.fetchall(
-                "SELECT a.id, a.text, a.screen, a.arg, p.platform_user_id AS uid FROM player_alerts a"
+                "SELECT a.id, a.key, a.text, a.screen, a.arg, p.platform_user_id AS uid, p.notif_off AS off FROM player_alerts a"
                 " JOIN players p ON p.id = a.player_id WHERE a.sent = 0 AND p.banned = 0 ORDER BY a.id LIMIT ?",
                 (limit,),
             )
             for r in rows:
-                out.append(Alert(r["uid"], r["text"], r["screen"], r["arg"]))
+                category = notifs.category_of(r["key"])
+                if category is None or category not in notifs.parse(r["off"]):  # a muted kind is dropped, not delayed
+                    out.append(Alert(r["uid"], r["text"], r["screen"], r["arg"]))
                 await tx.execute("UPDATE player_alerts SET sent = 1 WHERE id = ?", (r["id"],))
         return out
+
+    # --- the hero's switches -------------------------------------------------------------------------------
+    async def muted(self, player_id: int) -> set[str]:
+        """The notification categories this hero has turned off."""
+        async with self.ctx.db.read() as tx:
+            return notifs.parse(str(await tx.scalar("SELECT notif_off FROM players WHERE id = ?", (player_id,), "")))
+
+    async def set_muted(self, player_id: int, muted: set[str]) -> None:
+        async with self.ctx.db.transaction() as tx:
+            await tx.execute("UPDATE players SET notif_off = ? WHERE id = ?", (notifs.dump(muted), player_id))
+
+    async def toggle(self, player_id: int, category: str) -> bool:
+        """Flip one category; returns whether it is on now."""
+        if category not in notifs.BY_ID:
+            raise GameError("این دسته‌ی اعلان وجود ندارد.")
+        muted = await self.muted(player_id)
+        muted ^= {category}
+        await self.set_muted(player_id, muted)
+        return category not in muted

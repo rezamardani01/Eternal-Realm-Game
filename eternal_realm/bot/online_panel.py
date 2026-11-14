@@ -9,7 +9,7 @@ import asyncio
 import contextlib
 import logging
 
-from baleropy import Bot
+from baleropy import Bot, Button
 from baleropy.exceptions import BaleAPIError, BaleNetworkError
 
 from ..game.data.leagues import league_of, next_league
@@ -18,6 +18,7 @@ from ..game.services.online import ANYONE_AFTER, QUEUE_TIMEOUT, OnlineMatch, Wai
 from ..shared.errors import GameError
 from ..shared.text import bold, duration, fa, headline
 from . import keyboards, views
+from .callbacks import DuelCb
 from .panel import Ctx, Screen, screen
 from .services import Services
 
@@ -41,9 +42,10 @@ def result_text(update: DuelUpdate) -> str:
     return "🌐 " + views.duel_result(update)
 
 
-def result_rows(owner: int) -> list:
+def result_rows(owner: int, duel_id: int) -> list:
     return [
         [keyboards.panel_button("🌐 جستجوی حریف تازه", "onsearch", owner)],
+        [Button.inline("🔍 تحلیل نبرد", DuelCb(action="review", id=duel_id))],
         [keyboards.panel_button("🏠 قلمرو من", "home", owner)],
     ]
 
@@ -85,7 +87,7 @@ async def push(bot: Bot, services: Services, match: OnlineMatch, update: DuelUpd
     for seat in match.seats:
         try:
             if update.finished:
-                text, rows = result_text(update), result_rows(seat.platform_user_id)
+                text, rows = result_text(update), result_rows(seat.platform_user_id, update.duel.id)
             else:  # both players see the same fight with the move buttons, like in a group duel
                 text = battle_text(seat.player_id, update, turn_seconds)
                 rows = keyboards.duel_actions(update.duel.id, update.battle.current)
@@ -133,6 +135,8 @@ async def processor(bot: Bot, services: Services, interval: float = 3.0) -> None
                 await push_no_one_came(bot, waiter)
             for match, actor, left in await services.online.due_warnings():
                 seat = match.seat_of(actor)
+                if "online" in await services.alerts.muted(seat.player_id):
+                    continue
                 with contextlib.suppress(BaleAPIError, BaleNetworkError):
                     await _send(bot, seat.chat_id, f"⏰ {bold('فقط ' + fa(left) + ' ثانیه مانده!')}\n\nیک حرکت بزنید، وگرنه نبرد را واگذار می‌کنید.", None)
         except asyncio.CancelledError:
