@@ -28,7 +28,7 @@ def test_pack_catalogue_is_valid():
 
     for pack in PACKS.values():
         assert len(pack.title) <= 32 and pack.price_rial > 0 and pack.price_rial % 10 == 0
-        assert pack.gold or pack.crystal or pack.items or pack.lucky or pack.pet or pack.season or pack.vip_days or pack.boost_hours or pack.xp or pack.spins or pack.city or pack.city_shield_hours or pack.arms
+        assert pack.gold or pack.crystal or pack.items or pack.lucky or pack.pet or pack.season or pack.vip_days or pack.boost_hours or pack.xp or pack.spins or pack.city or pack.city_shield_hours or pack.arms or pack.workers
         assert all(item in ITEMS for item in pack.items)
 
 
@@ -98,12 +98,48 @@ async def test_disabled_payments_and_unknown_pack(services):
         await services.payments.create_order(p, "coins_s")
 
 
+async def test_the_starter_pack_is_once_only_and_lifts_a_new_hero_to_about_level_fifty(services, db):
+    from eternal_realm.game.data.packs import PACKS
+
+    p = await services.players.register(70, "u70", "تازه", "elf", "archer")
+    pack = PACKS["starter"]
+    assert pack.once and pack.xp >= 690_000 and pack.price_toman < 150_000
+    order = await services.payments.create_order(p, "starter")
+    delivery = await services.payments.complete(70, order.payload, order.amount, "c-starter")
+    assert "سطح" in delivery.granted
+    after = await services.players.require(70)
+    assert 45 <= after.level <= 55 and after.gold >= pack.gold
+    with pytest.raises(GameError, match="فقط یک بار"):
+        await services.payments.create_order(after, "starter")
+    veteran = await services.players.register(71, "u71", "کهنه", "elf", "archer")
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET level = 40 WHERE id = ?", (veteran.id,))
+    with pytest.raises(GameError, match="تا سطح"):
+        await services.payments.create_order(await services.players.require(71), "starter")
+
+
+async def test_the_dear_packs_carry_a_bonus_that_is_delivered_and_listed(services):
+    from eternal_realm.bot import views
+    from eternal_realm.game.data.packs import PACKS
+
+    bonus = [p for p in PACKS.values() if p.has_bonus]
+    assert len(bonus) >= 15
+    p = await services.players.register(72, "u72", "ثروتمند", "elf", "archer")
+    pack = PACKS["crystal_xl"]
+    before = await services.players.require(72)
+    order = await services.payments.create_order(p, pack.id)
+    await services.payments.complete(72, order.payload, order.amount, "c-xl")
+    after = await services.players.require(72)
+    assert after.crystal == before.crystal + pack.crystal and after.gold == before.gold + pack.gold + pack.bonus_gold
+    assert "اشانتیون" in views.pack_description(pack)
+
+
 async def test_invoice_flow_through_the_bot(h, services):
     p = await reg(services)
     await h.say(10, "/start")
     await h.panel(10, "premium")
     assert "خزانه قلمرو" in h.session.last_text()
-    assert len(h.labels()) == 17  # the wheel, the war gear, thirteen sections (rare materials, boost and experience included) and a back button
+    assert len(h.labels()) == 19  # the starter pack, the wheel, the war gear, fourteen sections (rare materials, boost and experience included) and a back button
     await h.tap(10, "خرید کریستال")
     assert any("تومان" in b["text"] for b in h.session.last_buttons())  # the prices are on the buttons
     await h.click(10, h.button_data("×۲۰"))

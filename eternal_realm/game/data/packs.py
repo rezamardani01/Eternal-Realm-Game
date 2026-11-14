@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
-from .arms import ARMS, PRICE_RISE, pack_id
+from .arms import PRICE_RISE
 
 
 @dataclass(frozen=True)
@@ -41,6 +41,19 @@ class Pack:
     city_shield_hours: int = 0
     #: pieces of hero war gear the pack adds (see arms.py)
     arms: dict[str, int] = field(default_factory=dict)
+    #: builders: the pack hires this worker number for the buyer's village (2, 3 or 4)
+    workers: int = 0
+    #: a pack a hero can buy only once, and only while at or under ``max_level`` (the new-hero starter pack)
+    once: bool = False
+    max_level: int = 0
+    #: a gift thrown in with the big packs (delivered on top of the goods above and listed as «اشانتیون»)
+    bonus_gold: int = 0
+    bonus_crystal: int = 0
+    bonus_items: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def has_bonus(self) -> bool:
+        return bool(self.bonus_gold or self.bonus_crystal or self.bonus_items)
 
     @property
     def price_toman(self) -> int:
@@ -66,6 +79,8 @@ SECTIONS = {
     "wheel": "🎡 گردونه شانس",
     "city": "🏰 منابع دهکده",
     "rare": "💠 منابع کمیاب",
+    "starter": "🚀 بسته‌ی شروع",
+    "workers": "👷 کارگر دهکده",
 }
 
 BOOST_FACTOR = 2
@@ -190,11 +205,48 @@ _EXTRA: tuple[Pack, ...] = (
     Pack("rare_scale_10", "🐉", "۱۰ فلس اژدها", 400_000, items={"dragon_scale": 10}, section="rare"),
     Pack("rare_shard_10", "💠", "۱۰ پاره‌کریستال", 250_000, items={"crystal_shard": 10}, section="rare"),
     Pack("vip_90", "💠", "اشتراک VIP · سه ماه", 500_000, vip_days=90, section="vip"),
+    # the new-hero starter pack: experience for about 50 levels, plus a bit of everything
+    Pack(
+        "starter", "🚀", "بسته‌ی شروع قهرمان", 800_000, section="starter", once=True, max_level=25,
+        xp=690_000, gold=150_000, crystal=120, vip_days=7, boost_hours=72,
+        items={"big_energy_potion": 15, "magic_chest": 5, "royal_chest": 1, "dragon_scale": 2, "iron_ore": 100},
+    ),
+    # builders for the village: each costs more than the one before (the buyer must hold the previous one)
+    Pack("worker_2", "👷", "کارگر دوم دهکده", 400_000, workers=2, section="workers"),
+    Pack("worker_3", "👷", "کارگر سوم دهکده", 800_000, workers=3, section="workers"),
+    Pack("worker_4", "👷", "کارگر چهارم دهکده", 1_600_000, workers=4, section="workers"),
 )
 for _pack in _EXTRA:
     PACKS[_pack.id] = _pack
 for _pid, _title in _TITLES.items():
     PACKS[_pid] = replace(PACKS[_pid], title=_title)
+
+
+#: what the dearer packs carry on top: (gold, crystals, items)
+_BONUSES: dict[str, tuple[int, int, dict[str, int]]] = {
+    "coins_l": (0, 0, {"magic_chest": 1}),
+    "coins_xl": (0, 20, {"magic_chest": 3, "big_energy_potion": 10}),
+    "coins_xxl": (0, 100, {"royal_chest": 3, "dragon_scale": 3}),
+    "crystal_l": (20_000, 0, {"magic_chest": 2}),
+    "crystal_xl": (80_000, 0, {"royal_chest": 1, "magic_chest": 3}),
+    "crystal_xxl": (250_000, 0, {"royal_chest": 3, "dragon_scale": 5}),
+    "ore_xl": (50_000, 0, {"dragon_scale": 2}),
+    "chests_x10": (0, 0, {"royal_chest": 1}),
+    "royal_x3": (0, 30, {"magic_chest": 2}),
+    "energy_x25": (0, 0, {"magic_chest": 1}),
+    "xp_xl": (30_000, 0, {"magic_chest": 2}),
+    "xp_xxl": (100_000, 50, {"royal_chest": 1, "magic_chest": 3}),
+    "xp_xxxl": (300_000, 200, {"royal_chest": 3, "dragon_scale": 5}),
+    "wheel_25": (50_000, 0, {}),
+    "wheel_50": (150_000, 60, {}),
+    "boost_168": (0, 0, {"big_energy_potion": 5}),
+    "boost_720": (0, 0, {"magic_chest": 3, "big_energy_potion": 10}),
+    "vip_90": (0, 50, {"magic_chest": 2}),
+    "city_res_xl": (0, 0, {"royal_chest": 1}),
+    "hero_chest": (0, 40, {"dragon_scale": 2}),
+}
+for _pid, (_g, _c, _i) in _BONUSES.items():
+    PACKS[_pid] = replace(PACKS[_pid], bonus_gold=_g, bonus_crystal=_c, bonus_items=_i)
 
 
 def _risen(rial: int) -> int:
@@ -205,11 +257,7 @@ def _risen(rial: int) -> int:
 for _pid, _pack in list(PACKS.items()):
     PACKS[_pid] = replace(_pack, price_rial=_risen(_pack.price_rial))
 
-# every piece of hero war gear can be bought with real money (the cheap ones also with coins, see arms.py); it is the same piece
-for _arm in (a for a in ARMS.values() if not a.boss):
-    PACKS[pack_id(_arm.id)] = Pack(
-        pack_id(_arm.id), _arm.emoji, _arm.name, _arm.rial, arms={_arm.id: 1}, section="arms"
-    )
+# hero war gear is bought with coins only (see arms.py), so the treasury sells none of it
 
 #: an unpaid order is abandoned after this long
 ORDER_TTL_SECONDS = 3600

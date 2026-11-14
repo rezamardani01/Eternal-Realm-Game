@@ -353,7 +353,8 @@ def test_mythic_gear_and_boss_spoils():
 def test_boss_spoils_are_not_sold():
     from eternal_realm.game.data.packs import PACKS
 
-    assert "arm_b_fire" not in PACKS and all(f"arm_{a.id}" in PACKS for a in ARMS.values() if not a.boss)
+    assert not any(k.startswith("arm_") for k in PACKS)  # no gear is sold for real money
+    assert all(a.coin_price is None for a in ARMS.values() if a.boss)  # boss spoils cannot be bought with coins either
 
 
 # --- bosses -----------------------------------------------------------------------------------------------------------------------------

@@ -72,6 +72,8 @@ class City:
     #: gold taken out of the treasury today (the day it counts for is ``withdraw_day``)
     withdraw_day: int = 0
     withdrawn: int = 0
+    #: builders hired (one at the start, up to four); each raises one building at a time
+    workers: int = 1
 
     # --- derived numbers -------------------------------------------------------------------
     @property
@@ -241,6 +243,7 @@ class CityService:
         ]
         city.alerts = bool(row["alerts"])
         city.withdraw_day, city.withdrawn = row["withdraw_day"], row["withdrawn"]
+        city.workers = int(row["workers"])
         owner = await tx.fetchone(
             "SELECT display_name, platform_user_id, boost_until FROM players WHERE id = ?", (city.player_id,)
         )
@@ -500,9 +503,12 @@ class CityService:
         async with self.ctx.db.transaction() as tx:
             city = await self._need(tx, player, now)
             level = city.levels.get(kind, 0)
-            if city.builds:
+            if any(w.kind == kind for w in city.builds):
+                raise GameError(f"{b.name} همین حالا در حال ساخت است؛ صبر کنید یا با کریستال کار را تمام کنید.")
+            if len(city.builds) >= city.workers:
                 busy = d.get_building(city.builds[0].kind)
-                raise GameError(f"سازندگان مشغول {busy.name} هستند؛ صبر کنید یا با کریستال کار را تمام کنید.")
+                more = "" if city.workers >= d.MAX_WORKERS else " یا از «خزانه قلمرو» کارگر تازه استخدام کنید"
+                raise GameError(f"همه‌ی کارگران مشغول‌اند ({busy.name} و ...)؛ صبر کنید، با کریستال کار را تمام کنید{more}.")
             if level >= b.max_level:
                 raise GameError(f"{b.name} به بالاترین سطح خود رسیده است.")
             if kind == "castle":

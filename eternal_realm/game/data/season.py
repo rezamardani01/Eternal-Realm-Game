@@ -65,28 +65,34 @@ def season_seconds_left(now: int) -> int:
 def reward_for(track: str, tier: int) -> TierReward:
     """What a tier gives on the ``free`` or the ``ticket`` track."""
     if track == "free":
-        gold = 20 + 3 * tier
-        crystal = 2 if tier % 10 == 5 else 0
+        gold = 60 + 8 * tier
+        crystal = 3 if tier % 10 == 5 else 0
         items: tuple[tuple[str, int], ...] = ()
-        if tier % 20 == 0:
-            items = (("wooden_chest", 1),)
+        if tier % 10 == 0:
+            items = (("wooden_chest", 1 + tier // 50),)
         if tier % 7 == 0:
-            items += (("energy_potion", 2),)
+            items += (("energy_potion", 3),)
+        if tier % 20 == 0:
+            items += (("magic_chest", 1),)
         title = "قهرمان فصل" if tier == TIERS else ""
-        if tier % 10 == 0 and tier != TIERS:
-            gold += 200
+        if tier % 10 == 0:
+            gold += 500
+        if tier == TIERS:
+            crystal = 20
+            items = (("magic_chest", 2), ("royal_chest", 1))
         cards = (_card_for(tier, 2),) if tier % 15 == 0 else ()
         return TierReward(gold, crystal, items, title, cards)
-    gold = 95 + 15 * tier
-    crystal = 5 if tier % 5 == 0 else 0
+    gold = 250 + 40 * tier
+    crystal = 8 if tier % 5 == 0 else 0
     items = ()
     if tier % 10 == 0:
-        items = (("magic_chest", 1),)
+        items = (("magic_chest", 1 + tier // 50),)
     if tier % 25 == 0:
-        items += (("dragon_scale", 2),)
+        items += (("dragon_scale", 3),)
     if tier == TIERS:
-        items = (("royal_chest", 1), ("magic_chest", 2))
-        crystal = 30
+        items = (("royal_chest", 3), ("magic_chest", 4), ("dragon_scale", 5))
+        crystal = 120
+        gold += 20_000
     title = "اسطوره‌ی فصل" if tier == TIERS else ""
     cards = (_card_for(tier, 4),) if tier % 4 == 0 else ()
     return TierReward(gold, crystal, items, title, cards)

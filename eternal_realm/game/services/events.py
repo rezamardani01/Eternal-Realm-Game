@@ -18,7 +18,9 @@ from ...db.repos import wallet
 from ...shared.errors import GameError
 from ..data import group_games
 from ..data.items import get_item
-from ..data.world_events import ARMIES, METEOR_LOOT, METEOR_PER_PLAYER, METEOR_PIECES, PLACES, REGIONS
+from ..data.world_events import (
+    ARMIES, METEOR_LOOT, METEOR_PER_PLAYER, METEOR_PIECES, ORE_LOOT, ORE_PLACES, PLACES, REGIONS,
+)
 from ..engine import progression
 from ..models import Player
 from .bosses import BossService, BossView
@@ -27,11 +29,18 @@ from .inventory import InventoryService
 KINDS = (
     "mystery_chest", "merchant", "double_xp", "hidden_boss", "hidden_chest", "invasion", "meteor",
     "gold_rain", "spring", "wheel", "egg", "riddle", "tiles", "raffle",
+    "quiz", "star_fall", "campfire", "ore_vein",
 )
+#: kinds that play like another one (the same buttons and rules, different story and prizes)
+RIDDLE_KINDS = ("riddle", "quiz")
+RAIN_KINDS = ("gold_rain", "star_fall")
+SPRING_KINDS = ("spring", "campfire")
+METEOR_KINDS = ("meteor", "ore_vein")
 BASE_WEIGHTS = {
     "mystery_chest": 22, "merchant": 14, "double_xp": 12, "hidden_boss": 8, "hidden_chest": 10, "invasion": 6,
     "meteor": 8, "gold_rain": 10, "spring": 8, "wheel": 10, "egg": 6,
     "riddle": 12, "tiles": 9, "raffle": 8,
+    "quiz": 12, "star_fall": 8, "campfire": 8, "ore_vein": 8,
 }
 #: busy groups get the big team events more often
 CROWD_KINDS = ("invasion", "egg", "hidden_boss")
@@ -39,6 +48,7 @@ LIFETIME = {
     "mystery_chest": 300, "merchant": 600, "double_xp": 1800, "hidden_chest": 900, "invasion": 180, "meteor": 600,
     "gold_rain": 480, "spring": 600, "wheel": 600, "egg": 180,
     "riddle": 240, "tiles": 420, "raffle": 600,
+    "quiz": 240, "star_fall": 480, "campfire": 600, "ore_vein": 600,
 }
 RIDDLE_GAP = 12
 RAIN_DROPS, RAIN_PER_PLAYER, RAIN_GAP = 20, 4, 10
@@ -151,17 +161,20 @@ class EventService:
                 state = await self._new_invasion(tx, chat_id, now)
             elif kind == "meteor":
                 state = {"region": rng.choice(REGIONS), "left": METEOR_PIECES, "taken": {}, "names": {}, "at": {}}
-            elif kind == "gold_rain":
+            elif kind == "ore_vein":
+                state = {"region": rng.choice(ORE_PLACES), "left": METEOR_PIECES, "taken": {}, "names": {}, "at": {}}
+            elif kind in ("gold_rain", "star_fall"):
                 state = {"left": RAIN_DROPS, "taken": {}, "names": {}, "at": {}, "gold": {}}
-            elif kind == "spring":
+            elif kind in SPRING_KINDS:
                 state = {"left": SPRING_VISITORS, "names": {}}
             elif kind == "wheel":
                 state = {"spins": {}, "names": {}}
             elif kind == "egg":
                 members = max(2, await repo.active_members(tx, chat_id, now - 86400))
                 state = {"need": min(60, max(12, 3 * members)), "warm": 0, "hits": {}, "names": {}, "at": {}}
-            elif kind == "riddle":
-                index = rng.randrange(len(group_games.RIDDLES))
+            elif kind in RIDDLE_KINDS:
+                pool = group_games.QUIZ if kind == "quiz" else group_games.RIDDLES
+                index = rng.randrange(len(pool))
                 order = list(range(4))
                 rng.shuffle(order)
                 state = {"q": index, "order": order, "at": {}, "names": {}}
@@ -276,7 +289,7 @@ class EventService:
     async def collect(self, event_id: int, player: Player) -> tuple[EventView, str]:
         now, rng = self.ctx.now(), self.ctx.rng
         async with self.ctx.db.transaction() as tx:
-            row = await self._live(tx, event_id, "meteor")
+            row = await self._live(tx, event_id, METEOR_KINDS)
             state = json.loads(row["state"])
             key = str(player.id)
             if state["left"] <= 0:
@@ -286,7 +299,8 @@ class EventService:
             wait = state["at"].get(key, 0) + COLLECT_GAP - now
             if wait > 0:
                 raise GameError(f"⏳ {wait} ثانیه دیگر دوباره بردارید.")
-            item = rng.choices([i for i, _ in METEOR_LOOT], weights=[w for _, w in METEOR_LOOT], k=1)[0]
+            loot = ORE_LOOT if row["kind"] == "ore_vein" else METEOR_LOOT
+            item = rng.choices([i for i, _ in loot], weights=[w for _, w in loot], k=1)[0]
             await self.inventory.grant(tx, player.id, item, 1)
             state["left"] -= 1
             state["taken"][key] = state["taken"].get(key, 0) + 1
@@ -303,7 +317,7 @@ class EventService:
     async def grab(self, event_id: int, player: Player) -> tuple[EventView, int]:
         now, rng = self.ctx.now(), self.ctx.rng
         async with self.ctx.db.transaction() as tx:
-            row = await self._live(tx, event_id, "gold_rain")
+            row = await self._live(tx, event_id, RAIN_KINDS)
             state = json.loads(row["state"])
             key = str(player.id)
             if state["left"] <= 0:
@@ -313,8 +327,14 @@ class EventService:
             wait = state["at"].get(key, 0) + RAIN_GAP - now
             if wait > 0:
                 raise GameError(f"⏳ {wait} ثانیه دیگر دوباره بردارید.")
-            gold = rng.randint(60, 180) + 6 * player.level
-            await wallet.apply(tx, player.id, gold=gold, reason="gold_rain", now=now)
+            if row["kind"] == "star_fall":  # the stars give experience (and now and then a crystal) instead of coins
+                gold = rng.randint(50, 120) + 5 * player.level
+                await self.bosses.players.grant_xp(tx, player.id, gold)
+                if rng.random() < 0.15:
+                    await wallet.apply(tx, player.id, crystal=1, reason="star_fall", now=now)
+            else:
+                gold = rng.randint(60, 180) + 6 * player.level
+                await wallet.apply(tx, player.id, gold=gold, reason="gold_rain", now=now)
             state["left"] -= 1
             state["taken"][key] = state["taken"].get(key, 0) + 1
             state["gold"][key] = state["gold"].get(key, 0) + gold
@@ -331,7 +351,7 @@ class EventService:
     async def drink(self, event_id: int, player: Player) -> EventView:
         now = self.ctx.now()
         async with self.ctx.db.transaction() as tx:
-            row = await self._live(tx, event_id, "spring")
+            row = await self._live(tx, event_id, SPRING_KINDS)
             state = json.loads(row["state"])
             key = str(player.id)
             if key in state["names"]:
@@ -340,6 +360,8 @@ class EventService:
                 raise GameError("💧 جای نوشیدن تمام شد.")
             await player_repo.set_energy(tx, player.id, progression.max_energy(player.level, self.ctx.balance), now)
             await self.bosses.players.grant_xp(tx, player.id, 40 + 5 * player.level)
+            if row["kind"] == "campfire":  # the fire also warms the purse
+                await wallet.apply(tx, player.id, gold=80 + 6 * player.level, reason="campfire", now=now)
             state["names"][key] = player.mention
             state["left"] -= 1
             if state["left"] == 0:
@@ -425,7 +447,7 @@ class EventService:
     async def answer(self, event_id: int, player: Player, position: int) -> tuple[EventView, bool]:
         now, rng = self.ctx.now(), self.ctx.rng
         async with self.ctx.db.transaction() as tx:
-            row = await self._live(tx, event_id, "riddle")
+            row = await self._live(tx, event_id, RIDDLE_KINDS)
             state = json.loads(row["state"])
             if not 0 <= position < 4:
                 raise GameError("این گزینه نیست.")
@@ -439,7 +461,7 @@ class EventService:
             if right and await repo.finish(tx, event_id, "done"):
                 gold = 150 + 12 * player.level
                 crystal = 1 if rng.random() < 0.3 else 0
-                await wallet.apply(tx, player.id, gold=gold, crystal=crystal, reason="riddle", now=now)
+                await wallet.apply(tx, player.id, gold=gold, crystal=crystal, reason=row["kind"], now=now)
                 await self.bosses.players.grant_xp(tx, player.id, 60 + 6 * player.level)
                 state["winner"], state["gold"], state["crystal"] = player.mention, gold, crystal
             else:
@@ -557,9 +579,10 @@ class EventService:
         return actions
 
     # --- playing events -------------------------------------------------------------------------
-    async def _live(self, tx: Tx, event_id: int, kind: str) -> Row:
+    async def _live(self, tx: Tx, event_id: int, kind: str | tuple[str, ...]) -> Row:
         row = await repo.get(tx, event_id)
-        if row is None or row["kind"] != kind or row["status"] != "active" or row["expires_at"] <= self.ctx.now():
+        kinds = (kind,) if isinstance(kind, str) else kind
+        if row is None or row["kind"] not in kinds or row["status"] != "active" or row["expires_at"] <= self.ctx.now():
             raise GameError("⌛ این رویداد تمام شده است.")
         return row
 

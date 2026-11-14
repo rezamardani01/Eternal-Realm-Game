@@ -101,7 +101,7 @@ class ArmsService:
         )
 
     async def buy(self, player: Player, arm_id: str, qty: int = 1) -> Arm:
-        """Buy cheap pieces (common and uncommon) with coins. The rest is sold for real money only."""
+        """Buy a piece with coins (every rarity; the pieces only bosses drop cannot be bought)."""
         if arm_id not in ARMS or qty < 1:
             raise GameError("این تجهیزات در قلمرو شناخته نشد.")
         arm = get_arm(arm_id)

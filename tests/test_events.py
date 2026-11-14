@@ -285,6 +285,46 @@ async def test_meteor_pieces_are_limited_and_shared(services, db, clock):
         await services.events.collect(view.id, players[1])
 
 
+async def test_the_quiz_pays_the_first_right_answer_and_its_questions_are_sound(services, db, clock):
+    from eternal_realm.game.data import group_games
+
+    for question, answer, wrong in group_games.QUIZ:
+        assert len({answer, *wrong}) == 4, question
+    a, b = await hero(services, db, 20, "الفبا"), await hero(services, db, 21, "بابک")
+    view = await services.events.spawn(CHAT, "quiz")
+    assert view.kind == "quiz" and "کوئیز" in events_ui.text_for(view)
+    right = view.state["order"].index(0)
+    wrong = (right + 1) % 4
+    view, ok = await services.events.answer(view.id, a, wrong)
+    assert not ok
+    view, ok = await services.events.answer(view.id, b, right)
+    assert ok and view.status == "done" and "پاسخ درست" in events_ui.text_for(view)
+
+
+async def test_the_star_fall_gives_experience_the_campfire_energy_and_the_vein_ore(services, db, clock):
+    from eternal_realm.game.data.world_events import ORE_LOOT
+
+    a = await hero(services, db, 30, "ستاره")
+    view = await services.events.spawn(CHAT, "star_fall")
+    xp_before = (await services.players.require(30)).xp
+    view, amount = await services.events.grab(view.id, a)
+    assert amount > 0 and view.state["left"] == 19 and "ستاره‌باران" in events_ui.text_for(view)
+    assert (await services.players.require(30)).xp != xp_before or (await services.players.require(30)).level > a.level
+    clock.advance(10_000)
+    await services.events.tick()
+    view = await services.events.spawn(CHAT, "campfire")
+    gold = (await services.players.require(30)).gold
+    view = await services.events.drink(view.id, a)
+    assert (await services.players.require(30)).gold > gold and "آتش‌گاه" in events_ui.text_for(view)
+    with pytest.raises(GameError, match="یک بار"):
+        await services.events.drink(view.id, a)
+    clock.advance(10_000)
+    await services.events.tick()
+    view = await services.events.spawn(CHAT, "ore_vein")
+    view, item = await services.events.collect(view.id, a)
+    assert item in {i for i, _ in ORE_LOOT} and "رگه" in events_ui.text_for(view)
+
+
 async def test_rare_boss_alert_goes_to_eligible_group_members_only(h, services, db):
     from eternal_realm.game.services.events import EventAction
 

@@ -103,20 +103,23 @@ def event_buttons(view) -> Rows | None:  # noqa: ANN001 - EventView
         return grid([Button.inline(spot.name, EventCb(action="search", id=view.id, arg=i)) for i, spot in spots], 2)
     if view.kind == "invasion":
         return [[Button.inline("⚔️ دفاع از قلمرو", EventCb(action="defend", id=view.id), style="danger")]]
-    if view.kind == "meteor":
-        return [[Button.inline("⛏️ برداشتن تکه", EventCb(action="collect", id=view.id), style="success")]]
-    if view.kind == "gold_rain":
-        return [[Button.inline("🪙 برداشتن سکه", EventCb(action="grab", id=view.id), style="success")]]
-    if view.kind == "spring":
-        return [[Button.inline("💧 نوشیدن", EventCb(action="drink", id=view.id), style="success")]]
+    if view.kind in ("meteor", "ore_vein"):
+        label = "⛏️ برداشتن تکه" if view.kind == "meteor" else "⛏️ کندن رگه"
+        return [[Button.inline(label, EventCb(action="collect", id=view.id), style="success")]]
+    if view.kind in ("gold_rain", "star_fall"):
+        label = "🪙 برداشتن سکه" if view.kind == "gold_rain" else "⭐ گرفتن ستاره"
+        return [[Button.inline(label, EventCb(action="grab", id=view.id), style="success")]]
+    if view.kind in ("spring", "campfire"):
+        label = "💧 نوشیدن" if view.kind == "spring" else "🔥 کنار آتش نشستن"
+        return [[Button.inline(label, EventCb(action="drink", id=view.id), style="success")]]
     if view.kind == "wheel":
         return [[Button.inline("🎡 چرخاندن", EventCb(action="spin", id=view.id), style="success")]]
     if view.kind == "egg":
         return [[Button.inline("🔥 گرم کردن تخم", EventCb(action="warm", id=view.id), style="danger")]]
-    if view.kind == "riddle":
-        from ..game.data.group_games import RIDDLES
+    if view.kind in ("riddle", "quiz"):
+        from ..game.data.group_games import QUIZ, RIDDLES
 
-        question = RIDDLES[view.state["q"]]
+        question = (QUIZ if view.kind == "quiz" else RIDDLES)[view.state["q"]]
         options = [question[1], *question[2]]
         return grid([Button.inline(options[view.state["order"][i]], EventCb(action="answer", id=view.id, arg=i)) for i in range(4)], 2)
     if view.kind == "tiles":

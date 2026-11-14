@@ -54,11 +54,14 @@ LINE = "─" * 12
 
 
 def _work_line(city: City, now: int) -> str:
-    if city.builds:
-        w = city.builds[0]
+    lines = []
+    for w in city.builds:
         b = d.get_building(w.kind)
-        return f"🏗️ {b.name} ← سطح {fa(w.level)} · {duration(w.ready_at - now)} مانده"
-    return "🏗️ سازندگان بیکارند"
+        lines.append(f"🏗️ {b.name} ← سطح {fa(w.level)} · {duration(w.ready_at - now)} مانده")
+    idle = city.workers - len(city.builds)
+    if idle > 0:
+        lines.append("🏗️ سازندگان بیکارند" if city.workers == 1 else f"👷 {fa(idle)} کارگر بیکار از {fa(city.workers)}")
+    return "\n".join(lines)
 
 
 def _advice(city: City) -> str:
@@ -67,7 +70,7 @@ def _advice(city: City) -> str:
         return "🍞 فرمانده: مردم گرسنه‌اند؛ مزرعه را بالا ببرید یا بسته‌ی آذوقه بخرید."
     if prod["food"] < eaten:
         return "🌾 فرمانده: مصرف غذا از تولید بیشتر است؛ مزرعه را ارتقا دهید."
-    if not city.builds:
+    if len(city.builds) < city.workers:
         return "🏗️ فرمانده: سازندگان بیکارند؛ ساختمانی را ارتقا دهید."
     if not city.army and not city.training:
         return "⚔️ فرمانده: شهر بی‌لشکر است؛ در سربازخانه نیرو تربیت کنید."
@@ -438,8 +441,8 @@ async def city_building(c: Ctx) -> Screen:
                 have = city.amount(r)
                 ok = ok and have >= cost[r]
                 lines.append(f"{d.RES_INFO[r][0]} {d.RES_INFO[r][1]}: {fa(cost[r])} (دارید {fa(have)})")
-        if city.builds:
-            lines += ["", "🔨 سازندگان مشغول کار دیگری هستند؛ از «صف کارها» تسریعش کنید."]
+        if len(city.builds) >= city.workers:
+            lines += ["", "🔨 همه‌ی سازندگان مشغول‌اند؛ از «صف کارها» تسریع کنید" + ("." if city.workers >= d.MAX_WORKERS else " یا از «خزانه قلمرو» کارگر بگیرید.")]
         elif ok:
             rows.append([c.btn(f"✅ {'ارتقا به سطح ' + fa(level + 1) if level else 'ساخت'}", "citybok", b.id, style="success")])
         else:
@@ -1031,8 +1034,9 @@ async def city_queue(c: Ctx) -> Screen:
         b = d.get_building(w.kind)
         lines.append(f"{b.emoji} {b.name} ← سطح {fa(w.level)} · {duration(w.ready_at - now)} مانده")
         rows.append([c.btn(f"💎 تکمیل {b.name} · {fa(d.rush_crystals(w.ready_at - now))} کریستال", "cityrushq", "build", w.id)])
-    if not city.builds:
-        lines.append("سازندگان بیکارند؛ از «ساختمان‌ها» کاری بسپارید.")
+    lines.append(f"👷 کارگران: {fa(len(city.builds))} مشغول از {fa(city.workers)}")
+    if len(city.builds) < city.workers:
+        lines.append("کارگر بیکار داریم؛ از «ساختمان‌ها» کاری بسپارید.")
     lines += ["", f"⚔️ {bold('آموزش سربازان')}"]
     for w in city.training:
         t = d.get_troop(w.kind)
@@ -1041,6 +1045,8 @@ async def city_queue(c: Ctx) -> Screen:
     if not city.training:
         lines.append("آموزشگاه خالی است.")
     total = c.services.city.rush_price(city, now)
+    if city.workers < d.MAX_WORKERS:
+        rows.append([c.btn("👷 استخدام کارگر تازه", "prem", "workers")])
     lines += ["", f"💎 کریستال شما: {fa(c.player.crystal)}", "هر ۱۰ دقیقه کار، یک کریستال است."]
     if total:
         rows.insert(0, [c.btn(f"⚡ تکمیل همه‌ی کارها · {fa(total)} کریستال", "cityrushq", "all", 0, style="success")])

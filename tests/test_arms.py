@@ -118,12 +118,8 @@ def test_catalogue_size_balance_and_data_integrity():
     assert max(prices[1]) < min(prices[3]) and max(prices[3]) < min(prices[5])  # rarer costs more
 
 
-def test_every_piece_is_also_sold_for_real_money_at_the_coin_price():
-    for arm in (a for a in ARMS.values() if not a.boss):
-        pack = PACKS[arms_data.pack_id(arm.id)]
-        assert pack.arms == {arm.id: 1} and pack.price_rial == arm.rial and pack.section == "arms"
-        assert arm.rial >= arm.price * arms_data.RIAL_PER_COIN or arm.rial == arms_data.MIN_RIAL
-        assert pack.price_rial % 10 == 0
+def test_no_piece_of_gear_is_sold_for_real_money():
+    assert not any(p.arms or p.section == "arms" for p in PACKS.values())
 
 
 # --- buying and equipping ------------------------------------------------------------------------------------------------------------
@@ -208,15 +204,6 @@ async def test_cannot_change_gear_during_a_fight(services, db):
         )
     with pytest.raises(GameError, match="وسط نبرد"):
         await services.arms.equip(p, 1, "iron_blade")
-
-
-async def test_real_money_order_delivers_the_piece(services, db):
-    p = await hero(services, db, gold=0)
-    pack = PACKS["arm_ruby_ring"]
-    order = await services.payments.create_order(p, pack.id)
-    assert order.amount == pack.price_rial
-    await services.payments.complete(10, order.payload, order.amount, "charge-arm")
-    assert (await services.arms.owned(p.id))["ruby_ring"] == 1
 
 
 # --- cooldowns, counted in turns ------------------------------------------------------------------------------------------------------
@@ -530,7 +517,7 @@ async def test_arms_screens_flow(h, services, db):
     assert len([b for b in h.labels() if any(e in b for e, _ in CATEGORIES.values())]) >= 6
     await h.panel(10, "armcat", "weapon")
     await h.panel(10, "armview", "iron_blade")
-    assert "تیغ آهنین" in h.session.last_text() and any("تومان" in b for b in h.labels())
+    assert "تیغ آهنین" in h.session.last_text() and any("سکه" in b for b in h.labels())
     me = await services.players.require(10)
     await give(services, db, me, "iron_blade")
     await h.panel(10, "armput", "iron_blade")
@@ -550,13 +537,13 @@ async def test_gear_screens_are_private_only(h, services, db):
 
 
 # --- the cheap pieces can also be bought with coins (a lot of them) ------------------------------------------------------------------
-def test_only_common_and_uncommon_pieces_have_a_coin_price_and_it_is_over_a_hundred_thousand():
-    cheap = [a for a in ARMS.values() if a.coin_price is not None]
-    assert cheap and all(a.rarity <= 2 and not a.boss for a in cheap)
-    assert all(a.coin_price > 100_000 for a in cheap)
-    assert all(a.coin_price is None for a in ARMS.values() if a.rarity >= 3 or a.boss)  # rare, epic, legendary, mythic: money only
-    assert {a.rarity for a in cheap} == {1, 2}
-    assert max(a.coin_price for a in cheap) < 160_000  # expensive, but not out of reach for a loyal player
+def test_every_piece_but_the_boss_drops_has_a_coin_price_over_a_hundred_thousand_and_rarer_costs_more():
+    buyable = [a for a in ARMS.values() if a.coin_price is not None]
+    assert {a.rarity for a in buyable} == {1, 2, 3, 4, 5, 6}
+    assert all(a.coin_price > 100_000 and not a.boss for a in buyable)
+    assert all(a.coin_price is None for a in ARMS.values() if a.boss)
+    by_rarity = {r: [a.coin_price for a in buyable if a.rarity == r] for r in range(1, 7)}
+    assert all(max(by_rarity[r]) <= min(by_rarity[r + 1]) for r in range(1, 6))
 
 
 async def test_buying_cheap_gear_with_coins_charges_the_price_and_the_rest_is_refused(services, db):
@@ -567,7 +554,7 @@ async def test_buying_cheap_gear_with_coins_charges_the_price_and_the_rest_is_re
     await services.arms.buy(await services.players.require(10), "iron_blade", 2)  # any number
     assert (await services.arms.owned(p.id))["iron_blade"] == 3
     gold = (await services.players.require(10)).gold
-    for rare in ("ruby_ring", "dragon_slayer", "doom_blade", "b_fire", "nope"):
+    for rare in ("b_fire", "nope"):
         with pytest.raises(GameError):
             await services.arms.buy(await services.players.require(10), rare)
     assert (await services.players.require(10)).gold == gold
@@ -577,13 +564,13 @@ async def test_buying_cheap_gear_with_coins_charges_the_price_and_the_rest_is_re
     assert not await services.arms.owned(poor.id)
 
 
-async def test_the_gear_card_shows_the_coin_button_only_for_cheap_pieces(h, services, db):
+async def test_the_gear_card_shows_only_the_coin_button(h, services, db):
     await hero(services, db, gold=500_000)
     await h.say(10, "/start")
     await h.panel(10, "armview", "iron_blade")
-    assert any("خرید با سکه" in b for b in h.labels()) and any("پول واقعی" in b for b in h.labels())
+    assert any("خرید با سکه" in b for b in h.labels()) and not any("پول واقعی" in b for b in h.labels())
     await h.panel(10, "armbuy", "iron_blade")
     me = await services.players.require(10)
     assert (await services.arms.owned(me.id)).get("iron_blade") == 1
     await h.panel(10, "armview", "ruby_ring")
-    assert not any("خرید با سکه" in b for b in h.labels()) and "فقط با پول واقعی" in h.session.last_text()
+    assert any("خرید با سکه" in b for b in h.labels())

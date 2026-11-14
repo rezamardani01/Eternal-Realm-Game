@@ -26,6 +26,8 @@ SUMMON_WORDS = {
     "تهاجم": "invasion", "شهاب": "meteor", "شهاب‌سنگ": "meteor", "شهاب سنگ": "meteor",
     "ستاره تجربه": "double_xp", "تجربه دوبرابر": "double_xp", "باس مخفی": "hidden_boss",
     "باران سکه": "gold_rain", "چشمه": "spring", "چرخ شانس": "wheel", "تخم اژدها": "egg", "تخم": "egg",
+    "کوئیز": "quiz", "پرسش": "quiz", "ستاره باران": "star_fall", "ستاره‌باران": "star_fall",
+    "آتش": "campfire", "آتشگاه": "campfire", "رگه": "ore_vein", "معدن": "ore_vein",
     "معما": "riddle", "کاشی": "tiles", "کاشی شانس": "tiles", "قرعه کشی": "raffle", "قرعه‌کشی": "raffle",
 }
 

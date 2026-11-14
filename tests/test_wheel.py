@@ -62,7 +62,7 @@ async def test_buying_a_pack_adds_spins_and_spinning_pays(services, db, h):
 async def test_the_wheel_screens_and_the_spin(h, services, db):
     p = await hero(services)
     await h.panel(7, "premium")
-    assert h.session.last_markup_rows()[0][0]["text"].endswith("گردونه شانس")  # the top row of the treasury
+    assert h.session.last_markup_rows()[1][0]["text"].endswith("گردونه شانس")  # right under the starter pack
     await h.panel(7, "wheel")
     text = h.session.last_text()
     assert "گردونه شانس" in text and "هیچ چرخشی پوچ نیست" in text and "۱۰٬۴۰۰ تومان" in text

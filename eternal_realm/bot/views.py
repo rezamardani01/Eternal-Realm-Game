@@ -268,7 +268,7 @@ def help_pages(balance) -> dict[str, tuple[str, str]]:  # noqa: ANN001 - Balance
             f"⚔️ {bold('تجهیزات قهرمان')}",
             "«تجهیزات» را بنویسید؛ چهار جایگاه دارد و هر قطعه اثر ویژه‌ی خودش را دارد.",
             "🔁 بیرون از نبرد هر وقت خواستید عوضشان کنید؛ هر قطعه تا +۱۰ ارتقا می‌خورد.\n🎯 ویژگی‌ها و 🧬 استعدادها هم از همین‌جا باز می‌شوند.",
-            "🛒 تجهیزات را با پول واقعی از «خزانه قلمرو» می‌خرید؛ معمولی و غیرمعمول‌ها را با سکه هم می‌شود خرید (بالای ۱۰۰ هزار سکه). تجهیزات کم‌ارزش‌تر را گاهی هم از شکار، سفر، صندوقچه و باس‌ها پیدا می‌کنید.",
+            "🛒 تجهیزات را فقط با سکه از «خزانه قلمرو» می‌خرید (از بالای ۱۰۰ هزار سکه تا میلیون‌ها). تجهیزات کم‌ارزش‌تر را گاهی هم از شکار، سفر، صندوقچه و باس‌ها پیدا می‌کنید.",
         )),
         "market": ("🏪 بازار و فروشگاه", page(
             f"🏪 {bold('بازار و فروشگاه')}",
@@ -588,6 +588,22 @@ def chests_opened_all(name: str, total) -> str:  # noqa: ANN001 - OpenedAll
 
 # --- premium shop and payments -----------------------------------------------------------------
 def pack_description(pack, now: int | None = None) -> str:  # noqa: ANN001 - Pack
+    """What a pack holds, with the gift thrown in with the big ones on a line of its own."""
+    text = _pack_base_description(pack, now)
+    if not pack.has_bonus:
+        return text
+    from ..game.data.items import get_item
+
+    gifts = []
+    if pack.bonus_gold:
+        gifts.append(f"{fa(pack.bonus_gold)} سکه")
+    if pack.bonus_crystal:
+        gifts.append(f"{fa(pack.bonus_crystal)} کریستال")
+    gifts += [f"{get_item(i).name} ×{fa(q)}" for i, q in pack.bonus_items.items()]
+    return text + "\n🎁 اشانتیون: " + "، ".join(gifts)
+
+
+def _pack_base_description(pack, now: int | None = None) -> str:  # noqa: ANN001 - Pack
     from ..game.data import lucky
     from ..game.data.items import get_item
 
@@ -607,6 +623,25 @@ def pack_description(pack, now: int | None = None) -> str:  # noqa: ANN001 - Pac
         if pack.city_shield_hours:
             parts.append(f"سپر دفاعی {fa(pack.city_shield_hours)} ساعته")
         return "شامل (مستقیم به شهر دهکده شما می‌رسد): " + "، ".join(parts)
+    if pack.workers:
+        return (
+            f"شامل: کارگر شماره‌ی {fa(pack.workers)} برای دهکده‌ی شما.\n"
+            "هر کارگر هم‌زمان یک ساختمان را می‌سازد یا ارتقا می‌دهد؛ برای خرید، باید کارگر قبلی را داشته باشید."
+        )
+    if pack.once:
+        from ..game.data.items import get_item as _item
+
+        got = [f"{fa(pack.xp)} تجربه (تا حدود سطح ۵۰)"]
+        if pack.gold:
+            got.append(f"{fa(pack.gold)} سکه")
+        if pack.crystal:
+            got.append(f"{fa(pack.crystal)} کریستال")
+        got += [f"{_item(i).name} ×{fa(q)}" for i, q in pack.items.items()]
+        if pack.boost_hours:
+            got.append(f"بوست دو برابر {fa(pack.boost_hours)} ساعته")
+        if pack.vip_days:
+            got.append(f"{fa(pack.vip_days)} روز VIP")
+        return "شامل: " + "، ".join(got) + f"\nفقط یک بار و فقط برای قهرمان‌های تا سطح {fa(pack.max_level)}."
     if pack.spins:
         return f"شامل: {fa(pack.spins)} فرصت چرخش گردونه شانس با جایزه‌های ارزشمند"
     parts = []
@@ -902,17 +937,17 @@ def event_text(view) -> str:  # noqa: ANN001 - EventView
         return _hidden_chest_text(view)
     if view.kind == "invasion":
         return _invasion_text(view)
-    if view.kind == "meteor":
+    if view.kind in ("meteor", "ore_vein"):
         return _meteor_text(view)
-    if view.kind == "gold_rain":
+    if view.kind in ("gold_rain", "star_fall"):
         return _rain_text(view)
-    if view.kind == "spring":
+    if view.kind in ("spring", "campfire"):
         return _spring_text(view)
     if view.kind == "wheel":
         return _wheel_text(view)
     if view.kind == "egg":
         return _egg_text(view)
-    if view.kind == "riddle":
+    if view.kind in ("riddle", "quiz"):
         return _riddle_text(view)
     if view.kind == "tiles":
         return _tiles_text(view)
@@ -922,22 +957,26 @@ def event_text(view) -> str:  # noqa: ANN001 - EventView
 
 
 def _riddle_text(view) -> str:  # noqa: ANN001 - EventView
-    from ..game.data.group_games import RIDDLES
+    from ..game.data.group_games import QUIZ, RIDDLES
 
     st = view.state
-    question, answer, _ = RIDDLES[st["q"]]
+    quiz = view.kind == "quiz"
+    question, answer, _ = (QUIZ if quiz else RIDDLES)[st["q"]]
     if view.status == "done":
         gains = [f"🪙 {fa(st['gold'])} سکه", "⭐ تجربه"] + (["💎 ۱ کریستال"] if st.get("crystal") else [])
         return (
-            f"🧠 {bold('معما حل شد!')}\n\n{question}\n\n✅ پاسخ: {bold(answer)}\n\n"
+            f"🧠 {bold('پاسخ درست داده شد!' if quiz else 'معما حل شد!')}\n\n{question}\n\n✅ پاسخ: {bold(answer)}\n\n"
             f"🏆 {st['winner']} زودتر از همه پاسخ داد و برد: {'، '.join(gains)}"
         )
     if view.status == "expired":
-        return f"🕸️ {bold('معما بی‌پاسخ ماند')}\n\n{question}\n\n✅ پاسخ: {bold(answer)}\n\nکسی آن را حل نکرد."
+        return f"🕸️ {bold('پرسش بی‌پاسخ ماند' if quiz else 'معما بی‌پاسخ ماند')}\n\n{question}\n\n✅ پاسخ: {bold(answer)}\n\nکسی آن را حل نکرد."
+    if quiz:
+        intro = f"📚 {bold('کوئیز قلمرو!')}\n\nمعلم قلمرو پرسشی پیش پای گروه گذاشته. اولین کسی که درست جواب دهد، جایزه را می‌برد.\n\n"
+    else:
+        intro = f"🧠 {bold('معمای کاروان!')}\n\nفرزانه‌ای دوره‌گرد معمایی پیش پای گروه گذاشته. اولین کسی که درست جواب دهد، جایزه را می‌برد.\n\n"
     return (
-        f"🧠 {bold('معمای کاروان!')}\n\n"
-        "فرزانه‌ای دوره‌گرد معمایی پیش پای گروه گذاشته. اولین کسی که درست جواب دهد، جایزه را می‌برد.\n\n"
-        f"❓ {question}\n\n"
+        intro
+        + f"❓ {question}\n\n"
         f"🙋 حدس‌ها: {fa(len(st['at']))} نفر\n⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}\n"
         "👇 گزینه‌ی درست را بزنید (هر ۱۲ ثانیه یک حدس)"
     )
@@ -983,18 +1022,24 @@ def _raffle_text(view) -> str:  # noqa: ANN001 - EventView
 
 def _rain_text(view) -> str:  # noqa: ANN001 - EventView
     st = view.state
+    stars = view.kind == "star_fall"
     if view.status == "active":
         lines = [
+            f"🌠 {bold('ستاره‌باران!')}", "",
+            "آسمان شب شکافته و ستاره‌های ریز بر سر گروه می‌ریزند؛ هر کدام کمی تجربه می‌دهد و گاهی یک کریستال.",
+            "هر نفر حداکثر ۴ ستاره می‌گیرد.", "",
+        ] if stars else [
             f"🌧️ {bold('باران سکه!')}", "",
             "ابرهای زرین بالای گروه باز شده‌اند و سکه از آسمان می‌بارد.",
             "هر نفر حداکثر ۴ مشت برمی‌دارد.", "",
         ]
     else:
-        lines = [f"☀️ {bold('باران سکه تمام شد')}", ""]
-    lines.append(f"🪙 مشت‌های مانده: {fa(st['left'])}")
+        lines = [f"🌌 {bold('ستاره‌باران تمام شد')}", ""] if stars else [f"☀️ {bold('باران سکه تمام شد')}", ""]
+    lines.append(f"⭐ ستاره‌های مانده: {fa(st['left'])}" if stars else f"🪙 مشت‌های مانده: {fa(st['left'])}")
     if st["taken"]:
         top = sorted(st["gold"].items(), key=lambda kv: -kv[1])[:5]
-        lines += ["", f"🏅 {bold('پرسودترین‌ها')}", *tidy_list([(st["names"][pid], [f"🪙 {fa(g)} سکه"]) for pid, g in top], 5)]
+        unit = "⭐ {} تجربه" if stars else "🪙 {} سکه"
+        lines += ["", f"🏅 {bold('پرسودترین‌ها')}", *tidy_list([(st["names"][pid], [unit.format(fa(g))]) for pid, g in top], 5)]
     if view.status == "active":
         lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "👇 زود باشید"]
     return "\n".join(lines)
@@ -1002,19 +1047,25 @@ def _rain_text(view) -> str:  # noqa: ANN001 - EventView
 
 def _spring_text(view) -> str:  # noqa: ANN001 - EventView
     st = view.state
+    fire = view.kind == "campfire"
     if view.status == "active":
         lines = [
+            f"🔥 {bold('آتش‌گاه شبانه روشن شد!')}", "",
+            "کاروانیان آتشی افروخته‌اند و داستان می‌گویند. هر که کنارش بنشیند، انرژی‌اش کامل می‌شود و کمی تجربه و سکه می‌گیرد.",
+            "جا برای چند نفر اول است و هر نفر یک بار می‌نشیند.", "",
+            f"👥 جای خالی: {fa(st['left'])}",
+        ] if fire else [
             f"💧 {bold('چشمه‌ی برکت پیدا شد!')}", "",
             "هر که از آب این چشمه بنوشد، انرژی‌اش کامل می‌شود و کمی تجربه می‌گیرد.",
             "جا برای چند نفر اول است و هر نفر یک بار می‌نوشد.", "",
             f"👥 جای خالی: {fa(st['left'])}",
         ]
     else:
-        lines = [f"🌙 {bold('چشمه خشک شد')}", ""]
+        lines = [f"🌙 {bold('آتش‌گاه خاموش شد' if fire else 'چشمه خشک شد')}", ""]
     if st["names"]:
-        lines += ["", f"💧 {bold('نوشندگان')}", *[f"🔹 {name}" for name in st["names"].values()]]
+        lines += ["", f"{'🔥' if fire else '💧'} {bold('نشستگان' if fire else 'نوشندگان')}", *[f"🔹 {name}" for name in st["names"].values()]]
     if view.status == "active":
-        lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "👇 بنوشید"]
+        lines += ["", f"⏳ زمان باقی‌مانده: {_clock(view.seconds_left)}", "👇 بنشینید" if fire else "👇 بنوشید"]
     return "\n".join(lines)
 
 
@@ -1117,13 +1168,20 @@ def _invasion_text(view) -> str:  # noqa: ANN001 - EventView
 
 def _meteor_text(view) -> str:  # noqa: ANN001 - EventView
     st = view.state
+    vein = view.kind == "ore_vein"
     lines = []
     if view.status == "active":
         lines = [
+            f"⛏️ {bold('رگه‌ی معدن پیدا شد!')}", "",
+            f"کارگران در {st['region']} رگه‌ای پر از سنگ و فلز یافتند.",
+            "لقمه‌ها محدودند؛ هر کس زودتر برسد برمی‌دارد (حداکثر ۳ تکه برای هر نفر).", "",
+        ] if vein else [
             f"☄️ {bold('شهاب‌سنگ سقوط کرد!')}", "",
             f"سنگی آسمانی در {st['region']} فرود آمد و تکه‌هایش پر از مواد کمیاب است.",
             "تکه‌ها محدودند؛ هر کس زودتر برسد برمی‌دارد (حداکثر ۳ تکه برای هر نفر).", "",
         ]
+    elif vein:
+        lines = [f"🕳️ {bold('رگه‌ی معدن خالی شد')}", "", "دیگر چیزی در آن نمانده."]
     else:
         lines = [f"🌌 {bold('شهاب‌سنگ خاموش شد')}", "", "دیگر چیزی از آن نمانده."]
     lines.append(f"💎 تکه‌های مانده: {fa(st['left'])}")
@@ -1143,7 +1201,8 @@ def events_overview(views_, double_xp: bool) -> str:  # noqa: ANN001
                      "double_xp": "✨ تجربه‌ی دوبرابر", "hidden_chest": "🗝️ صندوقچه‌ی مخفی",
                      "invasion": "🚨 تهاجم هیولاها", "meteor": "☄️ شهاب‌سنگ", "gold_rain": "🌧️ باران سکه",
                      "spring": "💧 چشمه‌ی برکت", "wheel": "🎡 چرخ شانس", "egg": "🥚 تخم اژدها", "riddle": "🧠 معمای کاروان",
-                     "tiles": "🔲 کاشی‌های شانس", "raffle": "🎟️ قرعه‌کشی بزرگ"}.get(v.kind, v.kind)
+                     "tiles": "🔲 کاشی‌های شانس", "raffle": "🎟️ قرعه‌کشی بزرگ", "quiz": "📚 کوئیز قلمرو",
+                     "star_fall": "🌠 ستاره‌باران", "campfire": "🔥 آتش‌گاه شبانه", "ore_vein": "⛏️ رگه‌ی معدن"}.get(v.kind, v.kind)
             lines.append(f"• {label} — {duration(v.seconds_left)} مانده")
         lines.append("")
     else:

@@ -1033,6 +1033,8 @@ PREMIUM_SECTIONS = {
     "boost": ("🚀", "بوست دو برابر", "تا پایان بوست، دریافتی‌هایتان دو برابر می‌شود."),
     "city": ("🏰", "منابع دهکده", "سکه، غذا، چوب، سنگ و آهن برای شهرتان؛ مستقیم به انبار شهر می‌رسد و ساخت‌وساز، ارتقا و لشکرسازی را سریع‌تر می‌کند."),
     "xp": ("⭐", "بسته‌های تجربه", "سریع‌تر سطح بالا بروید و زودتر به آیتم‌ها و مرحله‌های تازه برسید."),
+    "starter": ("🚀", "بسته‌ی شروع قهرمان", "مخصوص قهرمان‌های تازه‌کار؛ یک خرید و تا حدود سطح ۵۰ بالا می‌روید، با کلی سکه، کریستال، صندوقچه و بوست."),
+    "workers": ("👷", "کارگر دهکده", "هر کارگر هم‌زمان یک ساختمان را می‌سازد. دهکده با یک کارگر شروع می‌شود و تا ۴ کارگر می‌توانید بگیرید؛ هر کارگر از قبلی گران‌تر است."),
 }
 BUY_HINT = "👇 یک بسته را بزنید؛ فاکتور پرداخت بله برایتان می‌آید"
 
@@ -1057,6 +1059,7 @@ async def premium(c: Ctx) -> Screen:
         "👇 یک بخش را انتخاب کنید",
     ])
     rows = [
+        [c.btn("🚀 بسته‌ی شروع قهرمان", "prem", "starter", style="success")],
         [c.btn("🎡 گردونه شانس", "wheel", style="success")],
         [c.btn("⚔️ تجهیزات جنگی قهرمان", "armshop", style="primary")],
         [c.btn("🪙 خرید سکه", "prem", "coins"), c.btn("💎 خرید کریستال", "prem", "crystals")],
@@ -1066,6 +1069,7 @@ async def premium(c: Ctx) -> Screen:
         [c.btn("🎫 خدمات قهرمان", "prem", "services"), c.btn("🎟️ مسیر قهرمانی", "prem", "path")],
         [c.btn("🚀 بوست دو برابر", "prem", "boost", style="primary"), c.btn("⭐ بسته‌های تجربه", "prem", "xp", style="primary")],
         [c.btn("💠 اشتراک VIP", "vip"), c.btn("🏰 منابع دهکده", "prem", "city")],
+        [c.btn("👷 کارگر دهکده", "prem", "workers")],
         [c.btn("🏷️ تخفیف‌های امروز", "deals", style="success")],
         c.back("home"),
     ]
@@ -1210,7 +1214,7 @@ async def premium_section(c: Ctx) -> Screen:
         lines.append("🔒 خرید با پول واقعی فعلاً بسته است؛ با بازی کردن هم می‌توانید به این‌ها برسید!")
     else:
         for pack in (x for x in PACKS.values() if x.section == c.a and not x.lucky):
-            if c.a in ("bundles", "city") or pack.id.startswith("kit_"):  # these hide their contents in the button, so say them here
+            if c.a in ("bundles", "city", "starter", "workers") or pack.has_bonus or pack.id.startswith("kit_"):  # these hide their contents in the button, so say them here
                 lines += [f"{pack.emoji} {bold(pack.title)} · {fa(pack.price_toman)} تومان", f"🎁 {views.pack_description(pack, c.services.ctx.now()).removeprefix('شامل: ')}", ""]
             rows.append([Button.inline(f"{pack.label} — {fa(pack.price_toman)} تومان", BuyCb(kind="cash", id=pack.id), style="success")])
         if c.a == "bundles":

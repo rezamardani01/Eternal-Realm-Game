@@ -362,6 +362,37 @@ async def test_paid_city_packs_resources_shields_and_the_storage_limit(services,
     assert {o.pack.id for o in sold} >= {"city_res_l", "city_shield_72"}
 
 
+async def test_extra_workers_are_bought_in_steps_and_build_at_the_same_time(services, db, clock):
+    from eternal_realm.game.data.packs import PACKS
+
+    assert PACKS["worker_2"].price_rial < PACKS["worker_3"].price_rial < PACKS["worker_4"].price_rial
+    p, city = await make_city(services, db, 5, "پارسیان")
+    await stock(db, city.id, gold=900_000, wood=900_000, stone=900_000, iron=900_000)
+    assert (await services.city.mine(p)).workers == 1
+    await services.city.build(p, "castle")
+    with pytest.raises(GameError, match="همه‌ی کارگران مشغول"):
+        await services.city.build(p, "warehouse")
+    with pytest.raises(GameError, match="اول کارگر شماره‌ی ۲"):
+        await services.payments.create_order(p, "worker_3")  # the steps cannot be skipped
+    delivery = await buy(services, p, "worker_2", 5)
+    assert "کارگر شماره‌ی ۲" in delivery.granted and (await services.city.mine(p)).workers == 2
+    with pytest.raises(GameError, match="از قبل"):
+        await services.payments.create_order(p, "worker_2")
+    await services.city.build(p, "warehouse")  # two buildings at once
+    with pytest.raises(GameError, match="همین حالا در حال ساخت"):
+        await services.city.build(p, "warehouse")
+    with pytest.raises(GameError, match="همه‌ی کارگران مشغول"):
+        await services.city.build(p, "market")
+    await buy(services, p, "worker_3", 5)
+    await buy(services, p, "worker_4", 5)
+    assert (await services.city.mine(p)).workers == 4
+    nocity = await hero(services, db, 6, "بی‌شهر")
+    with pytest.raises(GameError, match="شهرتان را بنا کنید"):
+        await services.payments.create_order(nocity, "worker_2")
+    with pytest.raises(GameError, match="خودش"):
+        await services.payments.create_gift_order(p, nocity.id, "worker_2", 1)
+
+
 async def test_the_boost_doubles_what_the_city_produces(services, db, clock):
     a, ca = await make_city(services, db, 1, "آذرگان")
     b, cb = await make_city(services, db, 2, "شیرکوه")

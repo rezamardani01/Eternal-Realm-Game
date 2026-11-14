@@ -91,6 +91,25 @@ class PaymentService:
                 raise GameError("بلیط این فصل را از قبل دارید؛ خرید دوباره لازم نیست و پولی کسر نشد.")
         if pack.xp and player.level >= self.ctx.balance.max_level:
             raise GameError("قهرمان شما به بالاترین سطح رسیده و تجربه‌ی بیشتری نمی‌گیرد؛ پولی کسر نشد.")
+        if pack.once:
+            async with self.ctx.db.read() as tx:
+                bought = await tx.scalar(
+                    "SELECT 1 FROM orders WHERE player_id = ? AND pack_id = ? AND status IN ('paid', 'delivered')",
+                    (player.id, pack.id), 0,
+                )
+            if bought:
+                raise GameError("این بسته را قبلاً گرفته‌اید؛ فقط یک بار خریدنی است و پولی کسر نشد.")
+            if pack.max_level and player.level > pack.max_level:
+                raise GameError(f"این بسته مخصوص قهرمان‌های تا سطح {fa(pack.max_level)} است؛ پولی کسر نشد.")
+        if pack.workers:
+            async with self.ctx.db.read() as tx:
+                have = await tx.scalar("SELECT workers FROM cities WHERE player_id = ?", (player.id,), 0)
+            if not have:
+                raise GameError("اول در «دهکده من» شهرتان را بنا کنید؛ کارگر برای شهر است و پولی از شما کسر نشد.")
+            if have >= pack.workers:
+                raise GameError("این کارگر را از قبل دارید؛ پولی کسر نشد.")
+            if have < pack.workers - 1:
+                raise GameError(f"اول کارگر شماره‌ی {fa(pack.workers - 1)} را بخرید؛ کارگرها پله‌پله استخدام می‌شوند. پولی کسر نشد.")
         if pack.city or pack.city_shield_hours:
             async with self.ctx.db.read() as tx:
                 have_city = await tx.scalar("SELECT 1 FROM cities WHERE player_id = ?", (player.id,), 0)
@@ -122,6 +141,8 @@ class PaymentService:
             raise GameError("چنین بسته‌ای در خزانه نیست.")
         from ..data.season import season_of
 
+        if pack.once or pack.workers:
+            raise GameError("این بسته را فقط خود قهرمان می‌تواند برای خودش بخرد.")
         if not 1 <= qty <= 10:
             raise GameError("تعداد هدیه باید بین ۱ تا ۱۰ باشد.")
         if target_id == payer.id:
@@ -228,7 +249,9 @@ class PaymentService:
         base = ref_base or f"order:{order.id}"
         if await player_repo.get(tx, order.player_id) is None:
             raise GameError("بازیکن پیدا نشد.")
-        gold, crystal, items, granted = pack.gold, pack.crystal, dict(pack.items), ""
+        gold, crystal, items, granted = pack.gold + pack.bonus_gold, pack.crystal + pack.bonus_crystal, dict(pack.items), ""
+        for item_id, qty in pack.bonus_items.items():
+            items[item_id] = items.get(item_id, 0) + qty
         if pack.lucky:
             haul = lucky.roll(pack.id, lucky.theme_of_day(now), self.ctx.rng)
             gold, crystal, items = haul.gold, haul.crystal, haul.items
@@ -263,6 +286,9 @@ class PaymentService:
         if pack.spins:
             await tx.execute("UPDATE players SET wheel_spins = wheel_spins + ? WHERE id = ?", (pack.spins, order.player_id))
             granted = f"🎡 {fa(pack.spins)} فرصت گردونه شانس به شما رسید؛ همین حالا بچرخانید!"
+        if pack.workers:
+            await tx.execute("UPDATE cities SET workers = MAX(workers, ?) WHERE player_id = ?", (pack.workers, order.player_id))
+            granted = f"👷 کارگر شماره‌ی {fa(pack.workers)} به دهکده‌ی شما پیوست؛ حالا {fa(pack.workers)} ساختمان را هم‌زمان می‌سازید."
         if pack.vip_days:
             await tx.execute(
                 "UPDATE players SET vip_until = MAX(vip_until, ?) + ? WHERE id = ?",

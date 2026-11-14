@@ -43,5 +43,8 @@ REGIONS: tuple[str, ...] = ("🏔️ قله‌ی بادها", "🌲 جنگل ن�
 METEOR_LOOT: tuple[tuple[str, int], ...] = (
     ("crystal_shard", 45), ("gold_ore", 22), ("ancient_coin", 18), ("dragon_scale", 10), ("moon_herb", 5),
 )
+#: the ore vein (a meteor-like event in the mines): what its lumps hold, and where it opens
+ORE_LOOT: tuple[tuple[str, int], ...] = (("iron_ore", 50), ("gold_ore", 28), ("crystal_shard", 14), ("ancient_coin", 8))
+ORE_PLACES: tuple[str, ...] = ("⛏️ معدن فراموش‌شده", "🏔️ دره‌ی سنگ‌ها", "🕳️ چاه عمیق", "🌋 دامنه‌ی آتشفشان")
 METEOR_PIECES = 12
 METEOR_PER_PLAYER = 3

@@ -130,9 +130,9 @@ async def notify_new_tiers(bot: Bot, services: Services) -> int:
     async with services.ctx.db.transaction() as tx:
         rows = await tx.fetchall(
             "SELECT s.player_id, s.points, s.premium, p.platform_user_id AS uid FROM season_progress s"
-            " JOIN players p ON p.id = s.player_id WHERE s.season = ? AND s.points / ? > s.notified AND p.banned = 0"
+            " JOIN players p ON p.id = s.player_id WHERE s.season = ? AND MIN(s.points / ?, ?) > s.notified AND p.banned = 0"
             " LIMIT 200",
-            (season, POINTS_PER_TIER),
+            (season, POINTS_PER_TIER, TIERS),
         )
         for r in rows:
             tier = min(TIERS, r["points"] // POINTS_PER_TIER)

@@ -31,6 +31,8 @@ START_RESOURCES = {"gold": 3_000, "food": 3_000, "wood": 1_500, "stone": 1_500, 
 START_BUILDINGS = {"castle": 1, "farm": 1, "lumber": 1, "stone_mine": 1, "barracks": 1}
 START_POPULATION = 300
 MAX_CASTLE = 10
+#: a village starts with one builder and can hire three more in the realm treasury
+MAX_WORKERS = 4
 MAX_ELAPSED_HOURS = 48
 DAILY_ATTACKS = 8
 SAME_TARGET_PER_DAY = 2

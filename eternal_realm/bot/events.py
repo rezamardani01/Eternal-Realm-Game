@@ -105,11 +105,12 @@ async def on_event_button(query: CallbackQuery, callback_data: EventCb, services
     elif callback_data.action == "grab":
         view, gold = await services.events.grab(callback_data.id, player)
         await _show(query, view)
-        await query.answer(f"🪙 {fa(gold)} سکه برداشتید!")
+        before = await services.events.get(callback_data.id)
+        await query.answer(f"⭐ {fa(gold)} تجربه گرفتید!" if before and before.kind == "star_fall" else f"🪙 {fa(gold)} سکه برداشتید!")
     elif callback_data.action == "drink":
         view = await services.events.drink(callback_data.id, player)
         await _show(query, view)
-        await query.answer("💧 انرژی‌تان کامل شد!")
+        await query.answer("🔥 انرژی‌تان کامل شد و گرم شدید!" if view.kind == "campfire" else "💧 انرژی‌تان کامل شد!")
     elif callback_data.action == "spin":
         view, prize = await services.events.spin(callback_data.id, player)
         await _show(query, view)

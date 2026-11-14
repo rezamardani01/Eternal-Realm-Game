@@ -1047,6 +1047,10 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE online_queue ADD COLUMN power INTEGER NOT NULL DEFAULT 0;
     """,
+    # 64: bought builders: a city starts with one and can hire up to three more
+    """
+    ALTER TABLE cities ADD COLUMN workers INTEGER NOT NULL DEFAULT 1;
+    """,
 ]
 
 

@@ -36,7 +36,7 @@ async def add(db, services, player, deed, times=1):
 def test_the_ticket_costs_49900_toman_and_the_path_has_100_tiers():
     assert PACKS["season_ticket"].price_toman == 64_900 and TIERS == 100
     assert any(reward_for("free", t) for t in range(1, TIERS + 1))
-    assert reward_for("ticket", 100).title == "اسطوره‌ی فصل" and reward_for("ticket", 5).crystal == 5
+    assert reward_for("ticket", 100).title == "اسطوره‌ی فصل" and reward_for("ticket", 5).crystal == 8
     assert all(reward_for("ticket", t) for t in range(1, TIERS + 1))
 
 
@@ -113,7 +113,7 @@ async def test_glass_flow(h, services, db):
 
 
 def test_tier_one_matches_the_sketch_and_cards_come_with_golden_tiers():
-    assert reward_for("free", 1).gold == 23 and reward_for("ticket", 1).gold == 110
+    assert reward_for("free", 1).gold == 68 and reward_for("ticket", 1).gold == 290
     golden_cards = [t for t in range(1, TIERS + 1) if reward_for("ticket", t).cards]
     assert golden_cards and all(t % 4 == 0 for t in golden_cards)
     assert any("کارت" in line for line in reward_for("ticket", 4).lines())
@@ -141,10 +141,10 @@ async def test_tapping_a_reward_pays_the_free_track_and_marks_it(h, services, db
     gold = (await services.players.require(8)).gold
     await h.panel(8, "pathtiers", "1")
     await h.click(8, h.session.last_markup_rows()[1][0]["callback_data"])
-    assert (await services.players.require(8)).gold == gold + 23
+    assert (await services.players.require(8)).gold == gold + 68
     assert "✔" in h.session.last_markup_rows()[1][0]["text"]
     await h.click(8, h.session.last_markup_rows()[1][1]["callback_data"])  # the golden one needs the ticket
-    assert (await services.players.require(8)).gold == gold + 23
+    assert (await services.players.require(8)).gold == gold + 68
 
 
 async def test_a_golden_card_reward_lands_in_the_album(services, db):
@@ -170,6 +170,17 @@ async def test_new_tier_message_is_sent_once_per_tier(h, services, db):
     assert await notify_new_tiers(h.bot, services) == 0
     await add(db, services, p, "boss", 4)
     assert await notify_new_tiers(h.bot, services) == 1
+
+
+async def test_the_last_tier_message_is_not_repeated_when_points_go_past_the_end(h, services, db):
+    from eternal_realm.bot.path_panel import notify_new_tiers
+
+    p = await hero(services, db, 12, "مهسا")
+    await add(db, services, p, "boss", 340)  # 10200 points: past tier 100
+    assert await notify_new_tiers(h.bot, services) == 1
+    assert await notify_new_tiers(h.bot, services) == 0
+    await add(db, services, p, "boss", 3)
+    assert await notify_new_tiers(h.bot, services) == 0
 
 
 async def test_profile_shows_the_stats_in_the_text_and_only_hero_buttons(h, services, db):

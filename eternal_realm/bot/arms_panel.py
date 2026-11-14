@@ -3,9 +3,7 @@ realm treasury (reached from «خزانه قلمرو»). Everything is data from
 
 from __future__ import annotations
 
-from baleropy import Button
-
-from ..game.data.arms import CATEGORIES, CATEGORY_SHORT, MAX_EQUIPPED, MAX_UPGRADE, RARITIES, Arm, arms_of, get_arm, pack_id, plus, trait_text
+from ..game.data.arms import CATEGORIES, CATEGORY_SHORT, MAX_EQUIPPED, MAX_UPGRADE, RARITIES, Arm, arms_of, get_arm, plus, trait_text
 from ..game.data.growth import SKILL_LEVELS, SLOT_LEVELS, slots_open
 from ..game.data.classes import CLASSES
 from ..game.data.races import RACES
@@ -13,7 +11,6 @@ from ..game.data.skills import skills_for
 from ..shared.errors import GameError
 from ..shared.text import bold, fa
 from . import keyboards
-from .callbacks import BuyCb
 from .panel import Ctx, Screen, screen
 
 LINE = "─" * 12
@@ -93,7 +90,7 @@ async def arm_slot(c: Ctx) -> Screen:
     chunk = pieces[page * per:(page + 1) * per]
     lines = [f"{CIRCLED[slot - 1]} {bold('جایگاه ' + fa(slot))}", LINE, f"الان: {here.label if here else '— خالی —'}", ""]
     if not pieces:
-        lines.append("هنوز تجهیزاتی ندارید. از «خزانه قلمرو» با سکه یا پول واقعی بخرید 🛒")
+        lines.append("هنوز تجهیزاتی ندارید. از «خزانه قلمرو» با سکه بخرید 🛒")
     else:
         lines.append("یکی را برای این جایگاه انتخاب کنید 👇")
     rows = []
@@ -162,8 +159,8 @@ async def arm_shop(c: Ctx) -> Screen:
     owned = await c.services.arms.owned(p.id)
     lines = [
         f"🛒 {bold('تجهیزات جنگی')}", LINE, "",
-        "💳 همه‌ی تجهیزات را با پول واقعی می‌خرید. تجهیزات معمولی و غیرمعمول را با سکه هم می‌شود خرید، اما گران است (بالای ۱۰۰ هزار سکه).", "",
-        "🍀 بازیکن رایگان هم جا نمی‌ماند: تجهیزات معمولی و غیرمعمول را گاهی از شکار، سفر، صندوقچه و باس‌ها پیدا می‌کند.", "",
+        "🪙 همه‌ی تجهیزات را فقط با سکه‌ی بازی می‌خرید؛ هرچه کمیاب‌تر، گران‌تر (از بالای ۱۰۰ هزار سکه تا میلیون‌ها).", "",
+        "🍀 تجهیزات معمولی و غیرمعمول را گاهی هم از شکار، سفر، صندوقچه و باس‌ها پیدا می‌کنید.", "",
         "هر تعداد که بخواهید می‌توانید داشته باشید، اما فقط ۴ تا را هم‌زمان روی قهرمان می‌گذارید. 👇",
     ]
     rows = [
@@ -185,7 +182,7 @@ async def arm_category(c: Ctx) -> Screen:
     rows = []
     for arm in arms_of(c.a):
         have = f" · ×{fa(owned[arm.id])}" if arm.id in owned else ""
-        lines.append(f"{RARITIES[arm.rarity][0]} {arm.label} — 💳 {fa(arm.rial // 10)} تومان{have}")
+        lines.append(f"{RARITIES[arm.rarity][0]} {arm.label} — 🪙 {fa(arm.coin_price)} سکه{have}")
         rows.append(c.btn(f"{RARITIES[arm.rarity][0]} {arm.name}", "armview", arm.id))
     grid = keyboards.grid(rows, 2)
     grid.append(c.back("armshop"))
@@ -196,7 +193,6 @@ def _card_buttons(c: Ctx, arm: Arm, have: int) -> list[list]:
     rows = []
     if arm.coin_price is not None:
         rows.append([c.btn(f"🪙 خرید با سکه ({fa(arm.coin_price)})", "armbuy", arm.id, style="success")])
-    rows.append([Button.inline(f"💳 خرید با پول واقعی ({fa(arm.rial // 10)} تومان)", BuyCb(kind="cash", id=pack_id(arm.id)), style="primary" if arm.coin_price is None else None)])
     if have:
         rows.append([c.btn("✅ تجهیز کردن", "armput", arm.id, style="primary"), c.btn("⬆️ ارتقا", "armup", arm.id)])
     rows.append(c.back("armcat", "↩️ بازگشت", arm.cat))
@@ -210,11 +206,11 @@ async def arm_view(c: Ctx) -> Screen:
     p = await c.refresh()
     have = (await c.services.arms.owned(p.id)).get(arm.id, 0)
     level = (await c.services.arms.plus_of(p.id)).get(arm.id, 0)
-    text = f"{arm.card()}\n\n{LINE}\n💳 قیمت: {fa(arm.rial // 10)} تومان"
+    text = f"{arm.card()}\n\n{LINE}"
     if arm.coin_price is not None:
-        text += f"\n🪙 یا {fa(arm.coin_price)} سکه (کیف شما: {fa(p.gold)})"
+        text += f"\n🪙 قیمت: {fa(arm.coin_price)} سکه (کیف شما: {fa(p.gold)})"
     else:
-        text += "\n🔒 این تجهیزات کمیاب فقط با پول واقعی خریدنی است"
+        text += "\n🔒 این تجهیزات فقط از شکست دادن باس‌ها به دست می‌آید"
     if have:
         text += f"\n🎒 در کیف شما: ×{fa(have)}"
         text += f"\n⬆️ ارتقا: {plus(level) or '+۰'} از +{fa(MAX_UPGRADE)}"
