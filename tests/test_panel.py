@@ -120,9 +120,11 @@ async def test_a_panel_only_answers_to_its_owner(h, services):
 # --- start and menus ----------------------------------------------------------------------------
 async def test_start_shows_the_home_panel_with_glass_buttons(h, services):
     await reg(services)
+    async with services.ctx.db.transaction() as tx:
+        await tx.execute("UPDATE players SET level = 6")
     await h.say(10, "/start")
     labels = h.labels()
-    for name in ("قهرمان من", "دهکده من", "نبرد و چالش", "بازار و تجارت", "خاندان", "خزانه قلمرو", "ماجراجویی"):
+    for name in ("قهرمان من", "دهکده", "نبرد و چالش", "بازار و تجارت", "خاندان", "خزانه قلمرو", "ماجراجویی"):
         assert any(name in t for t in labels), name
     assert len(labels) <= 13  # categories, not a wall of buttons
 

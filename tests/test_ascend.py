@@ -71,6 +71,7 @@ async def test_glass_flow_and_profile_lines(h, services, db):
     await hero(services, db, 5, "رها")
     await h.say(5, "قلمرو")
     await h.tap(5, "قهرمان من")
+    await h.tap(5, "امکانات بیشتر")
     await h.tap(5, "ارتقای قهرمان")
     await h.tap(5, "انتخاب کلاس دوم")
     await h.click(5, h.button_data("جادوگر"))

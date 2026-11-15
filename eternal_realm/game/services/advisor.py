@@ -72,8 +72,15 @@ class AdvisorService:
                 out.append(Suggestion("🐉", f"قدرتتان به باس «{data.get_foe(boss.foe).name}» می‌رسد؛ امروز پاداش اولش را بگیرید", "sbossv", boss.foe))
                 break
         city = await self.city.mine(player, visit=False)
-        if city is not None and not city.builds:
-            out.append(Suggestion("🏗️", "سازندگان شهر بیکارند؛ ساختمانی را ارتقا دهید", "citybuild"))
+        if city is None and player.level >= self.ctx.balance.city_min_level:
+            out.insert(0, Suggestion("🏰", "هنوز دهکده نداری! دهکده بساز، لشکر تربیت کن و به شهرهای دیگر لشکر بکش", "city"))
+        elif city is not None:
+            if not city.army and not city.training:
+                out.insert(0, Suggestion("⚔️", "دهکده‌ات لشکر ندارد؛ سرباز تربیت کن تا بتوانی لشکرکشی کنی", "citytroops"))
+            elif city.army and city.att_count < 8:
+                out.insert(0, Suggestion("🗡️", "لشکرت آماده است؛ به یک شهر دیگر لشکر بکش و غنیمت بگیر", "cityatk"))
+            if len(city.builds) < city.workers:
+                out.append(Suggestion("🏗️", "سازندگان شهر بیکارند؛ ساختمانی را ارتقا دهید", "citybuild"))
         async with self.ctx.db.read() as tx:
             in_clan = await tx.scalar("SELECT 1 FROM clan_members WHERE player_id = ?", (player.id,), 0)
         if in_clan:

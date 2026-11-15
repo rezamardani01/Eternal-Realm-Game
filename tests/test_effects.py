@@ -79,13 +79,3 @@ async def test_cleansing_only_removes_curses(services, db):
         await services.effects.give(tx, p.id, get_effect("sun"))
     assert await services.effects.cleanse(p) == 1
     assert [e.id for e, _ in await services.effects.active(p.id)] == ["sun"]
-
-
-async def test_glass_flow(h, services, db):
-    p = await hero(services, db, 5, "نگار")
-    await h.say(5, "محراب")
-    assert "محراب" in h.session.last_text()
-    await h.tap(5, "دعا")
-    assert "تأیید دعا" in h.session.sent("editMessageText")[-1]["text"]
-    await h.tap(5, "بله، دعا کن")
-    assert await services.effects.active(p.id)

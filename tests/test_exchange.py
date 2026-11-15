@@ -70,6 +70,8 @@ async def test_poor_heroes_and_the_daily_limit(services, db, clock):
 
 async def test_the_screens(h, services, db):
     await rich(services, db, crystal=3)
+    async with db.transaction() as tx:
+        await tx.execute("UPDATE players SET level = 6")
     await h.panel(7, "home")
     assert any("بازار و تجارت" in label for label in h.labels())
     await h.panel(7, "trade")

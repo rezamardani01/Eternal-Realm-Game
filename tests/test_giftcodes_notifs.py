@@ -138,6 +138,8 @@ async def test_muted_categories_are_dropped_and_the_rest_still_arrive(services, 
 async def test_the_notification_screen_flips_each_switch_and_all_at_once(h, services):
     p = await hero(services, 42, "سارا")
     await h.panel(42, "profile")
+    assert "🧰 امکانات بیشتر" in h.labels()
+    await h.panel(42, "more")
     assert "🔔 اعلان‌ها" in h.labels() and "🎁 کد هدیه" in h.labels()
     await h.panel(42, "notifs")
     assert len([b for b in h.labels() if b.startswith(("✅", "⛔"))]) == len(notifs.CATEGORIES) + 1

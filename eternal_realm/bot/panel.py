@@ -205,6 +205,26 @@ def _greeting(now: int) -> str:
     return "شب قلمرو آرام"
 
 
+#: heroes under this level get the short home menu (the rest of the game opens as they grow)
+NEWBIE_LEVEL = 6
+
+
+@screen("more")
+async def more(c: Ctx) -> Screen:
+    """Everything that is not a main door: kept one tap away so the home menu stays short."""
+    text = f"🧰 {bold('امکانات بیشتر')}\n\nبقیه‌ی بخش‌های بازی اینجاست؛ هر وقت دلتان خواست سر بزنید 👇"
+    rows = [
+        [c.btn("🐱 حیوان خانگی", "pets"), c.btn("🃏 آلبوم کارت", "album")],
+        [c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")],
+        [c.btn("📅 مأموریت‌ها", "missions"), c.btn("🏅 دستاوردها", "ach")],
+        [c.btn("👥 دوستان", "friends"), c.btn("🏁 مسابقات", "contests")],
+        [c.btn("🤝 دعوت از دوستان", "invite", style="success"), c.btn("😴 استراحت", "rest")],
+        [c.btn("🎁 کد هدیه", "giftcode"), c.btn("🔔 اعلان‌ها", "notifs")],
+        c.back("home"),
+    ]
+    return Screen(text, rows)
+
+
 @screen("home")
 async def home(c: Ctx) -> Screen:
     p = c.player
@@ -225,18 +245,37 @@ async def home(c: Ctx) -> Screen:
         if c.services.bot_username:
             rows.append(keyboards.open_panel_button(c.services.bot_username))
         return Screen(text, rows)
-    rows = [
-        [c.btn("🗺️ ماجراجویی", "adv", style="primary"), c.btn("🧭 سفر قهرمان", "trip", style="primary")],
-        [c.btn("👤 قهرمان من", "profile"), c.btn("🏰 دهکده من", "city")],
-        [c.btn("⚔️ نبرد و چالش", "fight"), c.btn("🛒 بازار و تجارت", "trade")],
-        [c.btn("🏯 خاندان", "clan"), c.btn("💎 خزانه قلمرو", "premium")],
-        [c.btn("🎁 جایزه روزانه", "daily"), c.btn("😴 استراحت", "rest")],
-        [c.btn("🎓 آکادمی", "academy", style="primary"), c.btn("🤝 دعوت از دوستان", "invite", style="success")],
-    ]
+    if p.level < NEWBIE_LEVEL:  # a new hero sees only the few doors that matter; the rest opens with the levels
+        rows = [
+            [c.btn("🗺️ ماجراجویی", "adv", style="primary"), c.btn("🧭 سفر قهرمان", "trip", style="primary")],
+            [c.btn("⚔️ نبرد و چالش", "fight"), c.btn("👤 قهرمان من", "profile")],
+            [c.btn("🎁 جایزه روزانه", "daily"), c.btn("🎓 آکادمی", "academy", style="primary")],
+            [c.btn("💎 خزانه قلمرو", "premium"), c.btn("🧰 امکانات بیشتر", "more")],
+        ]
+    else:
+        city = await c.services.city.mine(p, visit=False)
+        if city is not None:
+            village = [c.btn("🏰 دهکده من", "city", style="success"), c.btn("🗡️ لشکرکشی", "cityatk", style="danger")]
+            text += f"\n\n🏰 دهکده: ارتش {fa(city.army)} نفر" + (
+                f" · {fa(city.workers - len(city.builds))} کارگر بیکار" if len(city.builds) < city.workers else ""
+            )
+        elif p.level >= c.services.ctx.balance.city_min_level:
+            village = [c.btn("🏰 بنای دهکده و لشکرکشی", "city", style="success")]
+            text += "\n\n🏰 هنوز دهکده نداری! دهکده بساز، لشکر تربیت کن و به شهرهای دیگر لشکر بکش."
+        else:
+            village = []
+        rows = [
+            [c.btn("🗺️ ماجراجویی", "adv", style="primary"), c.btn("🧭 سفر قهرمان", "trip", style="primary")],
+            *([village] if village else []),
+            [c.btn("⚔️ نبرد و چالش", "fight"), c.btn("👤 قهرمان من", "profile")],
+            [c.btn("🛒 بازار و تجارت", "trade"), c.btn("🏯 خاندان", "clan")],
+            [c.btn("💎 خزانه قلمرو", "premium"), c.btn("🎁 جایزه روزانه", "daily")],
+            [c.btn("🎓 آکادمی", "academy", style="primary"), c.btn("🧰 امکانات بیشتر", "more")],
+        ]
+        rows.insert(0, [c.btn("🌐 مبارزه آنلاین", "online", style="success")])  # the top row, alone
     streak, savable = c.services.players.streak_status(p)
     if savable:
         rows.insert(0, [c.btn(f"🛟 نجات زنجیره‌ی {fa(streak)} روزه", "rescue", style="danger")])
-    rows.insert(0, [c.btn("🌐 مبارزه آنلاین", "online", style="success")])  # the top row, alone
     shown = await c.services.admin.links()
     links = [Button.url(shown[key]["text"], shown[key]["url"]) for key in ("group", "channel") if shown[key]["url"]]
     if links:
@@ -347,13 +386,10 @@ async def profile(c: Ctx) -> Screen:
             rows.append(keyboards.open_panel_button(c.services.bot_username))
     elif target is me:
         rows += [
-            [c.btn("🎒 کوله‌پشتی", "inv")],
             [c.btn("⚔️ تجهیزات و مهارت‌های قهرمان", "arms", style="primary")],
-            [c.btn("🐱 حیوان خانگی", "pets"), c.btn("🃏 آلبوم کارت", "album")],
-            [c.btn("✨ ارتقای قهرمان", "ascend"), c.btn("🎟️ مسیر قهرمانی", "path")],
+            [c.btn("🎒 کوله‌پشتی", "inv")],
             [c.btn("📅 مأموریت‌ها", "missions"), c.btn("🏅 دستاوردها", "ach")],
-            [c.btn("🕯️ محراب", "altar"), c.btn("👥 دوستان", "friends")],
-            [c.btn("🎁 کد هدیه", "giftcode"), c.btn("🔔 اعلان‌ها", "notifs")],
+            [c.btn("🧰 امکانات بیشتر", "more")],
             c.back("home"),
         ]
     elif c.b == "cm":

@@ -102,6 +102,7 @@ async def test_glass_flow(h, services, db):
     await add(db, services, p, "boss", 4)
     await h.say(6, "قلمرو")
     await h.tap(6, "قهرمان من")
+    await h.tap(6, "امکانات بیشتر")
     await h.tap(6, "مسیر قهرمانی")
     text = h.session.sent("editMessageText")[-1]["text"]
     assert "مرحله‌ی شما" in text and "جایزه‌ی رایگان بعدی" in text

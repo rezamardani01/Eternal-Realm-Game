@@ -37,14 +37,18 @@ async def join(h, uid, name, payload="1"):
 
 async def test_the_main_menu_has_an_invite_button_between_the_academy_and_the_links(h, services):
     await hero(services, 5, "آرش")
+    async with services.ctx.db.transaction() as tx:
+        await tx.execute("UPDATE players SET level = 6")
     await h.say(5, "/start")
     rows = h.session.last_markup_rows()
     labels = [[b["text"] for b in row] for row in rows]
     flat = [t for row in labels for t in row]
     i_help = next(i for i, row in enumerate(labels) if any("آکادمی" in t for t in row))
-    assert labels[i_help] == ["🎓 آکادمی", "🤝 دعوت از دوستان"]
+    assert labels[i_help] == ["🎓 آکادمی", "🧰 امکانات بیشتر"]
     assert any("گروه ما" in t for t in labels[i_help + 1])  # the links row comes after
     assert "👥 گروه ما" in flat
+    await h.panel(5, "more")
+    assert "🤝 دعوت از دوستان" in h.labels()
 
 
 async def test_invite_screen_shows_the_link_with_a_copy_button(h, services):

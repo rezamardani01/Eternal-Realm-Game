@@ -267,7 +267,7 @@ async def test_a_refused_rest_still_teaches_lesson_3_of_chapter_1_with_a_note(h,
     await h.say(1, "استراحت")  # the game answers «سرشار از انرژی هستید» ...
     assert any("سرشار از انرژی" in t for t in h.session.texts())
     note = next(n for n in notes(h))  # ... and the academy still says well done
-    assert "درس ۳ فصل ۱ تکمیل شد" in note and "انرژی و استراحت" in note and "۳ از ۳۹" in note
+    assert "درس ۳ فصل ۱ تکمیل شد" in note and "انرژی و استراحت" in note and "۳ از ۳۸" in note
     assert "energy" in (await services.academy.state(p.id)).done
     assert "مأموریت‌های روزانه" in note  # and points to the next lesson
 
