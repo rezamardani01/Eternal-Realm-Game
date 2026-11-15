@@ -161,3 +161,41 @@ async def test_clan_member_opens_a_full_profile_and_goes_back(h, services, db):
     assert "حمله" in h.session.last_text() and "جان" in h.session.last_text()  # the stats are in the text of a real profile
     await h.click(1, h.button_data("بازگشت به عضو خاندان"))
     assert "مقام" in h.session.sent("editMessageText")[-1]["text"]
+
+
+async def test_the_leader_renames_the_clan_to_a_free_name_and_the_old_one_is_freed(services, db, clock):
+    leader, other, member = await hero(services, db, 11, "رهبر"), await hero(services, db, 12, "دیگری"), await hero(services, db, 13, "عضو")
+    clan = await services.clans.create(leader, "شیرهای شمال")
+    await services.clans.create(other, "عقاب‌های جنوب")
+    await services.clans.join(member, clan.id)
+    with pytest.raises(GameError, match="فقط دست مالک"):
+        await services.clans.rename(member, "نام تازه")
+    with pytest.raises(GameError, match="از قبل"):
+        await services.clans.rename(leader, "عقاب‌های جنوب")  # taken by another clan
+    with pytest.raises(GameError, match="همان نام"):
+        await services.clans.rename(leader, "شیرهای شمال")
+    with pytest.raises(GameError, match="حرف"):
+        await services.clans.rename(leader, "ا")
+    old, new = await services.clans.rename(leader, "ببرهای شرق")
+    assert (old, new) == ("شیرهای شمال", "ببرهای شرق")
+    assert (await services.clans.get(clan.id)).name == "ببرهای شرق"
+    with pytest.raises(GameError, match="دیگر دوباره"):
+        await services.clans.rename(leader, "ببرهای غرب")  # a pause between two renames
+    # the old name is free at once for anybody
+    third = await hero(services, db, 14, "سومی")
+    taken = await services.clans.create(third, "شیرهای شمال")
+    assert taken.name == "شیرهای شمال"
+    clock.advance(3 * 86400 + 5)
+    assert (await services.clans.rename(leader, "ببرهای غرب"))[1] == "ببرهای غرب"
+
+
+async def test_the_rename_button_asks_for_the_new_name(h, services, db):
+    leader = await hero(services, db, 15, "سردار")
+    await services.clans.create(leader, "ققنوسان")
+    await h.panel(15, "clanset")
+    assert any("تغییر نام خاندان" in b for b in h.labels())
+    await h.panel(15, "clanrename")
+    assert "ققنوسان" in h.session.last_text()
+    await h.say(15, "پروانگان")
+    assert "نام خاندان عوض شد" in h.session.last_text()
+    assert (await services.clans.of(leader.id)).name == "پروانگان"

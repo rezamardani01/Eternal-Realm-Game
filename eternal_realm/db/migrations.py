@@ -1076,6 +1076,10 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (code, player_id)
     );
     """,
+    # 67: a clan may be renamed (the leader, with a pause between renames)
+    """
+    ALTER TABLE clans ADD COLUMN renamed_at INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

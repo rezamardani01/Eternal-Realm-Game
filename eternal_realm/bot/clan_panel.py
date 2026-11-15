@@ -11,10 +11,11 @@ from baleropy.fsm import FSMContext, State, StatesGroup
 from baleropy.types import CallbackQuery, Message
 from baleropy.types.markup import _build_inline_markup
 
-from ..game.services.clans import DONATION_STEPS, ROLES, ClanView, Withdrawal, role_power
+from ..game.services.clans import DONATION_STEPS, RENAME_PAUSE, ROLES, ClanView, Withdrawal, role_power
 from ..shared.errors import GameError
-from ..shared.text import bold, duration, fa, to_int
+from ..shared.text import bold, duration, fa, headline, to_int
 from . import keyboards
+from .commands.registry import REGISTRY
 from .callbacks import ClanCb
 from .panel import PER_PAGE, Ctx, Screen, _int, _is_group, _nav, _page, screen
 from .services import Services
@@ -27,6 +28,7 @@ FINE_STEPS = (500, 5_000)
 class ClanFlow(StatesGroup):
     photo = State()
     amount = State()
+    name = State()
 
 
 #: the picture waiting for the leader's «yes»: player id -> Bale file id
@@ -226,7 +228,7 @@ async def clan_settings(c: Ctx) -> Screen:
                 c.btn(f"➕ {fa(FINE_STEPS[0])}", "clanfine", FINE_STEPS[0]),
                 c.btn(f"➕ {fa(FINE_STEPS[1])}", "clanfine", FINE_STEPS[1]),
             ],
-            [c.btn("🖼️ عکس خاندان", "clanphoto")],
+            [c.btn("🖼️ عکس خاندان", "clanphoto"), c.btn("✏️ تغییر نام خاندان", "clanrename")],
             [c.btn("💥 منحل کردن خاندان", "clandisq", style="danger")],
         ]
     rows.append(c.back("clan"))
@@ -273,6 +275,37 @@ async def clan_photo(c: Ctx) -> Screen:
         rows.append([c.btn("🗑️ برداشتن عکس", "clanphotodelq", style="danger")])
     rows.append(c.back("clanset"))
     return Screen(text, rows, photo=mine.photo or None)
+
+
+@screen("clanrename")
+async def clan_rename_ask(c: Ctx) -> Screen:
+    mine = await c.services.clans.of(c.player.id)
+    if mine is None or mine.my_role != "leader":
+        raise GameError("نام خاندان را فقط مالک می‌تواند عوض کند.")
+    if c.state is None:
+        raise GameError("برای نوشتن نام از پیوی یا همان گروه شروع کنید.")
+    await c.state.set_state(ClanFlow.name)
+    text = (
+        f"✏️ {bold('تغییر نام خاندان')}\n\nنام فعلی: {bold(mine.name)}\n\n"
+        "نام تازه را بفرستید؛ باید نامی باشد که خاندان دیگری ندارد. بعد از تغییر، نام قبلی برای همه آزاد می‌شود "
+        f"و تا {fa(RENAME_PAUSE // 86400)} روز نمی‌شود دوباره عوضش کرد."
+    )
+    return Screen(text, [[c.btn("❌ انصراف", "clanset")]])
+
+
+@router.message(ClanFlow.name, F.text)
+async def got_clan_name(message: Message, state: FSMContext, services: Services) -> None:
+    if _is_group(message) and REGISTRY.resolve(message.text or "") is not None:
+        raise SkipHandler  # a game word, not the new name
+    user = message.from_user
+    assert user is not None
+    player = await services.players.require(user.id)
+    await state.clear()
+    old, new = await services.clans.rename(player, message.text or "")
+    await message.answer(
+        headline(f"✅ {bold('نام خاندان عوض شد')}\n\n{old} ← {bold(new)}\nنام «{old}» حالا برای هر خاندانی آزاد است."),
+        buttons=[[keyboards.panel_button("🏯 خاندان من", "clan", user.id)]],
+    )
 
 
 @screen("clanphotoask")

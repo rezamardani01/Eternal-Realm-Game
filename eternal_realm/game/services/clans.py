@@ -12,7 +12,7 @@ from ...db.repos import players as player_repo
 from ...db.repos import wallet
 from ...db.repos.wallet import DuplicateOperation
 from ...shared.errors import GameError
-from ...shared.text import fa, normalize
+from ...shared.text import duration, fa, normalize
 from ..data.khan_shop import WAR_BOOST_HOURS, WAR_CRYSTALS, WAR_POINTS, Offer, day_of, get_offer, offers_for
 from ..models import Player
 from .inventory import InventoryService
@@ -106,6 +106,8 @@ def clean_clan_name(raw: str) -> str:
 
 
 WAR_PRIZES = (800, 500, 300)
+#: the leader can rename the clan once in this many seconds
+RENAME_PAUSE = 3 * 86400
 
 
 @dataclass
@@ -316,6 +318,26 @@ class ClanService:
         if member["role"] != "leader":
             raise GameError("این تنظیم فقط دست مالک خاندان است.")
         return clan
+
+    async def rename(self, actor: Player, raw_name: str) -> tuple[str, str]:
+        """The leader gives the clan a new name nobody else has; the old name is free for anyone at once.
+
+        Returns ``(old, new)``. A pause between two renames keeps the name from being sniped back and forth.
+        """
+        name, now = clean_clan_name(raw_name), self.ctx.now()
+        async with self.ctx.db.transaction() as tx:
+            clan = await self._as_leader(tx, actor)
+            old = clan["name"]
+            if name.casefold() == old.casefold() and name == old:
+                raise GameError("این همان نام فعلی خاندان است؛ نام دیگری بنویسید.")
+            wait = clan["renamed_at"] + RENAME_PAUSE - now
+            if wait > 0:
+                raise GameError(f"نام خاندان را به‌تازگی عوض کرده‌اید؛ {duration(wait)} دیگر دوباره می‌شود.")
+            other = await repo.by_name(tx, name)
+            if other is not None and other["id"] != clan["id"]:
+                raise GameError(f"خاندانی به نام «{name}» از قبل هست. نام دیگری انتخاب کنید.")
+            await tx.execute("UPDATE clans SET name = ?, renamed_at = ? WHERE id = ?", (name, now, clan["id"]))
+        return old, name
 
     async def set_fine(self, actor: Player, amount: int) -> int:
         limit = self.ctx.balance.clan_fine_max
